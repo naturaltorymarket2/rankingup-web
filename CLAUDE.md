@@ -234,6 +234,25 @@ Phase 4 (1~2주): 어드민 + 배포
   - ⚠️ Play Console 앱 설정 완료 (스크린샷, 설명, 콘텐츠 등급 등)
   - ⚠️ 프로덕션 트랙 출시 (내부 테스트 완료 후)
 
+- ✅ 완료: Phase 4-10 — 웹 라우팅 버그 수정 + 기능 개선 (2026-04-27)
+  - splash_screen.dart: kIsWeb 분기 추가 (웹/앱 라우팅 분리)
+  - web_login_screen.dart: 광고주 회원가입 2-step 플로우 구현
+  - rank_module/main.py: CORSMiddleware 추가 (Flutter Web 브라우저 지원)
+  - campaign_new_screen.dart: 순위 조건 완화 (URL+키워드만 있으면 등록 가능)
+
+- ✅ 완료: Phase 4-11 — GitHub 저장소 등록 + Path URL 라우팅 수정 + Nginx (2026-04-29)
+  - store_traffic_booster/ git init + GitHub 저장소 연결 (main 브랜치)
+  - android/key.properties → .gitignore 추가
+  - main.dart: usePathUrlStrategy() 추가 (Hash URL → Path URL)
+  - web/nginx.conf + Dockerfile 신규 (Railway SPA 라우팅)
+  - AAB versionCode 3 → 4 빌드
+
+- ✅ 완료: Phase 4-12 — 어드민 로그인 페이지 분리 (2026-04-29)
+  - lib/features/auth/presentation/admin_login_screen.dart 신규 생성 (어드민 전용)
+  - router.dart: /web/* → /web/login, /admin/* → /admin/login 가드 분리
+  - web_login_screen.dart: fromAdmin 파라미터 및 오렌지 배너 제거
+  - admin_charge_screen.dart, admin_withdraw_screen.dart: role 체크 로직 제거
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
