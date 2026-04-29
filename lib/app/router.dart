@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'supabase_client.dart';
 import '../features/admin/presentation/admin_charge_screen.dart';
 import '../features/admin/presentation/admin_withdraw_screen.dart';
+import '../features/auth/presentation/admin_login_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/web_login_screen.dart';
@@ -25,22 +26,22 @@ import '../shared/widgets/bottom_nav_bar.dart';
 /// 앱 (B2C Android)  : ShellRoute(/home, /history, /mypage) + /splash + /login
 ///                     + /mission/:id + /mission/:id/active + /withdraw
 /// 웹 (B2B 광고주)   : /web/login, /web/dashboard, /web/campaign/*, /web/charge, /web/transactions
-/// 어드민 웹 (운영자) : /admin/charge, /admin/withdraw
+/// 어드민 웹 (운영자) : /admin/login, /admin/charge, /admin/withdraw
 ///
 /// ShellRoute: /home, /history, /mypage 에 하단 탭 네비게이션 표시
 /// 비-Shell:   /splash, /login, /mission/*, /withdraw, /web/*, /admin/* — 하단 탭 없음
 final appRouter = GoRouter(
   initialLocation: '/splash',
-  // 웹(/web/*) 및 어드민(/admin/*) 라우트는 인증 필수
-  // /web/login 은 예외 (미인증 접근 허용)
+  // 인증 가드:
+  //   /web/* (/web/login 제외) → 세션 없으면 /web/login
+  //   /admin/* (/admin/login 제외) → 세션 없으면 /admin/login
   redirect: (context, state) {
     final path = state.uri.path;
-    final needsAuth = (path.startsWith('/web/') && path != '/web/login') ||
-        path.startsWith('/admin/');
-    if (needsAuth && supabase.auth.currentSession == null) {
-      // C-007: 어드민 경로 접근 시 ?from=admin 파라미터로 안내 배너 표시
-      if (path.startsWith('/admin/')) return '/web/login?from=admin';
-      return '/web/login';
+    if (path.startsWith('/web/') && path != '/web/login') {
+      if (supabase.auth.currentSession == null) return '/web/login';
+    }
+    if (path.startsWith('/admin/') && path != '/admin/login') {
+      if (supabase.auth.currentSession == null) return '/admin/login';
     }
     return null;
   },
@@ -116,10 +117,7 @@ final appRouter = GoRouter(
     // ── 웹 (B2B 광고주) ───────────────────────────────────────
     GoRoute(
       path: '/web/login',
-      builder: (context, state) => WebLoginScreen(
-        // C-007: ?from=admin 파라미터 전달
-        fromAdmin: state.uri.queryParameters['from'] == 'admin',
-      ),
+      builder: (context, state) => const WebLoginScreen(),
     ),
     GoRoute(
       path: '/web/dashboard',
@@ -145,8 +143,11 @@ final appRouter = GoRouter(
     ),
 
     // ── 어드민 웹 (운영자) ────────────────────────────────────
-    // role = ADMIN 검증은 각 화면 내에서 currentUserRoleProvider 로 처리
-    // (비동기 role 체크를 지원하기 위해 화면 진입 후 리다이렉트 방식 사용)
+    // 세션 인증은 redirect 가드에서 처리 (/admin/login 제외 경로)
+    GoRoute(
+      path: '/admin/login',
+      builder: (context, state) => const AdminLoginScreen(),
+    ),
     GoRoute(
       path: '/admin/charge',
       builder: (context, state) => const AdminChargeScreen(),

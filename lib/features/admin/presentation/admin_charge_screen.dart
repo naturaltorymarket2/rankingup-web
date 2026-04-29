@@ -37,26 +37,7 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final roleAsync = ref.watch(currentUserRoleProvider);
-
-    return roleAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, st) {
-        WidgetsBinding.instance.addPostFrameCallback(
-            (_) => context.go('/web/login'));
-        return const Scaffold(body: SizedBox.shrink());
-      },
-      data: (role) {
-        if (role != 'ADMIN') {
-          WidgetsBinding.instance.addPostFrameCallback(
-              (_) => context.go('/web/login'));
-          return const Scaffold(body: SizedBox.shrink());
-        }
-        return _buildAdminBody(context);
-      },
-    );
+    return _buildAdminBody(context);
   }
 
   Widget _buildAdminBody(BuildContext context) {
@@ -160,7 +141,7 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
       if (!mounted) return;
       final err = e.toString().toLowerCase();
       if (err.contains('jwt') || err.contains('session') || err.contains('401')) {
-        context.go('/web/login');
+        context.go('/admin/login');
         return;
       }
       _showSnack('오류: $e', Colors.red);
@@ -222,7 +203,7 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
       if (!mounted) return;
       final err = e.toString().toLowerCase();
       if (err.contains('jwt') || err.contains('session') || err.contains('401')) {
-        context.go('/web/login');
+        context.go('/admin/login');
         return;
       }
       _showSnack('오류: $e', Colors.red);

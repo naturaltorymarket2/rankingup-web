@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../domain/admin_withdraw_model.dart';
-import 'admin_charge_provider.dart';   // currentUserRoleProvider 재사용
+import 'admin_charge_provider.dart';
 import 'admin_withdraw_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -40,26 +40,7 @@ class _AdminWithdrawScreenState
 
   @override
   Widget build(BuildContext context) {
-    final roleAsync = ref.watch(currentUserRoleProvider);
-
-    return roleAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, st) {
-        WidgetsBinding.instance.addPostFrameCallback(
-            (_) => context.go('/web/login'));
-        return const Scaffold(body: SizedBox.shrink());
-      },
-      data: (role) {
-        if (role != 'ADMIN') {
-          WidgetsBinding.instance.addPostFrameCallback(
-              (_) => context.go('/web/login'));
-          return const Scaffold(body: SizedBox.shrink());
-        }
-        return _buildAdminBody(context);
-      },
-    );
+    return _buildAdminBody(context);
   }
 
   Widget _buildAdminBody(BuildContext context) {
@@ -203,7 +184,7 @@ class _AdminWithdrawScreenState
       if (!mounted) return;
       final err = e.toString().toLowerCase();
       if (err.contains('jwt') || err.contains('session') || err.contains('401')) {
-        context.go('/web/login');
+        context.go('/admin/login');
         return;
       }
       _showSnack('오류: $e', Colors.red);
@@ -262,7 +243,7 @@ class _AdminWithdrawScreenState
       if (!mounted) return;
       final err = e.toString().toLowerCase();
       if (err.contains('jwt') || err.contains('session') || err.contains('401')) {
-        context.go('/web/login');
+        context.go('/admin/login');
         return;
       }
       _showSnack('오류: $e', Colors.red);

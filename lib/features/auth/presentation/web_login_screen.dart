@@ -20,10 +20,7 @@ import '../../../app/supabase_client.dart';
 //   → 가입 즉시 세션 발급, 별도 이메일 인증 불필요
 
 class WebLoginScreen extends StatefulWidget {
-  // C-007: ?from=admin 파라미터 — 어드민 세션 만료 리다이렉트 안내
-  final bool fromAdmin;
-
-  const WebLoginScreen({super.key, this.fromAdmin = false});
+  const WebLoginScreen({super.key});
 
   @override
   State<WebLoginScreen> createState() => _WebLoginScreenState();
@@ -269,33 +266,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
               children: [
                 _buildLogo(),
                 const SizedBox(height: 24),
-                // C-007: 어드민 세션 만료 안내 배너
-                if (widget.fromAdmin) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      border: Border.all(color: Colors.orange.shade200),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline,
-                            color: Colors.orange.shade700, size: 16),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            '어드민 페이지 접근을 위해 로그인이 필요합니다.',
-                            style: TextStyle(fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ] else
-                  const SizedBox(height: 12),
+                const SizedBox(height: 12),
                 _buildCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
