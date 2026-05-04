@@ -6,14 +6,16 @@ import '../../../shared/utils/rank_api_client.dart';
 // 키워드 선택 모달
 //
 // 사용 예:
-//   final selected = await showKeywordSelectModal(context, keywords);
+//   final selected = await showKeywordSelectModal(context, keywords,
+//     preSelected: _selectedKeywords);
 //   if (selected != null) { /* 사용자가 확인을 눌렀을 때 */ }
 // ─────────────────────────────────────────────────────────────────
 
 Future<List<KeywordRankResult>?> showKeywordSelectModal(
   BuildContext context,
-  List<KeywordRankResult> keywords,
-) {
+  List<KeywordRankResult> keywords, {
+  List<KeywordRankResult> preSelected = const [],
+}) {
   final maxH = MediaQuery.of(context).size.height * 0.85;
   return showModalBottomSheet<List<KeywordRankResult>>(
     context: context,
@@ -23,7 +25,7 @@ Future<List<KeywordRankResult>?> showKeywordSelectModal(
     ),
     builder: (_) => ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxH),
-      child: _KeywordSelectModal(keywords: keywords),
+      child: _KeywordSelectModal(keywords: keywords, preSelected: preSelected),
     ),
   );
 }
@@ -34,7 +36,11 @@ Future<List<KeywordRankResult>?> showKeywordSelectModal(
 
 class _KeywordSelectModal extends StatefulWidget {
   final List<KeywordRankResult> keywords;
-  const _KeywordSelectModal({required this.keywords});
+  final List<KeywordRankResult> preSelected;
+  const _KeywordSelectModal({
+    required this.keywords,
+    this.preSelected = const [],
+  });
 
   @override
   State<_KeywordSelectModal> createState() => _KeywordSelectModalState();
@@ -49,7 +55,12 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
   @override
   void initState() {
     super.initState();
-    _toggles = List.filled(widget.keywords.length, false);
+    // 이전 선택 키워드(preSelected)와 키워드명이 일치하면 ON 상태로 초기화
+    final preSelectedKeywords =
+        widget.preSelected.map((k) => k.keyword).toSet();
+    _toggles = widget.keywords
+        .map((k) => preSelectedKeywords.contains(k.keyword))
+        .toList();
   }
 
   int get _selectedCount => _toggles.where((t) => t).length;

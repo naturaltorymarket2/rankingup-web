@@ -762,8 +762,11 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         return;
       }
 
-      final selected =
-          await showKeywordSelectModal(context, keywords);
+      final selected = await showKeywordSelectModal(
+        context,
+        keywords,
+        preSelected: _selectedKeywords,
+      );
       if (!mounted) return;
 
       if (selected != null) {
