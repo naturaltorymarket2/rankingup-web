@@ -46,6 +46,17 @@ class RankResult {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// 키워드 + 순위 결과 모델 (fetchKeywords 반환 타입)
+// ─────────────────────────────────────────────────────────────────
+
+class KeywordRankResult {
+  final String keyword;
+  final int?   rank; // null 이면 100위 이내 미노출
+
+  const KeywordRankResult({required this.keyword, this.rank});
+}
+
+// ─────────────────────────────────────────────────────────────────
 // 파이썬 랭킹 모듈 HTTP 클라이언트
 // ─────────────────────────────────────────────────────────────────
 //
@@ -112,5 +123,62 @@ class RankApiClient {
       productName:  (body['product_name'] as String?) ?? '',
       thumbnailUrl: body['thumbnail_url'] as String?,
     );
+  }
+
+  /// 상품 URL + 대표 키워드로 연관 키워드 목록과 각 순위를 반환합니다.
+  ///
+  /// 서버의 GET /keywords?url={productUrl}&keyword={seedKeyword} 엔드포인트를 호출합니다.
+  /// RANK_API_URL 형식: https://host/rank → /keywords 경로로 자동 파생.
+  ///
+  /// Throws:
+  ///   [RankTimeoutException]   — 10초 타임아웃 초과
+  ///   [RankApiException]       — 4xx/5xx 서버 오류 또는 RANK_API_URL 미설정
+  ///   [RankNetworkException]   — 네트워크 연결 오류
+  Future<List<KeywordRankResult>> fetchKeywords(
+    String productUrl,
+    String seedKeyword,
+  ) async {
+    if (_baseUrl.isEmpty) {
+      throw const RankApiException(0); // RANK_API_URL 미설정
+    }
+
+    // /rank → /keywords 경로 치환 (호스트·스킴은 유지)
+    final base = Uri.parse(_baseUrl);
+    final uri = base.replace(
+      path: '/keywords',
+      queryParameters: {'url': productUrl, 'keyword': seedKeyword},
+    );
+
+    late http.Response response;
+    try {
+      response = await http.get(uri).timeout(_timeout);
+    } on TimeoutException {
+      throw const RankTimeoutException();
+    } catch (e) {
+      throw RankNetworkException(e);
+    }
+
+    if (response.statusCode != 200) {
+      throw RankApiException(response.statusCode);
+    }
+
+    late Map<String, dynamic> body;
+    try {
+      body = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const RankApiException(-1);
+    }
+
+    final items = body['keywords'] as List<dynamic>? ?? [];
+    return items
+        .map((e) {
+          final m = e as Map<String, dynamic>;
+          return KeywordRankResult(
+            keyword: (m['keyword'] as String?) ?? '',
+            rank:    m['rank'] as int?,
+          );
+        })
+        .where((r) => r.keyword.isNotEmpty)
+        .toList();
   }
 }

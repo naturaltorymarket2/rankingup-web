@@ -69,16 +69,15 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   Future<void> _onSubmit(int balance) async {
     if (!_canSubmit(balance)) return;
 
-    final success = await ref.read(withdrawProvider.notifier).submit(
-      amount:  _parsedAmount,
-      bank:    _bankCtrl.text.trim(),
-      account: _accountCtrl.text.trim(),
-      holder:  _holderCtrl.text.trim(),
-    );
+    try {
+      await ref.read(withdrawProvider.notifier).submit(
+        amount:  _parsedAmount,
+        bank:    _bankCtrl.text.trim(),
+        account: _accountCtrl.text.trim(),
+        holder:  _holderCtrl.text.trim(),
+      );
 
-    if (!mounted) return;
-
-    if (success) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('출금 신청이 완료되었습니다'),
@@ -86,11 +85,14 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         ),
       );
       context.go('/mypage');
-    } else {
+    } on Exception catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('오류가 발생했습니다. 다시 시도해 주세요'),
+        SnackBar(
+          content: Text(msg),
           behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red.shade700,
         ),
       );
     }

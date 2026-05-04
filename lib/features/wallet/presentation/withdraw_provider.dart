@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/supabase_client.dart';
 import '../data/wallet_repository.dart';
@@ -19,9 +20,11 @@ class WithdrawNotifier extends AutoDisposeNotifier<bool> {
 
   /// 출금 신청 제출
   ///
-  /// 성공: true 반환
-  /// 실패: false 반환 (throw 하지 않음 — 호출부에서 처리)
-  Future<bool> submit({
+  /// 성공: 정상 반환
+  /// 실패: Exception throw (호출부에서 try/catch 처리)
+  ///   - PostgrestException: Supabase RPC RAISE EXCEPTION → 사용자 메시지
+  ///   - 기타: 기본 에러 메시지
+  Future<void> submit({
     required int amount,
     required String bank,
     required String account,
@@ -37,9 +40,11 @@ class WithdrawNotifier extends AutoDisposeNotifier<bool> {
         account: account,
         holder:  holder,
       );
-      return true;
+    } on PostgrestException catch (e) {
+      // RPC RAISE EXCEPTION 메시지를 그대로 전파
+      throw Exception(e.message);
     } catch (_) {
-      return false;
+      throw Exception('오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       try {
         state = false;

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/supabase_client.dart';
@@ -44,19 +42,12 @@ class WalletRepository {
   // 출금 신청
   // ─────────────────────────────────────────────────────────────
 
-  /// 출금 신청 INSERT
+  /// 출금 신청 — submit_withdraw RPC 호출
   ///
-  /// - transactions 테이블: type=WITHDRAW, status=PENDING
-  /// - description: 은행 정보 JSON {"bank", "account", "holder"}
-  ///   (transactions 테이블에 memo 컬럼 없음 — description에 JSON 저장)
-  ///   어드민 get_pending_withdraws RPC는 description AS memo 로 반환하여
-  ///   admin_withdraw_model._memoMap 이 파싱함
-  /// - 잔액 차감은 어드민 process_withdraw RPC에서 처리 — 여기서 하지 않음
-  ///
-  /// ⚠️ 이 수정 이전에 생성된 PENDING 출금 건은 description='출금 신청'(고정 텍스트)으로
-  ///    저장되어 있어 어드민 화면에서 계좌 정보가 '-'로 표시됨.
-  ///    Supabase Studio > Table Editor > transactions 에서 해당 PENDING 건의
-  ///    description 컬럼을 수동으로 JSON 형식으로 업데이트해야 함.
+  /// - SECURITY DEFINER RPC로 서버에서 처리 (RLS 우회)
+  /// - 중복 체크 / 잔액 확인 / 잔액 차감 / transactions INSERT 모두 RPC 내부에서 처리
+  /// - RPC가 RAISE EXCEPTION하면 PostgrestException으로 전파됨
+  ///   → 호출부(WithdrawNotifier)에서 message를 파싱해 사용자에게 표시
   Future<void> submitWithdraw({
     required String userId,
     required int amount,
@@ -64,31 +55,12 @@ class WalletRepository {
     required String account,
     required String holder,
   }) async {
-    // ── 중복 출금 신청 방지 ──────────────────────────────────────
-    // PENDING 상태의 출금 건이 이미 존재하면 신청 차단
-    final pending = await supabase
-        .from('transactions')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('type', 'WITHDRAW')
-        .eq('status', 'PENDING') as List<dynamic>;
-
-    if (pending.isNotEmpty) {
-      throw Exception('이미 출금 신청이 진행 중입니다');
-    }
-
-    final memoJson = jsonEncode({
-      'bank':    bank,
-      'account': account,
-      'holder':  holder,
-    });
-
-    await supabase.from('transactions').insert({
-      'user_id':     userId,
-      'type':        'WITHDRAW',
-      'amount':      amount,
-      'status':      'PENDING',
-      'description': memoJson,
+    await supabase.rpc('submit_withdraw', params: {
+      'p_user_id': userId,
+      'p_amount':  amount,
+      'p_bank':    bank,
+      'p_account': account,
+      'p_holder':  holder,
     });
   }
 }

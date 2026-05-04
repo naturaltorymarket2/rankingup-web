@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/rank_api_client.dart';
 import 'campaign_provider.dart';
+import 'keyword_select_modal.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // 광고 등록 웹 화면  (/web/campaign/new)  —  Step 1 ~ 3
@@ -24,10 +25,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
   // ── Step 1 ────────────────────────────────────────────────────
   final _urlCtrl     = TextEditingController();
-  final _keywordCtrl = TextEditingController();
-  bool _isCheckingRank = false;
-  int?  _fetchedRank;
-  bool  _rankNotFound  = false;
+  final _seedCtrl    = TextEditingController(); // 대표 키워드 (시드)
+  bool _isFetchingKeywords = false;
+  List<KeywordRankResult> _selectedKeywords = [];
 
   // ── Step 2 ────────────────────────────────────────────────────
   final List<TextEditingController> _tagCtls = [TextEditingController()];
@@ -38,9 +38,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   bool _isSubmitting = false;
 
   // ── 스타일 상수 ──────────────────────────────────────────────
-  static const _kBlue   = Color(0xFF1E3A8A);
-  static const _kGreen  = Color(0xFF2E7D32);
-  static const _kLabel  = TextStyle(
+  static const _kBlue  = Color(0xFF1E3A8A);
+  static const _kGreen = Color(0xFF2E7D32);
+  static const _kLabel = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w600,
     color: Color(0xFF111827),
@@ -57,11 +57,15 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       .where((t) => t.isNotEmpty)
       .toList();
 
-  int get _totalCost => _dailyTarget * _durationDays * 50;
+  /// 선택된 키워드 수 × 기간 × 일일목표 × 50P
+  int get _totalCost =>
+      _dailyTarget * _durationDays * 50 * _selectedKeywords.length;
 
+  /// URL + 시드 키워드 입력 + 키워드 1개 이상 선택
   bool get _step1Valid =>
       _urlCtrl.text.trim().isNotEmpty &&
-      _keywordCtrl.text.trim().isNotEmpty; // URL+키워드 입력만 되면 진행 허용 (순위 조회 선택사항)
+      _seedCtrl.text.trim().isNotEmpty &&
+      _selectedKeywords.isNotEmpty;
 
   bool get _step2Valid =>
       _validTags.isNotEmpty &&
@@ -73,8 +77,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   @override
   void dispose() {
     _urlCtrl.dispose();
-    _keywordCtrl.dispose();
-    for (final c in _tagCtls) { c.dispose(); }
+    _seedCtrl.dispose();
+    for (final c in _tagCtls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -84,7 +90,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Step 3에서 필요한 잔액을 미리 로드 (step1/2에선 무시)
+    // Step 3에서 필요한 잔액 미리 로드 (step1/2에선 무시)
     final balanceAsync = ref.watch(walletBalanceProvider);
 
     return Scaffold(
@@ -162,10 +168,14 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Step 1 — 상품 URL + 키워드 + 순위 조회
+  // Step 1 — 상품 URL + 키워드 자동완성
   // ─────────────────────────────────────────────────────────────
 
   Widget _buildStep1() {
+    final canFetch = _urlCtrl.text.trim().isNotEmpty &&
+        _seedCtrl.text.trim().isNotEmpty &&
+        !_isFetchingKeywords;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -177,119 +187,76 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _urlCtrl,
-                onChanged: (_) => setState(() {
-                  _fetchedRank   = null;
-                  _rankNotFound  = false;
-                }),
+                // URL 변경 시 기존 선택 키워드 초기화
+                onChanged: (_) => setState(() => _selectedKeywords = []),
                 decoration: const InputDecoration(
-                  hintText:
-                      'https://smartstore.naver.com/...',
+                  hintText: 'https://smartstore.naver.com/...',
                   border: OutlineInputBorder(),
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 12),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('타겟 키워드', style: _kLabel),
+              const Text('대표 키워드', style: _kLabel),
+              const SizedBox(height: 4),
+              Text(
+                '상품을 대표하는 키워드를 입력하세요. 이를 기반으로 연관 키워드를 자동 생성합니다.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
               const SizedBox(height: 8),
               TextField(
-                controller: _keywordCtrl,
-                onChanged: (_) => setState(() {
-                  _fetchedRank   = null;
-                  _rankNotFound  = false;
-                }),
+                controller: _seedCtrl,
+                onChanged: (_) => setState(() => _selectedKeywords = []),
                 decoration: const InputDecoration(
-                  hintText: '예: 무선이어폰',
+                  hintText: '예: 무선 블루투스 이어폰',
                   border: OutlineInputBorder(),
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 12),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed:
-                    _isCheckingRank ? null : _checkRank,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kBlue,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 44),
-                ),
-                child: _isCheckingRank
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: canFetch ? _fetchKeywords : null,
+                icon: _isFetchingKeywords
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
+                        height: 16,
+                        width: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
                       )
-                    : const Text('순위 조회'),
+                    : const Icon(Icons.search, size: 18),
+                label: Text(
+                  _isFetchingKeywords ? '키워드 조회 중...' : '키워드 자동완성',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kBlue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 44),
+                ),
               ),
             ],
           ),
         ),
 
-        // ── 순위 결과 ─────────────────────────────────────────
-        if (_fetchedRank != null || _rankNotFound) ...[
+        // ── 선택된 키워드 목록 ────────────────────────────────
+        if (_selectedKeywords.isNotEmpty) ...[
           const SizedBox(height: 16),
           _WebCard(
-            child: _rankNotFound
-                ? Row(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.warning_amber_rounded,
-                          color: Colors.orange, size: 22),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          '검색 결과에서 상품을 찾을 수 없습니다.\n'
-                          '순위 확인 없이 광고 등록을 진행할 수 있습니다.',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            height: 1.55,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : _fetchedRank! <= 15
-                    ? Row(
-                        children: [
-                          const Icon(Icons.check_circle,
-                              color: _kGreen, size: 22),
-                          const SizedBox(width: 10),
-                          Text(
-                            '현재 순위: $_fetchedRank위 — 등록 가능',
-                            style: const TextStyle(
-                              color: _kGreen,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: Colors.orange, size: 22),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '현재 순위 $_fetchedRank위 — 등록은 가능하나\n'
-                              '15위 이내 상품의 효과가 더 높습니다.',
-                              style: const TextStyle(
-                                color: Colors.orange,
-                                height: 1.55,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '선택된 키워드 (${_selectedKeywords.length}개)',
+                  style: _kLabel,
+                ),
+                const SizedBox(height: 12),
+                ..._selectedKeywords.map(_buildKeywordChip),
+              ],
+            ),
           ),
         ],
 
@@ -298,8 +265,60 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     );
   }
 
+  /// 선택된 키워드 1개를 순위 뱃지 + X 버튼과 함께 표시
+  Widget _buildKeywordChip(KeywordRankResult kw) {
+    final rank = kw.rank;
+    final Color badgeColor;
+    if (rank == null) {
+      badgeColor = Colors.grey;
+    } else if (rank <= 15) {
+      badgeColor = _kGreen;
+    } else {
+      badgeColor = Colors.orange;
+    }
+    final rankText = rank == null ? '순위권 밖' : '$rank위';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: badgeColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              rankText,
+              style: TextStyle(
+                color: badgeColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              kw.keyword,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(
+              () => _selectedKeywords =
+                  _selectedKeywords.where((k) => k != kw).toList(),
+            ),
+            child: const Icon(Icons.close, size: 18, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────
-  // Step 2 — 태그 / 일일 수량 / 기간
+  // Step 2 — 태그 / 일일 수량 / 기간 / 예산 미리보기
   // ─────────────────────────────────────────────────────────────
 
   Widget _buildStep2() {
@@ -329,8 +348,12 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const SizedBox(height: 2),
               Text(
                 '미션 유저가 상품에 달아야 할 네이버 쇼핑 태그입니다. (최대 3개)',
-                style: TextStyle(
-                    fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '입력한 태그는 선택한 ${_selectedKeywords.length}개 키워드 캠페인에 모두 적용됩니다.',
+                style: const TextStyle(fontSize: 12, color: Colors.orange),
               ),
               const SizedBox(height: 12),
               ...List.generate(
@@ -348,8 +371,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                             isDense: true,
                             contentPadding:
                                 const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 12),
+                                    horizontal: 12, vertical: 12),
                           ),
                           onChanged: (_) => setState(() {}),
                         ),
@@ -387,8 +409,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                     SizedBox(height: 2),
                     Text(
                       '하루 목표 미션 수행 인원',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -402,8 +423,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                           child: Text('$v명'),
                         ))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _dailyTarget = v!),
+                onChanged: (v) => setState(() => _dailyTarget = v!),
               ),
             ],
           ),
@@ -430,9 +450,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 44),
-                  foregroundColor: _dateRange != null
-                      ? _kBlue
-                      : Colors.grey[700],
+                  foregroundColor:
+                      _dateRange != null ? _kBlue : Colors.grey[700],
                 ),
               ),
               if (_dateRange != null && _durationDays < 7)
@@ -440,13 +459,69 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                   padding: EdgeInsets.only(top: 6),
                   child: Text(
                     '최소 7일 이상 선택해주세요.',
-                    style: TextStyle(
-                        color: Colors.red, fontSize: 12),
+                    style: TextStyle(color: Colors.red, fontSize: 12),
                   ),
                 ),
             ],
           ),
         ),
+
+        // ── 예산 미리보기 ─────────────────────────────────────
+        if (_dateRange != null && _durationDays >= 7) ...[
+          const SizedBox(height: 16),
+          _WebCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('예산 미리보기', style: _kLabel),
+                const SizedBox(height: 8),
+                Text(
+                  '${_selectedKeywords.length}개 키워드 × $_durationDays일 × $_dailyTarget명 × 50P',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 10),
+                ..._selectedKeywords.map(
+                  (kw) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            kw.keyword,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        Text(
+                          '${_fmtNum(_dailyTarget * _durationDays * 50)}P',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 20),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '예상 총 예산',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Text(
+                      '${_fmtNum(_totalCost)}P',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _kBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
 
         const SizedBox(height: 16),
       ],
@@ -469,24 +544,23 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const Text('등록 정보 요약', style: _kLabel),
               const SizedBox(height: 12),
               _SummaryRow(
-                  label: '키워드',
-                  value: _keywordCtrl.text),
+                label: '키워드',
+                value: _selectedKeywords.map((k) => k.keyword).join(', '),
+                maxLines: 4,
+              ),
               _SummaryRow(
-                  label: '상품 URL',
-                  value: _urlCtrl.text,
-                  maxLines: 2),
-              _SummaryRow(
-                  label: '일일 유입',
-                  value: '$_dailyTarget명'),
+                label: '상품 URL',
+                value: _urlCtrl.text,
+                maxLines: 2,
+              ),
+              _SummaryRow(label: '일일 유입', value: '$_dailyTarget명'),
               if (_dateRange != null)
                 _SummaryRow(
                   label: '광고 기간',
                   value:
                       '${_fmtDate(_dateRange!.start)} ~ ${_fmtDate(_dateRange!.end)} ($_durationDays일)',
                 ),
-              _SummaryRow(
-                  label: '태그',
-                  value: _validTags.join(', ')),
+              _SummaryRow(label: '태그', value: _validTags.join(', ')),
             ],
           ),
         ),
@@ -501,14 +575,11 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const Text('결제 정보', style: _kLabel),
               const SizedBox(height: 12),
               _SummaryRow(
-                  label: '일일 유입',
-                  value: '$_dailyTarget명'),
-              _SummaryRow(
-                  label: '광고 기간',
-                  value: '$_durationDays일'),
-              _SummaryRow(
-                  label: '단가',
-                  value: '50P / 1명'),
+                  label: '키워드 수',
+                  value: '${_selectedKeywords.length}개'),
+              _SummaryRow(label: '일일 유입', value: '$_dailyTarget명'),
+              _SummaryRow(label: '광고 기간', value: '$_durationDays일'),
+              _SummaryRow(label: '단가', value: '50P / 1명'),
               const Divider(height: 24),
               Row(
                 children: [
@@ -534,10 +605,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '$_dailyTarget명 × $_durationDays일 × 50P',
+                  '$_dailyTarget명 × $_durationDays일 × 50P × ${_selectedKeywords.length}개 키워드',
                   textAlign: TextAlign.end,
-                  style: TextStyle(
-                      fontSize: 12, color: Colors.grey[500]),
+                  style:
+                      TextStyle(fontSize: 12, color: Colors.grey[500]),
                 ),
               ),
             ],
@@ -563,21 +634,18 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
             final isEnough = balance >= _totalCost;
             return _WebCard(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
-                      const Expanded(
-                          child: Text('현재 잔여 포인트')),
+                      const Expanded(child: Text('현재 잔여 포인트')),
                       Text(
                         '${_fmtNum(balance)}P',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: isEnough
-                              ? Colors.black87
-                              : Colors.red,
+                          color:
+                              isEnough ? Colors.black87 : Colors.red,
                         ),
                       ),
                     ],
@@ -586,15 +654,13 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                     const SizedBox(height: 10),
                     const Text(
                       '포인트가 부족합니다. 충전 후 다시 시도해주세요.',
-                      style: TextStyle(
-                          color: Colors.red, fontSize: 13),
+                      style:
+                          TextStyle(color: Colors.red, fontSize: 13),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () =>
-                          context.push('/web/charge'),
-                      icon: const Icon(
-                          Icons.add_circle_outline,
+                      onPressed: () => context.push('/web/charge'),
+                      icon: const Icon(Icons.add_circle_outline,
                           size: 16),
                       label: const Text('포인트 충전하기'),
                       style: OutlinedButton.styleFrom(
@@ -620,8 +686,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-            top: BorderSide(color: Colors.grey[200]!)),
+        border: Border(top: BorderSide(color: Colors.grey[200]!)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       child: SafeArea(
@@ -642,9 +707,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 child: const Text('다음 단계 (3/3)'),
               ),
           _ => ElevatedButton(
-                onPressed: _canRegister(balanceAsync)
-                    ? _submit
-                    : null,
+                onPressed: _canRegister(balanceAsync) ? _submit : null,
                 style: _primaryStyle,
                 child: _isSubmitting
                     ? const SizedBox(
@@ -655,7 +718,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('포인트 차감 후 광고 등록'),
+                    : Text('${_selectedKeywords.length}개 캠페인 포인트 차감 후 등록'),
               ),
         },
       ),
@@ -666,8 +729,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     backgroundColor: _kBlue,
     foregroundColor: Colors.white,
     minimumSize: const Size(double.infinity, 48),
-    shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10)),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
   );
 
   bool _canRegister(AsyncValue<int> balanceAsync) {
@@ -681,39 +743,42 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   // 액션 메서드
   // ─────────────────────────────────────────────────────────────
 
-  Future<void> _checkRank() async {
-    final url     = _urlCtrl.text.trim();
-    final keyword = _keywordCtrl.text.trim();
-    if (url.isEmpty || keyword.isEmpty) {
-      _showSnack('상품 URL과 키워드를 모두 입력해주세요.');
-      return;
-    }
-    setState(() {
-      _isCheckingRank = true;
-      _fetchedRank    = null;
-      _rankNotFound   = false;
-    });
+  /// 키워드 자동완성 버튼 처리:
+  ///   1. fetchKeywords API 호출
+  ///   2. KeywordSelectModal 표시
+  ///   3. ON된 키워드를 _selectedKeywords 에 저장
+  Future<void> _fetchKeywords() async {
+    final url  = _urlCtrl.text.trim();
+    final seed = _seedCtrl.text.trim();
+    if (url.isEmpty || seed.isEmpty) return;
+
+    setState(() => _isFetchingKeywords = true);
     try {
-      final rank = await ref
-          .read(campaignRepositoryProvider)
-          .fetchProductRank(url, keyword);
-      setState(() {
-        if (rank == null) {
-          _rankNotFound = true;
-        } else {
-          _fetchedRank = rank;
-        }
-      });
+      final keywords = await RankApiClient().fetchKeywords(url, seed);
+      if (!mounted) return;
+
+      if (keywords.isEmpty) {
+        _showSnack('연관 키워드를 찾을 수 없습니다.');
+        return;
+      }
+
+      final selected =
+          await showKeywordSelectModal(context, keywords);
+      if (!mounted) return;
+
+      if (selected != null) {
+        setState(() => _selectedKeywords = selected);
+      }
     } on RankTimeoutException {
-      _showSnack('순위 조회 시간이 초과되었습니다.');
+      _showSnack('키워드 조회 시간이 초과되었습니다.');
     } on RankNetworkException {
       _showSnack('네트워크 연결을 확인해주세요.');
     } on RankApiException {
-      _showSnack('순위 조회에 실패했습니다.');
+      _showSnack('키워드 조회에 실패했습니다.');
     } catch (e) {
-      _showSnack('순위 조회 중 오류가 발생했습니다.');
+      _showSnack('키워드 조회 중 오류가 발생했습니다.');
     } finally {
-      setState(() => _isCheckingRank = false);
+      if (mounted) setState(() => _isFetchingKeywords = false);
     }
   }
 
@@ -748,37 +813,61 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     setState(() => _dateRange = picked);
   }
 
+  /// 선택된 키워드 수만큼 register_campaign RPC 순차 호출
+  ///
+  /// - 전체 성공 → 대시보드 이동
+  /// - 부분 성공 → 성공한 수 SnackBar + 대시보드 이동
+  /// - 전부 실패 → 오류 SnackBar, 화면 유지
   Future<void> _submit() async {
-    // B-008: 중복 태그 검사
-    final rawTags = _tagCtls.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
+    // 중복 태그 검사
+    final rawTags = _tagCtls
+        .map((c) => c.text.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
     if (rawTags.length != rawTags.toSet().length) {
       _showSnack('중복된 태그가 있습니다. 서로 다른 태그를 입력해주세요.');
       return;
     }
 
     setState(() => _isSubmitting = true);
-    try {
-      final userId = supabase.auth.currentUser!.id;
-      await ref.read(campaignRepositoryProvider).registerCampaign(
-            userId:      userId,
-            productUrl:  _urlCtrl.text.trim(),
-            keyword:     _keywordCtrl.text.trim(),
-            dailyTarget: _dailyTarget,
-            startDate:   _dateRange!.start,
-            endDate:     _dateRange!.end,
-            tags:        _validTags,
-          );
-      if (!mounted) return;
+
+    final userId = supabase.auth.currentUser!.id;
+    final repo   = ref.read(campaignRepositoryProvider);
+    int successCount = 0;
+
+    for (int i = 0; i < _selectedKeywords.length; i++) {
+      final kw = _selectedKeywords[i];
+      try {
+        await repo.registerCampaign(
+          userId:      userId,
+          productUrl:  _urlCtrl.text.trim(),
+          keyword:     kw.keyword,
+          dailyTarget: _dailyTarget,
+          startDate:   _dateRange!.start,
+          endDate:     _dateRange!.end,
+          tags:        _validTags,
+        );
+        successCount++;
+      } catch (e) {
+        if (!mounted) return;
+        _showSnack(
+          '${i + 1}번째 키워드(${kw.keyword}) 등록 실패: ${_mapRpcError(e.toString())}',
+        );
+        break; // 이후 키워드 등록 중단
+      }
+    }
+
+    if (!mounted) return;
+
+    if (successCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('광고가 성공적으로 등록되었습니다.'),
+        SnackBar(
+          content: Text('$successCount개 광고가 등록되었습니다.'),
           backgroundColor: _kGreen,
         ),
       );
       context.go('/web/dashboard');
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack(_mapRpcError(e.toString()));
+    } else {
       setState(() => _isSubmitting = false);
     }
   }
@@ -805,9 +894,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   // ── 유틸 ─────────────────────────────────────────────────────
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String _fmtDate(DateTime d) =>
@@ -837,10 +925,9 @@ class _WebCard extends StatelessWidget {
     return Card(
       elevation: 0,
       color: Colors.white,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-          padding: const EdgeInsets.all(20), child: child),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(padding: const EdgeInsets.all(20), child: child),
     );
   }
 }
@@ -871,8 +958,7 @@ class _SummaryRow extends StatelessWidget {
             width: 72,
             child: Text(
               label,
-              style: TextStyle(
-                  fontSize: 13, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             ),
           ),
           const SizedBox(width: 8),
