@@ -253,6 +253,56 @@ Phase 4 (1~2주): 어드민 + 배포
   - web_login_screen.dart: fromAdmin 파라미터 및 오렌지 배너 제거
   - admin_charge_screen.dart, admin_withdraw_screen.dart: role 체크 로직 제거
 
+- ✅ 완료: Phase 4-13 — 출금 신청 RLS 버그 수정 (2026-04-29)
+  - **원인**: `transactions_charge_insert` RLS 정책이 `type='CHARGE'`만 허용 → WITHDRAW INSERT 차단
+  - supabase/migrations/20260317000015_submit_withdraw_rpc.sql 신규
+    - `submit_withdraw` RPC (SECURITY DEFINER): 중복 체크 + 잔액 확인 + 잔액 차감 + transactions INSERT
+  - supabase/migrations/20260317000016_fix_withdraw_rpcs.sql 신규
+    - `process_withdraw` 수정: 잔액 차감 제거 (submit_withdraw에서 이미 차감) → status=COMPLETED만 처리
+    - `reject_withdraw` 수정: 잔액 복구 추가 (신청 시 차감됐으므로 거절 시 환불)
+  - lib/features/wallet/data/wallet_repository.dart 수정
+    - 직접 INSERT 제거 → `submit_withdraw` RPC 호출로 교체
+    - `dart:convert` import 제거
+  - lib/features/wallet/presentation/withdraw_provider.dart 수정
+    - `Future<bool>` → `Future<void>`, `catch (_) { return false; }` → PostgrestException 파싱 후 throw
+  - lib/features/wallet/presentation/withdraw_screen.dart 수정
+    - `success == false` 분기 → `try/catch` 패턴, RPC 에러 메시지를 빨간 SnackBar로 표시
+
+- ✅ 완료: Phase 5-1 — 랭킹 서버 /keywords 엔드포인트 추가 (2026-05-04)
+
+  **rank_module/ 변경 사항**
+  - `crawler.py` — `fetch_related_keywords(product_url, seed_keyword)` 구현
+    - 기존: SmartStore 페이지 og:title 스크래핑 → Naver 429로 항상 실패
+    - 수정: Shopping API + seed_keyword로 상품명 파악 (페이지 접근 없음)
+      - seed_keyword로 Shopping API 검색 → product_id 매칭 시 실제 상품명 사용
+      - 미매칭 시 seed_keyword 자체를 상품명으로 fallback
+    - `_fetch_product_name()` 함수 제거 (og:title 스크래핑 코드 완전 삭제)
+    - `__main__` --keywords 플래그: `{url} {seed_keyword}` 두 인자로 변경
+  - `main.py` — `GET /keywords?url=&keyword=` (keyword 파라미터 필수 추가)
+    - `CrawlError` except 제거 (페이지 스크래핑 없으므로 불필요)
+  - Railway 배포 완료 (commit: 4ca5769)
+  - 검증: `curl "…/keywords?url=…&keyword=무선 블루투스 이어폰"` → `{"keywords":[...]}` 정상 응답
+
+- ✅ 완료: Phase 5-2 — 캠페인 등록 키워드 자동완성 기능 (2026-05-04)
+
+  **Flutter 변경 사항**
+  - `lib/shared/utils/rank_api_client.dart`
+    - `fetchKeywords(productUrl, seedKeyword)` — seed_keyword 파라미터 추가
+    - `/keywords?url=&keyword=` 쿼리 파라미터 전송
+  - `lib/features/campaign/presentation/keyword_select_modal.dart` (신규)
+    - `showKeywordSelectModal()` — BottomSheet 모달
+    - 최대 10개 ON 가능, 순위 뱃지 (초록 ≤15위, 주황 >15위, 회색 null)
+    - 취소 / N개 선택 완료 버튼
+  - `lib/features/campaign/presentation/campaign_new_screen.dart`
+    - Step 1: 상품 URL + 대표 키워드(시드) 필드 추가
+      - 두 필드 모두 입력해야 [키워드 자동완성] 버튼 활성화
+      - URL 또는 키워드 변경 시 기존 선택 초기화
+    - `fetchKeywords(url, seed)` 호출 → 모달 → 선택 키워드 저장
+    - `_step1Valid`: URL + 시드 키워드 + 선택 키워드 1개 이상 필요
+    - 선택된 키워드 수만큼 `register_campaign` RPC 순차 호출 (다중 캠페인)
+    - Step 2: 예산 미리보기 카드 (키워드 × 기간 × 일일 × 50P)
+    - Step 3: 총 비용 = 키워드 수 × 기간 × 일일 목표 × 50P
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
