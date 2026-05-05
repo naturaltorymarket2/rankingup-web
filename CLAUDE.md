@@ -303,6 +303,72 @@ Phase 4 (1~2주): 어드민 + 배포
     - Step 2: 예산 미리보기 카드 (키워드 × 기간 × 일일 × 50P)
     - Step 3: 총 비용 = 키워드 수 × 기간 × 일일 목표 × 50P
 
+- ✅ 완료: Phase 5-QA — 키워드 자동완성 + 다중 캠페인 등록 QA (2026-05-05)
+
+  **버그 발견 및 수정 (B-7)**
+  - `keyword_select_modal.dart`: 모달 재오픈 시 이전 선택 상태가 초기화되는 버그
+    - 원인: `initState`에서 `List.filled(n, false)` — 항상 전부 false 초기화
+    - 수정: `preSelected` named 파라미터 추가
+      - `showKeywordSelectModal(context, keywords, preSelected: _selectedKeywords)`
+      - `initState`에서 `preSelectedKeywords` Set 생성 → 이름 일치 키워드 ON 초기화
+  - `campaign_new_screen.dart`: `showKeywordSelectModal` 호출 시 `preSelected: _selectedKeywords` 전달
+  - Flutter commit: f18fe1d
+
+  **QA Pass 항목 (코드 리뷰)**
+  - A-1~A-7: /keywords API 연동 전항목 Pass
+  - B-1~B-6: 모달 동작 Pass (B-7만 Fail → 수정 완료)
+  - C-1~C-3: Step 2 예산 계산 Pass
+  - D-1~D-5: Step 3 등록 플로우 Pass (D-3: SnackBar 아닌 인라인 UI — 의도된 동작)
+  - E-1~E-2: 엣지 케이스 Pass
+
+- ✅ 완료: Phase 5-디버깅 — /keywords 타임아웃 원인 파악 및 수정 (2026-05-05)
+
+  **증상**: `헬스 장갑` 키워드 자동완성 시 Flutter 타임아웃 에러
+
+  **원인 분석**
+  - `curl` 측정 결과: `/keywords` 엔드포인트 응답 **21.2초**
+  - Flutter `fetchKeywords()` 타임아웃: 10초 → 타임아웃 초과
+  - 원인: 슬라이딩 윈도우로 20개 후보 생성 × 0.5초 sleep = 10초 sleep 단독
+  - 여기에 Naver API 호출 ~0.5초/회 × 20 = 10초 추가 → 합계 ~21초
+
+  **수정 (A+B 병행)**
+  - `crawler.py`: `_MAX_KEYWORDS = 20 → 10`, `time.sleep(0.5 → 0.3)`
+    - Railway commit: a07df52
+  - `rank_api_client.dart`: `fetchKeywords()` 전용 `_keywordsTimeout = Duration(seconds: 60)` 추가
+    - `fetchRank()`는 기존 `_timeout(10s)` 유지
+    - Flutter commit: 3fd9238
+  - 수정 후 응답 시간: **10.1초** (21.2s → 10.1s, -52%)
+
+- ✅ 완료: Phase 5-3 — 네이버 자동완성 API로 키워드 수집 방식 교체 (2026-05-05)
+
+  **배경**: Phase 5-1의 슬라이딩 윈도우 방식은 상품명 기반 기계적 조합 → 실사용자 검색어와 괴리
+  이 Phase에서 네이버 자동완성 API로 완전 교체
+
+  **crawler.py 변경 사항** (rank_module commit: e9b05a4)
+  - `_generate_keyword_candidates()` 함수 제거 (슬라이딩 윈도우 완전 삭제)
+  - `_MAX_KEYWORDS` 상수 제거
+  - Shopping API 기반 상품명 파악 로직 제거 (`fetch_related_keywords` 내부)
+  - `fetch_autocomplete_keywords(seed_keyword: str) -> List[str]` 신규 추가
+    - URL: `https://ac.search.naver.com/nx/ac`
+    - 파라미터: `q`, `r_format=json`, `r_enc=UTF-8`, `st=100`
+    - 헤더: `User-Agent: Mozilla/5.0`, `Referer: https://search.naver.com`
+    - timeout: 5초
+    - 응답 파싱: `items[0][i][0]` 로 키워드 추출
+    - 단어 수 2개 이하만 포함 (긴 구절 제외)
+    - seed_keyword를 맨 앞에 추가 (중복 제거), 최대 10개 반환
+    - 예외 시 `[seed_keyword]` 반환 (빈 결과 방지)
+  - `fetch_related_keywords(product_url, seed_keyword)`:
+    - product_id 검증 → `fetch_autocomplete_keywords(seed_keyword)` → 각 키워드별 `fetch_naver_rank()` + `sleep(0.3)`
+
+  **성능 비교**
+
+  | 항목 | 슬라이딩 윈도우 | 자동완성 API |
+  |------|----------------|-------------|
+  | 키워드 예시 | "헬스장갑 턱걸이장갑 철봉" (상품명 조합) | "여자 헬스장갑", "헬스장갑 추천" (실검색어) |
+  | 로컬 소요 시간 | ~21초 | **5.6초** |
+  | Railway 응답 | ~10초 (제한 후) | **9.3초** |
+  | 키워드 품질 | 상품명 기반 기계적 조합 | 실사용자 검색 기반 |
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
