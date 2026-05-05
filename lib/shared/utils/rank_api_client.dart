@@ -74,7 +74,8 @@ class RankApiClient {
   static const _baseUrl =
       String.fromEnvironment('RANK_API_URL', defaultValue: '');
 
-  static const _timeout = Duration(seconds: 10);
+  static const _timeout         = Duration(seconds: 10);  // fetchRank 용
+  static const _keywordsTimeout = Duration(seconds: 60);  // fetchKeywords 용 (다중 API 호출)
 
   /// 상품 URL + 키워드로 네이버 쇼핑 순위를 조회합니다.
   ///
@@ -129,9 +130,10 @@ class RankApiClient {
   ///
   /// 서버의 GET /keywords?url={productUrl}&keyword={seedKeyword} 엔드포인트를 호출합니다.
   /// RANK_API_URL 형식: https://host/rank → /keywords 경로로 자동 파생.
+  /// 서버에서 여러 번 Naver API를 순차 호출하므로 타임아웃은 60초를 적용.
   ///
   /// Throws:
-  ///   [RankTimeoutException]   — 10초 타임아웃 초과
+  ///   [RankTimeoutException]   — 60초 타임아웃 초과
   ///   [RankApiException]       — 4xx/5xx 서버 오류 또는 RANK_API_URL 미설정
   ///   [RankNetworkException]   — 네트워크 연결 오류
   Future<List<KeywordRankResult>> fetchKeywords(
@@ -151,7 +153,7 @@ class RankApiClient {
 
     late http.Response response;
     try {
-      response = await http.get(uri).timeout(_timeout);
+      response = await http.get(uri).timeout(_keywordsTimeout);
     } on TimeoutException {
       throw const RankTimeoutException();
     } catch (e) {
