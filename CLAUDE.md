@@ -206,7 +206,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 4 (어드민 + 배포) — 완료**
+현재 진행 Phase: **Phase 6 (재빌드 + 배포) — 완료**
 
 - ✅ 완료: Phase 1 전체
 - ✅ 완료: Phase 2 전체
@@ -368,6 +368,13 @@ Phase 4 (1~2주): 어드민 + 배포
   | 로컬 소요 시간 | ~21초 | **5.6초** |
   | Railway 응답 | ~10초 (제한 후) | **9.3초** |
   | 키워드 품질 | 상품명 기반 기계적 조합 | 실사용자 검색 기반 |
+
+- ✅ 완료: Phase 6-1 — AAB 빌드 versionCode 5 (2026-05-05)
+  - `android/app/build.gradle.kts`: versionCode 4 → 5
+  - Phase 5 기능(키워드 자동완성 + 다중 캠페인 등록) 반영한 배포용 빌드
+  - 빌드 명령: `flutter build appbundle --release --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank`
+  - 결과: `build/app/outputs/bundle/release/app-release.aab` (47MB)
+  - Flutter commit: d4a795e
 
 ---
 
