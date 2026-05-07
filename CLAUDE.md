@@ -424,8 +424,8 @@ Phase 4 (1~2주): 어드민 + 배포
 
 ---
 
-## 12. 추후 개선 사항 (Known Issues)
+## 12. 추후 개선 사항
 
-| 우선순위 | 항목 | 내용 |
-|----------|------|------|
-| 중 | campaigns RLS 정책 보완 | `fetchCampaignDetail`이 `campaigns`를 직접 SELECT함. 현재 ACTIVE 캠페인은 모든 로그인 유저가 조회 가능할 수 있음. UUID를 아는 경우 다른 광고주 캠페인 정보 노출 위험. 수정안: `auth.uid() = user_id` 조건만 허용하도록 SELECT 정책 강화 필요 |
+개선사항, 버그, 신규 기능 요청은 모두 **`BACKLOG.md`** 파일에서 관리한다.
+
+> Claude Code는 개선사항 관련 작업 시 반드시 `BACKLOG.md`를 먼저 읽는다.
