@@ -376,6 +376,19 @@ Phase 4 (1~2주): 어드민 + 배포
   - 결과: `build/app/outputs/bundle/release/app-release.aab` (47MB)
   - Flutter commit: d4a795e
 
+- ✅ 완료: Phase 6-2 — 순위 조회 매칭 로직 고도화 (2026-05-07)
+
+  **rank_module/crawler.py 변경 사항** (rank_module commit: 4ca72cf)
+  - `_normalize_url(url)` 추가: 소문자 변환, 쿼리·프래그먼트 제거, trailing slash 제거
+  - `_extract_numeric_id(url)` 추가: URL 경로의 마지막 숫자 세그먼트 추출
+  - `from urllib.parse import urlparse` import 추가 (표준 라이브러리)
+  - `fetch_naver_rank()` 매칭 순서 변경:
+    - 기존: productId 직접 비교 → `product_id in link` (포함 여부 — 오탐 가능성)
+    - 변경: 정규화 URL 완전 일치 → productId 비교 (더 정확)
+  - `_call()` `sort='sim'` 파라미터 추가 (유사도순 명시)
+  - `_extract_product_id()`는 `fetch_related_keywords` SmartStore URL 검증용으로 유지
+  - Railway 자동 배포 완료
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
