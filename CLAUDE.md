@@ -389,6 +389,23 @@ Phase 4 (1~2주): 어드민 + 배포
   - `_extract_product_id()`는 `fetch_related_keywords` SmartStore URL 검증용으로 유지
   - Railway 자동 배포 완료
 
+- ✅ 완료: Phase 6-3 — 순위 추이 데이터 미업데이트 문제 해결 (2026-05-07)
+
+  **원인**: Railway 무료 플랜에서 비활성 시 컨테이너 슬립 → APScheduler 미실행
+
+  **해결: GitHub Actions 외부 크론으로 대체** (rank_module commit: 1f15caa)
+  - `main.py` — `POST /run-scheduler` 엔드포인트 추가
+    - `X-Scheduler-Secret` 헤더로 토큰 검증
+    - `update_all_campaign_ranks()` BackgroundTasks로 실행 → 즉시 `{"status":"started"}` 반환
+  - `.github/workflows/daily_rank_update.yml` 신규 생성
+    - 매일 UTC 18:00 (KST 03:00) 자동 실행 (`cron: '0 18 * * *'`)
+    - `workflow_dispatch`로 GitHub Actions UI 수동 실행 가능
+    - `curl --fail --retry 3`으로 실패 시 재시도
+  - **GitHub Secret 등록**: `SCHEDULER_SECRET`
+  - **Railway Variables 등록**: `SCHEDULER_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
+  - 로컬 테스트: `curl -X POST http://localhost:8000/run-scheduler -H "X-Scheduler-Secret: {토큰}"`
+  - `campaign_rank_history` 데이터 정상 적재 확인 (2026-05-07)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -404,3 +421,11 @@ Phase 4 (1~2주): 어드민 + 배포
 1. 변경된 파일 목록 출력
 2. 다음 작업 번호 안내
 3. 테스트 필요 항목 안내
+
+---
+
+## 12. 추후 개선 사항 (Known Issues)
+
+| 우선순위 | 항목 | 내용 |
+|----------|------|------|
+| 중 | campaigns RLS 정책 보완 | `fetchCampaignDetail`이 `campaigns`를 직접 SELECT함. 현재 ACTIVE 캠페인은 모든 로그인 유저가 조회 가능할 수 있음. UUID를 아는 경우 다른 광고주 캠페인 정보 노출 위험. 수정안: `auth.uid() = user_id` 조건만 허용하도록 SELECT 정책 강화 필요 |
