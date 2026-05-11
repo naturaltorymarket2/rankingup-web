@@ -766,6 +766,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         context,
         keywords,
         preSelected: _selectedKeywords,
+        productUrl: _urlCtrl.text.trim(),
       );
       if (!mounted) return;
 
