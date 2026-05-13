@@ -13,10 +13,12 @@
 
 ## 🟠 기능 변경 (최우선)
 
-- [ ] [랭킹 서버] 순위 추적 대상을 시드(대표) 키워드 1개만으로 변경
-      현재: 캠페인에 등록된 키워드 전체 추적
-      변경: campaigns.keyword (시드 키워드) 1개만 추적
-      영향 범위: rank_module/scheduler.py, campaigns 테이블 seed_keyword 컬럼 존재 여부 확인 필요
+- [x] [랭킹 서버] 순위 추적 대상을 시드(대표) 키워드 1개만으로 변경 (2026-05-13)
+      campaigns.seed_keyword 컬럼 추가 (migration 0018)
+      register_campaign RPC에 p_seed_keyword 파라미터 추가 (DEFAULT NULL, 하위 호환)
+      scheduler.py: (product_url, seed_keyword) 기준 그룹화 → API 1회 호출/그룹
+      ⚠️ Supabase migration 0018 적용 필요
+      ⚠️ Flutter campaign_new_screen에서 seed_keyword 전달 별도 작업 필요
 
 ## 🟡 신규 기능 — 태그 자동 수집 + 정답 태그 선택 (광고주/앱 연동) (최우선)
 
