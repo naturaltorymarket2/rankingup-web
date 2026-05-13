@@ -30,38 +30,88 @@
 
 ## 3. 디렉토리 구조
 
+> 실제 구현 파일 기준 (2026-04-29 검증 완료)
+
 ```
 lib/
 ├── main.dart
 ├── app/
-│   ├── router.dart          # go_router 전체 라우팅 정의
-│   └── supabase_client.dart # Supabase 초기화
+│   ├── router.dart              # go_router 전체 라우팅 + 인증 리다이렉트
+│   └── supabase_client.dart     # Supabase 초기화 (URL/anon key 하드코딩)
 ├── features/
-│   ├── auth/                # 로그인, 회원가입
-│   ├── mission/             # 홈, 미션 상세, 미션 진행
-│   ├── wallet/              # 포인트, 출금
-│   ├── campaign/            # 광고주 캠페인 등록/조회 (웹)
-│   ├── dashboard/           # 광고주 대시보드 (웹)
-│   ├── charge/              # 포인트 충전 (웹)
-│   └── admin/               # 어드민 충전승인/출금처리 (웹)
-├── shared/
-│   ├── widgets/             # 공통 위젯
-│   ├── models/              # 데이터 모델 클래스
-│   └── utils/               # 공통 유틸
+│   ├── auth/
+│   │   └── presentation/
+│   │       ├── splash_screen.dart        # 자동로그인 체크, 웹/앱 분기
+│   │       ├── login_screen.dart         # 앱 로그인/회원가입
+│   │       └── web_login_screen.dart     # 광고주 로그인/회원가입 (2-step)
+│   ├── mission/
+│   │   ├── data/mission_repository.dart
+│   │   ├── domain/mission_model.dart
+│   │   └── presentation/
+│   │       ├── mission_home_screen.dart  # 홈 — 미션 보드 (무한 스크롤)
+│   │       ├── mission_home_provider.dart
+│   │       ├── mission_detail_screen.dart
+│   │       ├── mission_detail_provider.dart
+│   │       ├── mission_active_screen.dart # 미션 진행중 (타이머, 딥링크)
+│   │       └── mission_active_provider.dart
+│   ├── wallet/
+│   │   ├── data/wallet_repository.dart
+│   │   ├── domain/wallet_model.dart
+│   │   └── presentation/
+│   │       ├── history_screen.dart       # 참여 내역
+│   │       ├── history_provider.dart
+│   │       ├── mypage_screen.dart        # 마이페이지 (잔액, 프로필)
+│   │       ├── wallet_provider.dart
+│   │       ├── withdraw_screen.dart      # 출금 신청
+│   │       └── withdraw_provider.dart
+│   ├── campaign/
+│   │   ├── data/campaign_repository.dart # fetchProductRank, registerCampaign 등
+│   │   ├── domain/campaign_model.dart    # CampaignModel, CampaignStats
+│   │   └── presentation/
+│   │       ├── campaign_new_screen.dart  # 광고 등록 (Step 1~3)
+│   │       ├── campaign_detail_screen.dart # 광고 상세 + 순위 차트
+│   │       └── campaign_provider.dart   # walletBalanceProvider, campaignDetailProvider
+│   ├── dashboard/
+│   │   ├── data/dashboard_repository.dart # fetchDashboardData, fetchRankHistory
+│   │   ├── domain/dashboard_model.dart   # DashboardData, DashboardCampaign, RankHistory
+│   │   └── presentation/
+│   │       ├── web_dashboard_screen.dart
+│   │       └── dashboard_provider.dart   # dashboardDataProvider, rankHistoryProvider
+│   ├── charge/
+│   │   ├── data/charge_repository.dart
+│   │   ├── domain/charge_model.dart
+│   │   └── presentation/
+│   │       ├── charge_screen.dart        # 포인트 충전 (입금 정보 제출)
+│   │       ├── charge_provider.dart
+│   │       └── transactions_screen.dart  # 포인트 내역
+│   └── admin/
+│       ├── data/
+│       │   ├── admin_charge_repository.dart
+│       │   └── admin_withdraw_repository.dart
+│       ├── domain/
+│       │   ├── admin_charge_model.dart   # AdminChargeRecord (description 파싱)
+│       │   └── admin_withdraw_model.dart # AdminWithdrawRecord (JSON memo 파싱)
+│       └── presentation/
+│           ├── admin_charge_screen.dart  # ADMIN role 검증 필수
+│           ├── admin_charge_provider.dart
+│           ├── admin_withdraw_screen.dart
+│           └── admin_withdraw_provider.dart
+└── shared/
+    ├── widgets/
+    │   ├── bottom_nav_bar.dart           # 앱 하단 네비게이션
+    │   └── admob_banner.dart             # AdMob 배너 위젯
+    ├── models/                           # (비어 있음 — 모델은 각 feature/domain/)
+    └── utils/
+        ├── rank_api_client.dart          # RankApiClient (--dart-define=RANK_API_URL)
+        ├── admob_config.dart             # 광고 단위 ID 상수
+        ├── admob_interstitial.dart       # 전면 광고 헬퍼
+        └── device_util.dart             # Device ID 조회
 ```
 
-각 feature 폴더 내부 구조:
-```
-features/mission/
-├── data/
-│   └── mission_repository.dart   # Supabase 호출
-├── domain/
-│   └── mission_model.dart        # 데이터 모델
-└── presentation/
-    ├── mission_home_screen.dart
-    ├── mission_detail_screen.dart
-    └── mission_active_screen.dart
-```
+**주요 아키텍처 참고 사항:**
+- `rankHistoryProvider`는 `dashboard_provider.dart`에 정의, `campaign_detail_screen.dart`에서 import
+- auth feature에 data/domain 폴더 없음 (Supabase Auth 직접 사용)
+- `shared/models/` 디렉토리는 비어 있음 (각 feature의 `domain/` 폴더에 모델 정의)
 
 ---
 
@@ -117,13 +167,49 @@ features/mission/
 
 반드시 Supabase SQL로 구현. 클라이언트에서 직접 INSERT/UPDATE 금지.
 
-| RPC 함수명 | 역할 |
-|------------|------|
-| `start_mission(campaign_id, user_id, device_id)` | 미션 시작 + 태그 랜덤 할당 |
-| `verify_mission(log_id, user_id, submitted_tag)` | 정답 검증 + 리워드 지급 |
-| `approve_charge(tx_id)` | 충전 승인 + 포인트 지급 |
-| `process_withdraw(tx_id)` | 출금 처리 완료 |
-| `register_campaign(user_id, ...)` | 캠페인 등록 + 포인트 차감 |
+> 전체 14개 RPC (마이그레이션 0000~0013 기준, 2026-04-29 확인)
+
+### 미션 / 핵심 (migration 0001~0005)
+
+| RPC 함수명 | 파라미터 | 역할 |
+|------------|----------|------|
+| `start_mission` | `p_campaign_id uuid, p_user_id uuid, p_device_id text` | 미션 시작: 중복 체크 → 수량 체크 → log INSERT → 태그 랜덤 할당 |
+| `verify_mission` | `p_log_id uuid, p_user_id uuid, p_submitted_tag text` | 정답 검증: 10분 타임아웃 + 리워드 +7P 지급 |
+| `approve_charge` | `p_tx_id uuid` | 충전 승인: PENDING → COMPLETED + 포인트 지급 |
+| `process_withdraw` | `p_tx_id uuid` | 출금 처리: PENDING → COMPLETED + 잔액 차감 (FOR UPDATE) |
+| `register_campaign` | `p_user_id uuid, p_product_url text, p_keyword text, p_daily_target int, p_start_date date, p_end_date date, p_tags text[]` | 캠페인 등록: 예산 즉시 차감, 최소 7일, 50P/명/일 |
+
+### 광고주 / 대시보드 (migration 0007~0008)
+
+| RPC 함수명 | 파라미터 | 역할 |
+|------------|----------|------|
+| `register_advertiser` | `p_company_name text, p_business_number text, p_phone text, p_tax_email text (optional)` | 광고주 사업자 정보 등록 (business_info INSERT) |
+| `get_dashboard_data` | 없음 (auth.uid() 자동 사용) | 광고주 대시보드: 캠페인 목록 + 지갑 잔액 + 총 유입수 |
+
+### 어드민 — 충전 처리 (migration 0012)
+
+| RPC 함수명 | 파라미터 | 역할 |
+|------------|----------|------|
+| `reject_charge` | `p_tx_id uuid` | 충전 거절: PENDING → REJECTED (포인트 미지급) |
+| `get_pending_charges` | 없음 (ADMIN role 검증) | 승인 대기 충전 목록 조회 |
+| `get_processed_charges` | 없음 (ADMIN role 검증) | 처리 완료 충전 내역 조회 |
+
+### 어드민 — 출금 처리 (migration 0013)
+
+| RPC 함수명 | 파라미터 | 역할 |
+|------------|----------|------|
+| `reject_withdraw` | `p_tx_id uuid` | 출금 거절: PENDING → REJECTED (잔액 복구 없음) |
+| `get_pending_withdraws` | 없음 (ADMIN role 검증) | 출금 대기 목록 조회 |
+| `get_processed_withdraws` | 없음 (ADMIN role 검증) | 처리 완료 출금 내역 조회 |
+
+### 트리거 (자동 실행, 직접 호출 불가)
+
+| 함수명 | 트리거 조건 | 역할 |
+|--------|------------|------|
+| `handle_new_user()` | auth.users INSERT 시 | public.users + public.wallets 자동 생성 |
+
+> ⚠️ 트리거 생성 이슈: Supabase 대시보드 UI로 계정 생성 시 트리거 실패 가능
+> → SQL Editor에서 public.users + public.wallets 수동 INSERT 필요
 
 ---
 
@@ -154,12 +240,14 @@ features/mission/
 
 ### 캠페인 등록 검증 순서
 ```
-1. 상품 URL + 키워드 입력
-2. 파이썬 랭킹 모듈 API 호출 → 현재 순위 확인
-3. 15위 이내: 다음 단계 활성화
-4. 16위 이상: 등록 불가 메시지 표시 (빨간색)
-5. 최종 등록 시: register_campaign RPC → 포인트 즉시 차감
+1. 상품 URL + 키워드 입력 → 다음 단계 버튼 활성화 (순위 조회는 선택사항)
+2. [순위 조회] 버튼 클릭 시 → 파이썬 랭킹 모듈 API 호출
+   - 15위 이내: 초록색 표시 (권장)
+   - 16위 이상: 주황 경고 표시 (등록은 가능)
+   - 찾을 수 없음: 주황 경고 표시 (등록은 가능)
+3. 최종 등록 시: register_campaign RPC → 포인트 즉시 차감
 ```
+> ⚠️ 2026-04-27 변경: 순위 제한 없이 URL+키워드만 있으면 등록 가능하도록 완화
 
 ---
 
@@ -208,10 +296,171 @@ Phase 4 (1~2주): 어드민 + 배포
 
 현재 진행 Phase: **Phase 6 (재빌드 + 배포) — 완료**
 
-- ✅ 완료: Phase 1 전체
+- ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
+  - 2-1: 홈 미션 보드 (무한 스크롤)
+  - 2-2: 미션 상세 화면 + start_mission RPC
+  - 2-3: 미션 진행 화면 (AppLifecycle 감지, 타이머, verify_mission RPC)
+  - 2-4: 참여 내역, 마이페이지, 출금 신청 화면, 하단 네비게이션
+  - 2-5: AdMob 배너(홈·참여내역) + 전면 광고(미션 성공 시)
 - ✅ 완료: Phase 3 전체
-- ✅ 완료: Phase 4-1 ~ 4-8 (어드민, 랭킹 모듈, 배포 준비, 앱 이름 변경)
+  - 3-1: 광고주 로그인/회원가입 (/web/login) + register_advertiser RPC
+  - 3-2: 광고주 대시보드 (/web/dashboard) + 인증 리다이렉트
+  - 3-3: 캠페인 등록 Step 1~3 (/web/campaign/new) + register_campaign RPC
+  - 3-4: 포인트 충전 화면 (/web/charge) + RLS 정책
+  - 3-5: 포인트 내역 화면 (/web/transactions)
+- ✅ 완료: Phase 4-1 — 어드민 충전 승인 (/admin/charge)
+  - 20260317000012_admin_charge_rpc.sql — reject_charge / get_pending_charges / get_processed_charges RPC
+  - admin/domain/admin_charge_model.dart — AdminChargeRecord (description 파싱: 입금자명/세금계산서/입금금액)
+  - admin/data/admin_charge_repository.dart — fetchPendingCharges / fetchProcessedCharges / approveCharge / rejectCharge
+  - admin/presentation/admin_charge_provider.dart — currentUserRoleProvider + pendingChargesProvider + processedChargesProvider
+  - admin/presentation/admin_charge_screen.dart — ADMIN role 검증 + 대기 목록 ([승인]/[거절] 버튼) + 처리 완료 내역
+- ✅ 완료: Phase 4-2 — 어드민 출금 처리 (/admin/withdraw)
+  - 20260317000013_admin_withdraw_rpc.sql
+    - process_withdraw RPC 업데이트: wallets.balance -= amount 차감 버그 수정 + FOR UPDATE 잠금 추가
+    - reject_withdraw RPC 신규: WITHDRAW PENDING → REJECTED (잔액 변경 없음)
+    - get_pending_withdraws / get_processed_withdraws RPC 신규
+  - admin/domain/admin_withdraw_model.dart — AdminWithdrawRecord (memo JSON 파싱: bank/account/holder, netAmount 계산)
+  - admin/data/admin_withdraw_repository.dart — processWithdraw / rejectWithdraw / fetchPendingWithdraws / fetchProcessedWithdraws
+  - admin/presentation/admin_withdraw_provider.dart — pendingWithdrawsProvider + processedWithdrawsProvider
+  - admin/presentation/admin_withdraw_screen.dart — ADMIN role 검증 + 대기 목록 (카드 UI) + 처리 완료 내역
+- ✅ 완료: Phase 4-3 — 파이썬 랭킹 모듈 연동 (rank_api_client.dart)
+  - shared/utils/rank_api_client.dart — RankApiClient (--dart-define=RANK_API_URL 주입, 10초 타임아웃, 커스텀 예외 4종: Timeout/NotFound/Api/Network)
+  - campaign_repository.dart — fetchProductRank() 실제 API 호출로 교체 (mock 주석 유지, RankNotFoundException → null 반환)
+  - campaign_new_screen.dart — 타입별 예외 SnackBar 처리 + 상품 미노출(_rankNotFound) UI 추가
+- ✅ 완료: Phase 4-4 — Play Store 배포 준비
+  - android/key.properties — 서명 키 실제 값 입력 완료 (keyAlias=upload, storeFile=/Users/daeun/upload-keystore.jks)
+  - android/app/build.gradle.kts — applicationId(com.storetrafficbooster.app)/targetSdk(35)/versionCode(3)/versionName(1.0.0)/signingConfig/minify 설정
+    - ※ minSdk는 linter에 의해 flutter.minSdkVersion으로 유지됨
+  - android/app/proguard-rules.pro — Flutter/OkHttp/AdMob/Kotlin keep 규칙
+  - AndroidManifest.xml — INTERNET 퍼미션 추가 + naversearchapp:// queries 추가
+  - shared/utils/admob_config.dart — 배너/전면 광고 단위 ID 실제 값으로 교체
+    - 앱 ID: ca-app-pub-6225110164827541~2986900842
+    - 배너: ca-app-pub-6225110164827541/7157245996
+    - 전면: ca-app-pub-6225110164827541/3625195096
+  - CLAUDE.md — Play Store 배포 체크리스트 섹션 추가 (섹션 12)
+
+- ✅ 완료: Phase 4-5 — 로컬 테스트 및 버그 수정 (2026-04-05)
+
+  **웹 호환성 수정 (Flutter Web)**
+  - `main.dart` — `kIsWeb` 조건 추가: 웹 실행 시 `MobileAds.instance.initialize()` 스킵
+    (google_mobile_ads는 웹 미지원 → 미처리 시 흰 화면 크래시)
+  - `login_screen.dart` — `kIsWeb` 조건 추가: 웹 실행 시 `Platform.isAndroid` 호출 방지
+    (`dart:io`의 Platform은 웹에서 UnsupportedError 발생)
+
+  **플레이스홀더 화면 구현**
+  - `splash_screen.dart` — 실제 세션 체크 구현: 500ms 지연 → currentSession 확인 → /home or /login
+  - `login_screen.dart` — 실제 로그인/회원가입 구현: 이메일+비밀번호, Device ID 저장, 에러 매핑
+
+  **환경변수 설정**
+  - `supabase_client.dart` — defaultValue에 실제 Supabase URL/anon key 입력
+    (--dart-define 없이 `flutter run --release` 단독 실행 가능)
+  - `.vscode/launch.json` — Flutter debug/release 실행 구성 추가
+
+  **Supabase RPC 버그 수정**
+  - `get_pending_charges`, `get_processed_charges` — `id` ambiguous 오류 수정
+    (`WHERE id = auth.uid()` → `WHERE u.id = auth.uid()`, 조인 별칭 u→usr)
+    원인: RETURNS TABLE의 id 컬럼과 users.id 컬럼명 충돌 (PostgreSQL 42702)
+  - `get_pending_withdraws`, `get_processed_withdraws` — 동일한 id ambiguous 오류 수정
+  - `get_pending_withdraws`, `get_processed_withdraws` — `t.memo` → `t.description AS memo`
+    원인: transactions 테이블에 memo 컬럼 없음, description에 JSON 형태로 저장됨 (PostgreSQL 42703)
+
+  **AAB 빌드 성공**
+  - `flutter build appbundle --release` → `app-release.aab` (49.5MB) 빌드 완료
+
+  **로컬 테스트 완료 항목**
+  - Android 에뮬레이터 (API 36): 스플래시 → 로그인 → 회원가입 정상 동작
+  - 광고주 웹 (`flutter run -d chrome --web-port=8080`):
+    - `/web/login` → `/web/dashboard` → `/web/campaign/new` → `/web/charge` → `/web/transactions` 정상
+    - `/web/campaign/:id` (광고 상세) — 미구현 플레이스홀더 상태
+  - 어드민 웹:
+    - `/admin/charge` (충전 승인) 정상
+    - `/admin/withdraw` (출금 처리) 정상
+
+  **테스트 계정 (Supabase)**
+  - 이메일: naturaltorymarket2@gmail.com / 비밀번호: 123456
+  - role: ADMIN (수동 설정)
+  - ※ Supabase 대시보드에서 직접 생성 시 handle_new_user 트리거가 실패할 수 있음
+    → SQL Editor에서 public.users + public.wallets 수동 INSERT 필요
+
+- ✅ 완료: Phase 4-6 — 광고 상세 화면 구현 + 테스트 데이터
+
+  **광고 상세 화면 구현 (/web/campaign/:id)**
+  - `campaign/presentation/campaign_detail_screen.dart` — 전체 구현
+    - 상태 바: 진행 중/일시 중지/종료 배지 + 기간 + 잔여 일수
+    - 캠페인 정보 카드: 키워드, 일일 목표, 기간, 예산, 상품 URL (외부 링크)
+    - 성과 현황 카드: 오늘 유입 / 현재 순위(15위 이내 초록, 초과 빨강) / 누적 유입 + 달성률 프로그레스바
+    - 순위 추이 차트: fl_chart LineChart (최근 7일, y축 반전으로 1위=상단 표시)
+  - `campaign/presentation/campaign_provider.dart` — `campaignDetailProvider`, `campaignStatsProvider` 추가
+  - `campaign/data/campaign_repository.dart` — `fetchCampaignDetail()`, `fetchCampaignStats()` 메서드 추가
+    - `fetchCampaignStats()`: KST 자정 기준 오늘 성공 건수 + 누적 건수 + campaign_rank_history 최신 순위
+  - `campaign/domain/campaign_model.dart` — `CampaignStats` 클래스 추가 + `CampaignModel.fromMap()` startDate/endDate 추가
+
+  **테스트 데이터 SQL**
+  - `supabase/test_data/insert_test_campaign.sql` 신규 생성
+    - 키워드 "무선 블루투스 이어폰", 10명/일, 14일, ACTIVE 상태 캠페인 INSERT
+    - campaign_tags 3개 (블루투스이어폰 / 무선이어폰추천 / 노이즈캔슬링이어폰) INSERT
+    - 실행 결과에서 campaign_id 출력 → `http://localhost:8080/web/campaign/{id}` 확인
+    - ※ users 테이블 비어 있으면 EXCEPTION 발생 — 앱 로그인 후 실행 필요
+
+- ✅ 완료: Phase 4-7 — 파이썬 랭킹 모듈 서버 개발
+
+  **rank_module/ 디렉토리 (version1/rank_module/)**
+  - `crawler.py` — 네이버 쇼핑 공식 Search API 기반 순위 조회
+    - 네이버 API 계정 6개 등록, 한도 초과(429/403) 시 자동으로 다음 계정으로 전환
+    - SmartStore URL에서 product_id 파싱 → API 결과의 productId 필드와 매칭 (100위까지)
+    - 1순위: productId 직접 비교 / 2순위: link URL에 product_id 포함 여부 (fallback)
+    - 싱글톤 `_NaverApiClient`로 프로세스 내 계정 전환 상태 유지
+    - API 엔드포인트: `GET openapi.naver.com/v1/search/shop.json?query={keyword}&display=100`
+  - `main.py` — FastAPI 서버 (GET /rank?url=&keyword=)
+    - Flutter rank_api_client.dart 스펙과 동일한 응답 형식
+    - 서버 시작 시 BackgroundScheduler 자동 등록
+    - GET /health 헬스 체크 엔드포인트 포함
+    - 핸들러 sync 함수 (FastAPI 스레드풀 자동 실행)
+  - `scheduler.py` — APScheduler BackgroundScheduler 일일 순위 갱신
+    - 매일 KST 03:00 (SCHEDULER_HOUR/MINUTE 환경변수로 조정 가능)
+    - ACTIVE 캠페인 전체 순위 조회 → campaign_rank_history INSERT
+    - 캠페인 간 1초 대기 (API 과부하 방지)
+    - service_role key로 RLS bypass
+  - `requirements.txt` — fastapi, uvicorn, requests, apscheduler, supabase, python-dotenv
+  - `.env.example` — 환경변수 템플릿 (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PORT, SCHEDULER_HOUR/MINUTE)
+
+  **네이버 API 계정 (crawler.py에 하드코딩)**
+  - 계정 1: E09SGvUsSXi155g2Nvuh
+  - 계정 2: dgn3OcYdXliI0H4q8jww
+  - 계정 3: sUUN4YCKILvwbDGuL7tL
+  - 계정 4: I9TQEzQoTceN5qukTyOb
+  - 계정 5: 8qpWedtXuvjmamMsCBBc
+  - 계정 6: RXdmUvVbdWzT0zrO7pAC
+
+  **실행 방법:**
+  ```bash
+  cd rank_module
+  pip install -r requirements.txt
+  cp .env.example .env   # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 입력
+  uvicorn main:app --host 0.0.0.0 --port 8000
+
+  # 크롤러 단독 테스트
+  python crawler.py "https://smartstore.naver.com/store/products/12345678" "키워드"
+
+  # 스케줄러 즉시 1회 실행 (테스트)
+  python scheduler.py
+  ```
+
+- ✅ 완료: Phase 4-8 — 앱 이름 "겟머니" 변경 (2026-04-23)
+
+  **변경된 파일 (6개 파일, 6곳)**
+  - `android/app/src/main/AndroidManifest.xml` — `android:label` → `"겟머니"`
+  - `lib/main.dart` — `title: 'Store Traffic Booster'` → `'겟머니'`
+  - `lib/features/auth/presentation/splash_screen.dart` — 스플래시 텍스트 → `'겟머니'`
+  - `lib/features/auth/presentation/login_screen.dart` — 로고 하단 텍스트 → `'겟머니'`
+  - `lib/features/auth/presentation/web_login_screen.dart` — 로고 타이틀 + 하단 안내 문구 → `'겟머니'`
+  - `lib/features/dashboard/presentation/web_dashboard_screen.dart` — AppBar 타이틀 → `'겟머니'`
+
+  **패키지 이름 확인**
+  - `android/app/build.gradle.kts` — `applicationId = "com.storetrafficbooster.app"` 유지 (변경 없음)
+  - Play Store applicationId는 한 번 등록하면 변경 불가이므로 현행 유지
+
 - ✅ 완료: Phase 4-9 — 내부 테스트 배포 (2026-04-23)
 
   **배포 환경**
@@ -224,9 +473,10 @@ Phase 4 (1~2주): 어드민 + 배포
   **배포 완료 항목**
   - Railway 랭킹 서버: https://web-production-e7797.up.railway.app
   - RANK_API_URL: https://web-production-e7797.up.railway.app/rank
+  - Flutter 웹 배포: https://rankingup-web-production.up.railway.app
   - 개인정보처리방침: https://naturaltorymarket2.github.io/rankingup-privacy/
   - targetSdk: 35
-  - 앱 아이콘: 임시 아이콘 적용 (파란 배경 + 흰색 "랭킹업" 텍스트)
+  - 앱 아이콘: 임시 아이콘 적용 (파란 배경 + 흰색 "겟머니" 텍스트)
 
   **배포 후 수동 처리 필요 항목**
   - ⚠️ start_mission RPC 일일 참여 제한 주석 해제 (테스트 완료 후)
@@ -235,139 +485,170 @@ Phase 4 (1~2주): 어드민 + 배포
   - ⚠️ 프로덕션 트랙 출시 (내부 테스트 완료 후)
 
 - ✅ 완료: Phase 4-10 — 웹 라우팅 버그 수정 + 기능 개선 (2026-04-27)
-  - splash_screen.dart: kIsWeb 분기 추가 (웹/앱 라우팅 분리)
-  - web_login_screen.dart: 광고주 회원가입 2-step 플로우 구현
-  - rank_module/main.py: CORSMiddleware 추가 (Flutter Web 브라우저 지원)
-  - campaign_new_screen.dart: 순위 조건 완화 (URL+키워드만 있으면 등록 가능)
+
+  **버그 1: 웹 라우팅 (스플래시 → 광고주 대시보드)**
+  - `lib/features/auth/presentation/splash_screen.dart`
+    - 기존: 세션 있으면 무조건 `/home` (앱 화면) 이동
+    - 수정: `kIsWeb` 분기 추가
+      ```dart
+      context.go(kIsWeb ? '/web/dashboard' : '/home');
+      // 세션 없을 때:
+      context.go(kIsWeb ? '/web/login' : '/login');
+      ```
+    - 원인: 단일 코드베이스에서 웹/앱 분기 누락
+
+  **버그 2: 광고주 회원가입 2단계 UI**
+  - `lib/features/auth/presentation/web_login_screen.dart`
+    - 기존: 이메일+비밀번호 입력 시 즉시 로그인 처리 (사업자 정보 입력 단계 없음)
+    - 수정: 2-step 회원가입 플로우 구현
+      - Step 1: 이메일 + 비밀번호 → `supabase.auth.signUp()` → 세션 생성되면 Step 2
+      - Step 2: 전화번호 + 회사명 + 사업자번호 + 세금계산서 이메일 → `register_advertiser` RPC → 대시보드
+    - `_signupStep` (1 or 2) 상태 변수 추가
+    - `_buildStepIndicator()` 위젯 추가 (점 + 선 UI)
+    - `_switchTab()` 탭 전환 시 step 초기화
+
+  **버그 3: 랭킹 모듈 CORS 오류 (웹에서 "네트워크 연결을 확인해주세요")**
+  - `rank_module/main.py`
+    - 기존: CORS 미들웨어 없음 → 브라우저가 응답 차단
+    - 수정: `CORSMiddleware` 추가
+      ```python
+      app.add_middleware(
+          CORSMiddleware,
+          allow_origins=['https://rankingup-web-production.up.railway.app', 'http://localhost', 'http://localhost:8080'],
+          allow_methods=['GET'],
+          allow_headers=['*'],
+      )
+      ```
+    - 원인: Flutter Android는 CORS 무관, Flutter Web(브라우저)은 CORS 강제
+
+  **기능 변경: 캠페인 등록 순위 조건 완화**
+  - `lib/features/campaign/presentation/campaign_new_screen.dart`
+    - 기존: 순위 조회 후 15위 이내여야 다음 단계 활성화
+    - 수정: URL + 키워드만 입력하면 다음 단계 활성화 (순위 조회는 선택사항)
+      ```dart
+      bool get _step1Valid =>
+          _urlCtrl.text.trim().isNotEmpty &&
+          _keywordCtrl.text.trim().isNotEmpty;
+      ```
+    - 순위 미노출: 빨간 오류 → 주황 경고 (등록은 가능)
+    - 16위 이상: 빨간 오류(등록 불가) → 주황 경고 (등록 가능하나 효과 제한적)
+    - Railway 재배포 완료 (rank_module CORS 수정 포함)
 
 - ✅ 완료: Phase 4-11 — GitHub 저장소 등록 + Path URL 라우팅 수정 + Nginx (2026-04-29)
-  - store_traffic_booster/ git init + GitHub 저장소 연결 (main 브랜치)
-  - android/key.properties → .gitignore 추가
-  - main.dart: usePathUrlStrategy() 추가 (Hash URL → Path URL)
-  - web/nginx.conf + Dockerfile 신규 (Railway SPA 라우팅)
-  - AAB versionCode 3 → 4 빌드
+
+  **GitHub 저장소 초기화 (store_traffic_booster/)**
+  - 저장소: https://github.com/naturaltorymarket2/rankingup-web (브랜치: main)
+  - store_traffic_booster/ 내부에 `git init` (기존 홈 디렉토리 git과 분리)
+  - `android/key.properties` → `.gitignore` 추가 (서명 키 노출 방지)
+  - 118개 파일 최초 커밋 후 force push (remote main 기존 커밋과 히스토리 불일치)
+
+  **Path URL 라우팅 수정 (lib/main.dart)**
+  - `usePathUrlStrategy()` + `import 'package:flutter_web_plugins/url_strategy.dart'` 추가
+  - 원인: Hash URL (#/) 전략에서 브라우저가 `localhost/admin/charge`를 직접 입력하면 Flutter가 경로를 읽지 못하고 `/`로 처리 → 스플래시 → 대시보드로 리다이렉트
+  - 수정: Path URL 전략으로 변경 → 브라우저 직접 접근 경로 정상 인식
+
+  **Railway Nginx SPA 설정**
+  - `web/nginx.conf` 신규 — `${PORT}` 변수로 Railway 포트 자동 적용, `/index.html` SPA fallback
+  - `Dockerfile` 신규 — 멀티 스테이지: Flutter build (ARG RANK_API_URL) → nginx:alpine 서빙
+  - nginx:alpine 1.19+의 `/etc/nginx/templates/*.template` 자동 envsubst 처리 활용
+
+  **AAB 빌드 versionCode 4**
+  - `android/app/build.gradle.kts` versionCode 3 → 4
+  - 빌드: `flutter build appbundle --release --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank`
+  - 결과: app-release.aab (47MB)
 
 - ✅ 완료: Phase 4-12 — 어드민 로그인 페이지 분리 (2026-04-29)
-  - lib/features/auth/presentation/admin_login_screen.dart 신규 생성 (어드민 전용)
-  - router.dart: /web/* → /web/login, /admin/* → /admin/login 가드 분리
-  - web_login_screen.dart: fromAdmin 파라미터 및 오렌지 배너 제거
-  - admin_charge_screen.dart, admin_withdraw_screen.dart: role 체크 로직 제거
+
+  **`/admin/login` 페이지 신규 생성**
+  - `lib/features/auth/presentation/admin_login_screen.dart` — 어드민 전용 로그인 (회원가입 없음)
+  - UI: 관리자 아이콘 + "관리자 로그인" 타이틀, 로그인 성공 시 `/admin/charge` 이동
+
+  **`/web/login` 과 `/admin/login` 완전 분리**
+  - `lib/app/router.dart` — redirect 가드 분리:
+    - `/web/*` → 세션 없으면 `/web/login`
+    - `/admin/*` → 세션 없으면 `/admin/login`
+  - `web_login_screen.dart` — `fromAdmin` 파라미터 및 오렌지 배너 제거
+
+  **role 기반 리다이렉트 로직 제거**
+  - `admin_charge_screen.dart` — `currentUserRoleProvider` watch + role != 'ADMIN' 체크 제거
+  - `admin_withdraw_screen.dart` — 동일 변경
+  - 세션 만료 시 catch 블록 리다이렉트: `/web/login` → `/admin/login`
+  - GitHub 반영 완료 (commit: 25c599f)
 
 - ✅ 완료: Phase 4-13 — 출금 신청 RLS 버그 수정 (2026-04-29)
-  - **원인**: `transactions_charge_insert` RLS 정책이 `type='CHARGE'`만 허용 → WITHDRAW INSERT 차단
-  - supabase/migrations/20260317000015_submit_withdraw_rpc.sql 신규
-    - `submit_withdraw` RPC (SECURITY DEFINER): 중복 체크 + 잔액 확인 + 잔액 차감 + transactions INSERT
-  - supabase/migrations/20260317000016_fix_withdraw_rpcs.sql 신규
-    - `process_withdraw` 수정: 잔액 차감 제거 (submit_withdraw에서 이미 차감) → status=COMPLETED만 처리
-    - `reject_withdraw` 수정: 잔액 복구 추가 (신청 시 차감됐으므로 거절 시 환불)
-  - lib/features/wallet/data/wallet_repository.dart 수정
-    - 직접 INSERT 제거 → `submit_withdraw` RPC 호출로 교체
-    - `dart:convert` import 제거
-  - lib/features/wallet/presentation/withdraw_provider.dart 수정
-    - `Future<bool>` → `Future<void>`, `catch (_) { return false; }` → PostgrestException 파싱 후 throw
-  - lib/features/wallet/presentation/withdraw_screen.dart 수정
-    - `success == false` 분기 → `try/catch` 패턴, RPC 에러 메시지를 빨간 SnackBar로 표시
+
+  **원인 분석**
+  - `transactions_charge_insert` RLS 정책이 `type='CHARGE'`만 허용 → 클라이언트에서 `type='WITHDRAW'` INSERT 불가
+  - `withdraw_provider.dart`의 `catch (_) { return false; }` 가 예외를 삼켜 "오류가 발생했습니다" 표시
+
+  **수정 내용**
+  - `supabase/migrations/20260317000015_submit_withdraw_rpc.sql` 신규
+    - `submit_withdraw` RPC (SECURITY DEFINER): 최소금액/잔액/중복 체크 + 잔액 차감 + transactions INSERT
+  - `supabase/migrations/20260317000016_fix_withdraw_rpcs.sql` 신규
+    - `process_withdraw` 수정: 잔액 차감 제거 → status=COMPLETED만 처리
+    - `reject_withdraw` 수정: 잔액 복구 추가 (거절 시 신청 금액 환불)
+  - `wallet_repository.dart`: 직접 INSERT → `submit_withdraw` RPC 호출로 교체
+  - `withdraw_provider.dart`: `Future<bool>` → `Future<void>`, PostgrestException 파싱 후 throw
+  - `withdraw_screen.dart`: `try/catch` 패턴으로 교체, 에러 메시지를 빨간 SnackBar로 표시
+
+⚠️ 배포 전 수동 처리 필요 (코드 외 작업):
+- ⚠️ **start_mission RPC 일일 참여 제한 주석 해제 필수** — 테스트용으로 임시 비활성화 중
+  (`supabase/migrations/20260317000001_rpc_start_mission.sql` step 3 주석 → 해제 후 Supabase에 재적용)
+- 앱 아이콘 교체 (512×512px, 현재 임시 아이콘 사용 중)
+- Play Console 등록 (앱 설명, 스크린샷, 개인정보처리방침 URL, 콘텐츠 등급)
+- ✅ rank_module 서버 배포 완료: https://web-production-e7797.up.railway.app
+- ✅ RANK_API_URL 설정 완료: https://web-production-e7797.up.railway.app/rank
+- ✅ Flutter 웹 배포 완료: https://rankingup-web-production.up.railway.app
+- ✅ AAB 빌드 완료 (47MB, versionCode 4) — `build/app/outputs/bundle/release/app-release.aab`
 
 - ✅ 완료: Phase 5-1 — 랭킹 서버 /keywords 엔드포인트 추가 (2026-05-04)
 
   **rank_module/ 변경 사항**
   - `crawler.py` — `fetch_related_keywords(product_url, seed_keyword)` 구현
     - 기존: SmartStore 페이지 og:title 스크래핑 → Naver 429로 항상 실패
-    - 수정: Shopping API + seed_keyword로 상품명 파악 (페이지 접근 없음)
-      - seed_keyword로 Shopping API 검색 → product_id 매칭 시 실제 상품명 사용
-      - 미매칭 시 seed_keyword 자체를 상품명으로 fallback
+    - 수정: seed_keyword 기반으로 변경 (페이지 접근 없음)
     - `_fetch_product_name()` 함수 제거 (og:title 스크래핑 코드 완전 삭제)
     - `__main__` --keywords 플래그: `{url} {seed_keyword}` 두 인자로 변경
   - `main.py` — `GET /keywords?url=&keyword=` (keyword 파라미터 필수 추가)
-    - `CrawlError` except 제거 (페이지 스크래핑 없으므로 불필요)
   - Railway 배포 완료 (commit: 4ca5769)
-  - 검증: `curl "…/keywords?url=…&keyword=무선 블루투스 이어폰"` → `{"keywords":[...]}` 정상 응답
 
 - ✅ 완료: Phase 5-2 — 캠페인 등록 키워드 자동완성 기능 (2026-05-04)
 
   **Flutter 변경 사항**
   - `lib/shared/utils/rank_api_client.dart`
     - `fetchKeywords(productUrl, seedKeyword)` — seed_keyword 파라미터 추가
-    - `/keywords?url=&keyword=` 쿼리 파라미터 전송
+    - `_keywordsTimeout = Duration(seconds: 60)` 추가 (fetchRank의 10s와 별도)
   - `lib/features/campaign/presentation/keyword_select_modal.dart` (신규)
-    - `showKeywordSelectModal()` — BottomSheet 모달
+    - `showKeywordSelectModal(context, keywords, {preSelected})` — BottomSheet 모달
     - 최대 10개 ON 가능, 순위 뱃지 (초록 ≤15위, 주황 >15위, 회색 null)
-    - 취소 / N개 선택 완료 버튼
+    - `preSelected` 파라미터로 재오픈 시 이전 선택 상태 복원 (B-7 버그 수정)
   - `lib/features/campaign/presentation/campaign_new_screen.dart`
-    - Step 1: 상품 URL + 대표 키워드(시드) 필드 추가
-      - 두 필드 모두 입력해야 [키워드 자동완성] 버튼 활성화
-      - URL 또는 키워드 변경 시 기존 선택 초기화
+    - Step 1: 상품 URL + 대표 키워드(시드) 입력 필드 추가
     - `fetchKeywords(url, seed)` 호출 → 모달 → 선택 키워드 저장
     - `_step1Valid`: URL + 시드 키워드 + 선택 키워드 1개 이상 필요
-    - 선택된 키워드 수만큼 `register_campaign` RPC 순차 호출 (다중 캠페인)
-    - Step 2: 예산 미리보기 카드 (키워드 × 기간 × 일일 × 50P)
-    - Step 3: 총 비용 = 키워드 수 × 기간 × 일일 목표 × 50P
-
-- ✅ 완료: Phase 5-QA — 키워드 자동완성 + 다중 캠페인 등록 QA (2026-05-05)
-
-  **버그 발견 및 수정 (B-7)**
-  - `keyword_select_modal.dart`: 모달 재오픈 시 이전 선택 상태가 초기화되는 버그
-    - 원인: `initState`에서 `List.filled(n, false)` — 항상 전부 false 초기화
-    - 수정: `preSelected` named 파라미터 추가
-      - `showKeywordSelectModal(context, keywords, preSelected: _selectedKeywords)`
-      - `initState`에서 `preSelectedKeywords` Set 생성 → 이름 일치 키워드 ON 초기화
-  - `campaign_new_screen.dart`: `showKeywordSelectModal` 호출 시 `preSelected: _selectedKeywords` 전달
+    - 선택된 키워드 수만큼 `register_campaign` RPC 순차 호출 (다중 캠페인 등록)
+    - Step 2: 키워드 × 기간 × 일일 목표 × 50P 예산 미리보기 카드
   - Flutter commit: f18fe1d
 
-  **QA Pass 항목 (코드 리뷰)**
-  - A-1~A-7: /keywords API 연동 전항목 Pass
-  - B-1~B-6: 모달 동작 Pass (B-7만 Fail → 수정 완료)
-  - C-1~C-3: Step 2 예산 계산 Pass
-  - D-1~D-5: Step 3 등록 플로우 Pass (D-3: SnackBar 아닌 인라인 UI — 의도된 동작)
-  - E-1~E-2: 엣지 케이스 Pass
+- ✅ 완료: Phase 5-QA — 키워드 자동완성 + 다중 캠페인 등록 QA (2026-05-05)
+  - B-7 버그 수정: 모달 재오픈 시 이전 선택 상태 초기화 → `preSelected` 파라미터로 해결
+  - A-1~E-2 전 항목 Pass (D-3: SnackBar 아닌 인라인 UI — 의도된 동작)
 
 - ✅ 완료: Phase 5-디버깅 — /keywords 타임아웃 원인 파악 및 수정 (2026-05-05)
-
-  **증상**: `헬스 장갑` 키워드 자동완성 시 Flutter 타임아웃 에러
-
-  **원인 분석**
-  - `curl` 측정 결과: `/keywords` 엔드포인트 응답 **21.2초**
-  - Flutter `fetchKeywords()` 타임아웃: 10초 → 타임아웃 초과
-  - 원인: 슬라이딩 윈도우로 20개 후보 생성 × 0.5초 sleep = 10초 sleep 단독
-  - 여기에 Naver API 호출 ~0.5초/회 × 20 = 10초 추가 → 합계 ~21초
-
-  **수정 (A+B 병행)**
-  - `crawler.py`: `_MAX_KEYWORDS = 20 → 10`, `time.sleep(0.5 → 0.3)`
-    - Railway commit: a07df52
-  - `rank_api_client.dart`: `fetchKeywords()` 전용 `_keywordsTimeout = Duration(seconds: 60)` 추가
-    - `fetchRank()`는 기존 `_timeout(10s)` 유지
-    - Flutter commit: 3fd9238
-  - 수정 후 응답 시간: **10.1초** (21.2s → 10.1s, -52%)
+  - 증상: 타임아웃 에러 (Flutter 10초 제한 초과)
+  - 원인: 슬라이딩 윈도우 20개 후보 × 0.5초 sleep + API 호출 = ~21초
+  - 수정 A: `crawler.py` — `_MAX_KEYWORDS 20→10`, `sleep(0.5→0.3)` (Railway commit: a07df52)
+  - 수정 B: `rank_api_client.dart` — `_keywordsTimeout = Duration(seconds: 60)` 추가 (Flutter commit: 3fd9238)
+  - 결과: 21.2초 → 10.1초 (-52%)
 
 - ✅ 완료: Phase 5-3 — 네이버 자동완성 API로 키워드 수집 방식 교체 (2026-05-05)
-
-  **배경**: Phase 5-1의 슬라이딩 윈도우 방식은 상품명 기반 기계적 조합 → 실사용자 검색어와 괴리
-  이 Phase에서 네이버 자동완성 API로 완전 교체
-
-  **crawler.py 변경 사항** (rank_module commit: e9b05a4)
-  - `_generate_keyword_candidates()` 함수 제거 (슬라이딩 윈도우 완전 삭제)
-  - `_MAX_KEYWORDS` 상수 제거
-  - Shopping API 기반 상품명 파악 로직 제거 (`fetch_related_keywords` 내부)
-  - `fetch_autocomplete_keywords(seed_keyword: str) -> List[str]` 신규 추가
+  - `crawler.py` — `fetch_autocomplete_keywords(seed_keyword)` 신규 추가
     - URL: `https://ac.search.naver.com/nx/ac`
-    - 파라미터: `q`, `r_format=json`, `r_enc=UTF-8`, `st=100`
-    - 헤더: `User-Agent: Mozilla/5.0`, `Referer: https://search.naver.com`
-    - timeout: 5초
-    - 응답 파싱: `items[0][i][0]` 로 키워드 추출
-    - 단어 수 2개 이하만 포함 (긴 구절 제외)
-    - seed_keyword를 맨 앞에 추가 (중복 제거), 최대 10개 반환
-    - 예외 시 `[seed_keyword]` 반환 (빈 결과 방지)
-  - `fetch_related_keywords(product_url, seed_keyword)`:
-    - product_id 검증 → `fetch_autocomplete_keywords(seed_keyword)` → 각 키워드별 `fetch_naver_rank()` + `sleep(0.3)`
-
-  **성능 비교**
-
-  | 항목 | 슬라이딩 윈도우 | 자동완성 API |
-  |------|----------------|-------------|
-  | 키워드 예시 | "헬스장갑 턱걸이장갑 철봉" (상품명 조합) | "여자 헬스장갑", "헬스장갑 추천" (실검색어) |
-  | 로컬 소요 시간 | ~21초 | **5.6초** |
-  | Railway 응답 | ~10초 (제한 후) | **9.3초** |
-  | 키워드 품질 | 상품명 기반 기계적 조합 | 실사용자 검색 기반 |
+    - 단어 수 2개 이하만 포함, seed_keyword 맨 앞 추가, 최대 10개 반환
+  - `_generate_keyword_candidates()` (슬라이딩 윈도우) 완전 제거
+  - `fetch_related_keywords()`: product_id 검증 → 자동완성 후보 → 각 키워드별 순위 조회
+  - 결과: Railway 응답 10.1초 → **9.3초**, 키워드 품질 대폭 개선 (실검색어 기반)
+  - Railway commit: e9b05a4
 
 - ✅ 완료: Phase 6-1 — AAB 빌드 versionCode 5 (2026-05-05)
   - `android/app/build.gradle.kts`: versionCode 4 → 5
@@ -403,8 +684,63 @@ Phase 4 (1~2주): 어드민 + 배포
     - `curl --fail --retry 3`으로 실패 시 재시도
   - **GitHub Secret 등록**: `SCHEDULER_SECRET`
   - **Railway Variables 등록**: `SCHEDULER_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
-  - 로컬 테스트: `curl -X POST http://localhost:8000/run-scheduler -H "X-Scheduler-Secret: {토큰}"`
   - `campaign_rank_history` 데이터 정상 적재 확인 (2026-05-07)
+
+- ✅ 완료: Phase 6-4 — 순위 매칭 로직 재수정 (2026-05-11)
+
+  **배경**: Phase 6-2에서 추가한 `_normalize_url` 완전일치 로직 제거 요청
+  → productId 단일 비교로 변경 → link URL fallback 누락 버그 발견 → 즉시 복원
+
+  **rank_module/crawler.py 최종 변경 사항**
+  - `_normalize_url(url)` 함수 삭제 (fetch_naver_rank 외 사용처 없음)
+  - `fetch_naver_rank()` 매칭 순서 최종 확정:
+    - 1순위: `target_id == str(item.get('productId', ''))` — productId 직접 비교
+    - 2순위: `target_id == _extract_numeric_id(item.get('link', ''))` — 링크 URL fallback
+  - `_extract_numeric_id()` 유지 (fetch_naver_rank에서 계속 사용)
+  - `_extract_product_id()` 유지 (fetch_related_keywords SmartStore URL 검증용)
+  - rank_module commit: d3a4911 (URL 정규화 제거), 4135619 (link fallback 복원)
+  - Railway 자동 배포 완료
+
+- ✅ 완료: Phase 6-5 — 캠페인 등록 키워드 직접 추가 기능 (2026-05-11)
+
+  **Flutter 변경 사항** (Flutter commit: 53a48f2)
+  - `lib/features/campaign/presentation/keyword_select_modal.dart`
+    - `showKeywordSelectModal()`: `productUrl` named 파라미터 추가 (기본값 `''`)
+    - 직접 추가 섹션 신규:
+      - `_customKeywords`: 직접 추가 키워드 목록 (`List<KeywordRankResult>`)
+      - `_customToggles`: 직접 추가 키워드 ON/OFF (`List<bool>`)
+      - `_customController`: 텍스트 입력 컨트롤러
+      - `_isAddingKeyword`: 순위 조회 중 로딩 상태 bool
+    - `_addCustomKeyword()` 동작:
+      - 중복 키워드 → 토스트 "이미 추가된 키워드입니다"
+      - 직접 추가 10개 초과 → 토스트 "직접 추가는 최대 10개까지 가능합니다"
+      - `productUrl` 있으면 `RankApiClient.fetchRank()` 호출 → 성공 시 실제 순위, 실패 시 null (회색 뱃지)
+      - 추가 즉시 ON 상태, 입력창 초기화
+    - `_removeCustomKeyword(index)`: [X] 버튼으로 직접 추가 키워드 삭제
+    - `_selectedCount`: 추천 + 직접 추가 ON 수 합산
+    - 최종 반환: 추천 선택 목록 + 직접 추가 선택 목록 합산
+    - `_RecommendedKeywordTile` / `_CustomKeywordTile` 별도 위젯으로 분리
+  - `lib/features/campaign/presentation/campaign_new_screen.dart`
+    - `showKeywordSelectModal()` 호출 시 `productUrl: _urlCtrl.text.trim()` 파라미터 추가
+
+- ✅ 완료: Phase 7-1 — 긴급 버그 3개 수정 (2026-05-13)
+  - 순위 대시보드 동일 날짜 중복 노출: Dart에서 KST 날짜 기준 중복 제거
+  - 태그 입력 오류: userId null 체크 추가 + verify_mission NULL 태그 보안 버그 수정 (migration 0017)
+  - 출금 신청 오류: userId null 체크 + Exception 메시지 유실 방지
+
+- ✅ 완료: Phase 7-2 — 순위 추적 시드 키워드 1개로 변경 (2026-05-13)
+  - campaigns 테이블 seed_keyword 컬럼 추가 (migration 0018)
+  - register_campaign RPC p_seed_keyword 파라미터 추가 (DEFAULT NULL, 하위 호환)
+  - scheduler.py: (product_url, seed_keyword) 기준 그룹화 → API 1회 호출/그룹
+
+- ✅ 완료: Phase 7-3 — 태그 수동 입력 + 정답 태그 선택 기능 (2026-05-13)
+  - campaign_tags 테이블 is_answer BOOLEAN + sort_order INTEGER 컬럼 추가 (migration 0019)
+  - register_campaign RPC: p_answer_index 파라미터 추가, 태그 최소 2개 검증, p_start_date/p_end_date 시그니처 수정
+  - start_mission RPC: ORDER BY RANDOM() → WHERE is_answer=true 방식으로 변경, 응답에 tag_index 포함
+  - 광고주 웹: 태그 수동 입력([추가] 버튼) + 라디오 버튼 정답 선택 UI
+  - 앱: "상품 페이지에서 N번째 태그를 입력하세요" 강조 안내 문구 추가
+  - 랭킹 서버: GET /tags 엔드포인트 + fetch_product_tags 함수 + beautifulsoup4 제거 (봇 차단 확인)
+  ⚠️ Supabase migration 0018, 0019 수동 적용 필요
 
 ---
 
@@ -424,7 +760,141 @@ Phase 4 (1~2주): 어드민 + 배포
 
 ---
 
-## 12. 추후 개선 사항
+## 12. Play Store 배포 체크리스트 (Phase 4-4)
+
+### 배포 전 필수 완료 항목
+
+#### 🔑 앱 서명 키
+- [x] `keytool`로 키스토어 생성 완료 (`/Users/daeun/upload-keystore.jks`)
+- [x] `android/key.properties` 실제 값 입력 완료 (keyAlias=upload)
+- [ ] 키스토어 파일(.jks)을 git 외부에 안전하게 백업 (분실 시 업데이트 불가)
+
+#### 📦 빌드 설정 확인
+- [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
+- [x] `versionCode = 5` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 5)
+- [ ] 업데이트 배포 시마다 versionCode 증가 필수
+- [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
+- [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
+
+#### 🏪 Play Console 등록 항목
+- [x] 앱 이름: "겟머니" (확정)
+- [ ] 앱 아이콘: 512×512px PNG (현재 기본 Flutter 아이콘 — 교체 필요)
+- [ ] 스크린샷: 최소 2장 (폰), 태블릿 선택
+- [ ] 짧은 설명 (80자 이내) / 전체 설명
+- [ ] 개인정보처리방침 URL (필수)
+- [ ] 콘텐츠 등급 설문 완료
+- [ ] 타겟 국가 설정
+
+#### 🔒 개인정보 / 정책
+- [ ] 개인정보처리방침 페이지 준비 (수집 항목: 이메일, Device ID, 포인트 내역)
+- [ ] AdMob 사용 시 "광고 ID" 항목 데이터 안전 섹션에 신고
+- [ ] 금융 데이터(포인트 잔액/출금) 데이터 안전 섹션에 신고
+
+### AAB 빌드 명령어
+
+```bash
+# 릴리즈 AAB 빌드
+flutter build appbundle --release \
+  --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
+
+# 빌드 산출물 경로
+# build/app/outputs/bundle/release/app-release.aab
+# ※ 빌드 전 versionCode 증가 필수 (android/app/build.gradle.kts)
+```
+
+### 앱 아이콘 교체 방법
+
+```bash
+# flutter_launcher_icons 패키지 사용 권장
+flutter pub add --dev flutter_launcher_icons
+# pubspec.yaml에 flutter_icons 설정 후:
+flutter pub run flutter_launcher_icons
+```
+
+---
+
+## 13. 배포 현황 (2026-05-13 기준)
+
+### 서비스 URL
+
+| 서비스 | URL | 상태 |
+|--------|-----|------|
+| 랭킹 모듈 API (Railway) | https://web-production-e7797.up.railway.app | ✅ 운영 중 |
+| Flutter 웹 (Railway) | https://rankingup-web-production.up.railway.app | ✅ 운영 중 |
+| 개인정보처리방침 | https://naturaltorymarket2.github.io/rankingup-privacy/ | ✅ 운영 중 |
+
+### Android 앱 상태
+
+| 항목 | 값 |
+|------|-----|
+| 플랫폼 | Google Play Console 내부 테스트 트랙 |
+| applicationId | com.storetrafficbooster.app |
+| 배포된 versionCode | 2 (내부 테스트) |
+| 현재 빌드 versionCode | 5 |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (47MB) |
+
+### GitHub 저장소
+
+| 항목 | 값 |
+|------|-----|
+| Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
+| 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
+| 브랜치 | main |
+| 마지막 push | 2026-05-13 |
+
+### GitHub Actions
+
+| 워크플로우 | 실행 시각 | 동작 |
+|-----------|----------|------|
+| `daily_rank_update.yml` | 매일 UTC 18:00 (KST 03:00) | `POST /run-scheduler` 호출 → `campaign_rank_history` 갱신 |
+
+### 환경변수 설정
+
+```bash
+# Flutter 빌드/실행 시 필요한 --dart-define 변수
+RANK_API_URL=https://web-production-e7797.up.railway.app/rank
+
+# SUPABASE_URL / SUPABASE_ANON_KEY는 supabase_client.dart defaultValue에 하드코딩됨
+# (별도 --dart-define 없이 flutter run 가능)
+```
+
+### 테스트 계정
+
+| 계정 | 이메일 | 비밀번호 | role |
+|------|--------|----------|------|
+| 어드민 | naturaltorymarket2@gmail.com | 123456 | ADMIN |
+| 어드민2 | test-admin@test.com | (설정한 비밀번호) | ADMIN |
+
+> ※ Supabase 대시보드에서 계정 생성 시 `handle_new_user` 트리거 실패 가능
+> → SQL Editor에서 `public.users` + `public.wallets` 수동 INSERT 필요
+
+### 로컬 개발 실행 명령어
+
+```bash
+# 앱 실행 (Android 에뮬레이터)
+cd store_traffic_booster
+flutter run --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
+
+# 웹 실행 (광고주/어드민)
+flutter run -d chrome --web-port=8080 \
+  --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
+
+# 랭킹 모듈 로컬 실행
+cd rank_module
+uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 스케줄러 수동 1회 실행 (로컬)
+cd rank_module
+python3 scheduler.py
+
+# 스케줄러 엔드포인트 테스트
+curl -X POST http://localhost:8000/run-scheduler \
+  -H "X-Scheduler-Secret: {SCHEDULER_SECRET 값}"
+```
+
+---
+
+## 14. 추후 개선 사항
 
 개선사항, 버그, 신규 기능 요청은 모두 **`BACKLOG.md`** 파일에서 관리한다.
 
