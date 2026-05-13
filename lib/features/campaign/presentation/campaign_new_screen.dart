@@ -30,7 +30,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   List<KeywordRankResult> _selectedKeywords = [];
 
   // ── Step 2 ────────────────────────────────────────────────────
-  final List<TextEditingController> _tagCtls = [TextEditingController()];
+  final _tags       = <String>[];          // 입력된 태그 목록
+  final _newTagCtrl = TextEditingController(); // 태그 추가 입력 필드
+  int _answerIndex  = -1;                  // 정답 태그 인덱스 (0-based, -1=미선택)
   int          _dailyTarget = 100;
   DateTimeRange? _dateRange;
 
@@ -52,10 +54,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       ? _dateRange!.end.difference(_dateRange!.start).inDays + 1
       : 0;
 
-  List<String> get _validTags => _tagCtls
-      .map((c) => c.text.trim())
-      .where((t) => t.isNotEmpty)
-      .toList();
+  List<String> get _validTags => List.unmodifiable(_tags);
 
   /// 선택된 키워드 수 × 기간 × 일일목표 × 50P
   int get _totalCost =>
@@ -68,7 +67,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       _selectedKeywords.isNotEmpty;
 
   bool get _step2Valid =>
-      _validTags.isNotEmpty &&
+      _tags.length >= 2 &&
+      _answerIndex >= 0 &&
       _dateRange != null &&
       _durationDays >= 7;
 
@@ -78,9 +78,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   void dispose() {
     _urlCtrl.dispose();
     _seedCtrl.dispose();
-    for (final c in _tagCtls) {
-      c.dispose();
-    }
+    _newTagCtrl.dispose();
     super.dispose();
   }
 
@@ -330,67 +328,75 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text('정답 태그', style: _kLabel),
-                  ),
-                  if (_tagCtls.length < 3)
-                    TextButton.icon(
-                      onPressed: _addTag,
-                      icon: const Icon(Icons.add, size: 16),
-                      label: const Text('태그 추가'),
-                      style: TextButton.styleFrom(
-                          foregroundColor: _kBlue),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 2),
+              const Text('정답 태그', style: _kLabel),
+              const SizedBox(height: 4),
               Text(
-                '미션 유저가 상품에 달아야 할 네이버 쇼핑 태그입니다. (최대 3개)',
+                '상품 페이지에 있는 네이버 태그를 입력하세요. (최소 2개, 최대 10개)',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 4),
               Text(
-                '입력한 태그는 선택한 ${_selectedKeywords.length}개 키워드 캠페인에 모두 적용됩니다.',
+                '★ 라디오 버튼으로 정답 태그 1개를 선택해주세요. '
+                '유저에게 몇 번째 태그인지 안내됩니다.',
                 style: const TextStyle(fontSize: 12, color: Colors.orange),
               ),
               const SizedBox(height: 12),
-              ...List.generate(
-                _tagCtls.length,
-                (i) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _tagCtls[i],
-                          decoration: InputDecoration(
-                            hintText: '태그 ${i + 1}',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                          ),
-                          onChanged: (_) => setState(() {}),
+
+              // 태그 추가 입력 행
+              if (_tags.length < 10)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _newTagCtrl,
+                        decoration: const InputDecoration(
+                          hintText: '태그를 입력하고 추가 버튼을 누르세요',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
                         ),
+                        onSubmitted: (_) => _addTag(),
                       ),
-                      if (_tagCtls.length > 1) ...[
-                        const SizedBox(width: 6),
-                        IconButton(
-                          icon: const Icon(
-                              Icons.remove_circle_outline,
-                              color: Colors.red,
-                              size: 22),
-                          onPressed: () => _removeTag(i),
-                          tooltip: '태그 삭제',
-                        ),
-                      ],
-                    ],
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _addTag,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                      ),
+                      child: const Text('추가'),
+                    ),
+                  ],
+                ),
+
+              // 태그 목록 (라디오 + 텍스트 + 삭제 버튼)
+              if (_tags.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...List.generate(_tags.length, _buildTagRow),
+              ],
+
+              // 안내 메시지
+              if (_tags.length < 2)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    '태그를 2개 이상 입력해주세요.',
+                    style: TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                )
+              else if (_answerIndex < 0)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    '정답 태그를 선택해주세요.',
+                    style: TextStyle(color: Colors.red, fontSize: 12),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -786,15 +792,65 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     }
   }
 
+  /// 태그 추가 (최대 10개, 중복 불가)
   void _addTag() {
-    setState(() => _tagCtls.add(TextEditingController()));
+    final tag = _newTagCtrl.text.trim();
+    if (tag.isEmpty) return;
+    if (_tags.length >= 10) {
+      _showSnack('태그는 최대 10개까지 추가할 수 있습니다.');
+      return;
+    }
+    if (_tags.contains(tag)) {
+      _showSnack('이미 추가된 태그입니다.');
+      return;
+    }
+    setState(() {
+      _tags.add(tag);
+      _newTagCtrl.clear();
+    });
   }
 
+  /// 태그 삭제 — 정답 인덱스 자동 조정
   void _removeTag(int index) {
     setState(() {
-      _tagCtls[index].dispose();
-      _tagCtls.removeAt(index);
+      _tags.removeAt(index);
+      if (_answerIndex == index) {
+        _answerIndex = -1; // 정답 태그 삭제 시 초기화
+      } else if (_answerIndex > index) {
+        _answerIndex--; // 삭제된 항목 앞에 정답이 있으면 인덱스 조정
+      }
     });
+  }
+
+  /// 태그 행 위젯 (라디오 버튼 + 태그 텍스트 + 삭제 버튼)
+  Widget _buildTagRow(int index) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Radio<int>(
+            value: index,
+            groupValue: _answerIndex,
+            onChanged: (v) => setState(() => _answerIndex = v!),
+            activeColor: _kBlue,
+            visualDensity: VisualDensity.compact,
+          ),
+          Expanded(
+            child: Text(
+              '${index + 1}. ${_tags[index]}',
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+            onPressed: () => _removeTag(index),
+            constraints:
+                const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickDateRange() async {
@@ -823,16 +879,6 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   /// - 부분 성공 → 성공한 수 SnackBar + 대시보드 이동
   /// - 전부 실패 → 오류 SnackBar, 화면 유지
   Future<void> _submit() async {
-    // 중복 태그 검사
-    final rawTags = _tagCtls
-        .map((c) => c.text.trim())
-        .where((t) => t.isNotEmpty)
-        .toList();
-    if (rawTags.length != rawTags.toSet().length) {
-      _showSnack('중복된 태그가 있습니다. 서로 다른 태그를 입력해주세요.');
-      return;
-    }
-
     setState(() => _isSubmitting = true);
 
     final userId = supabase.auth.currentUser!.id;
@@ -850,6 +896,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           startDate:   _dateRange!.start,
           endDate:     _dateRange!.end,
           tags:        _validTags,
+          answerIndex: _answerIndex + 1, // 0-based → 1-based
         );
         successCount++;
       } catch (e) {
@@ -881,7 +928,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       return '포인트가 부족합니다. 충전 후 다시 시도해주세요.';
     }
     if (err.contains('TAGS_REQUIRED')) {
-      return '태그를 1개 이상 입력해주세요.';
+      return '태그를 2개 이상 입력해주세요.';
+    }
+    if (err.contains('INVALID_ANSWER_INDEX')) {
+      return '정답 태그를 선택해주세요.';
     }
     if (err.contains('DURATION_TOO_SHORT')) {
       return '광고 기간은 최소 7일 이상이어야 합니다.';

@@ -44,7 +44,8 @@ class CampaignRepository {
   /// 캠페인 등록 RPC 호출
   ///
   /// register_campaign(p_user_id, p_product_url, p_keyword,
-  ///                   p_daily_target, p_start_date, p_end_date, p_tags)
+  ///                   p_daily_target, p_start_date, p_end_date,
+  ///                   p_tags, p_answer_index)
   /// 성공 시 campaign_id(String) 반환, 실패 시 Exception throw
   Future<String> registerCampaign({
     required String       userId,
@@ -54,6 +55,7 @@ class CampaignRepository {
     required DateTime     startDate,
     required DateTime     endDate,
     required List<String> tags,
+    required int          answerIndex, // 1-based 정답 태그 인덱스
   }) async {
     final res = await supabase.rpc('register_campaign', params: {
       'p_user_id':       userId,
@@ -63,6 +65,7 @@ class CampaignRepository {
       'p_start_date':    _toDateStr(startDate),
       'p_end_date':      _toDateStr(endDate),
       'p_tags':          tags,
+      'p_answer_index':  answerIndex,
     }) as Map<String, dynamic>;
 
     if (res['success'] != true) {

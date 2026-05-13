@@ -102,6 +102,7 @@ final appRouter = GoRouter(
               startedAt: startedRaw != null
                   ? DateTime.parse(startedRaw).toUtc()
                   : DateTime.now().toUtc(),
+              tagIndex:  extra?['tag_index'] as int?,
             );
           },
         ),

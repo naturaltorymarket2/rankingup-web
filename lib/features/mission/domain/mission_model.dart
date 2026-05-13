@@ -82,10 +82,15 @@ class StartMissionResult {
   /// 타이머 기준값 — 클라이언트 DateTime.now()로 대체 금지
   final DateTime startedAt;
 
+  /// 정답 태그 순서 (1-based). "N번째 태그를 입력하세요" 안내용.
+  /// null이면 안내 미표시 (기존 캠페인 하위 호환).
+  final int? tagIndex;
+
   const StartMissionResult({
     required this.logId,
     required this.keyword,
     required this.startedAt,
+    this.tagIndex,
   });
 
   /// RPC 응답 Map에서 생성
@@ -95,6 +100,7 @@ class StartMissionResult {
       logId: map['log_id'] as String,
       keyword: map['keyword'] as String,
       startedAt: DateTime.parse(map['started_at'] as String).toUtc(),
+      tagIndex: map['tag_index'] as int?,
     );
   }
 }

@@ -110,6 +110,7 @@ class MissionDetailScreen extends ConsumerWidget {
 
     // ── 4. 미션 진행 화면으로 이동 ────────────────────────────
     //      started_at: 서버 시각 기준 타이머 계산용 (UTC ISO 8601)
+    //      tag_index: 정답 태그 순서 안내용 (null이면 미표시)
     if (context.mounted) {
       context.push(
         '/mission/$campaignId/active',
@@ -117,6 +118,7 @@ class MissionDetailScreen extends ConsumerWidget {
           'log_id':     result.logId,
           'keyword':    result.keyword,
           'started_at': result.startedAt.toIso8601String(),
+          'tag_index':  result.tagIndex,
         },
       );
     }

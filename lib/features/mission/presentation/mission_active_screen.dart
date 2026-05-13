@@ -18,6 +18,7 @@ import 'mission_active_provider.dart';
 //   - logId     : start_mission RPC 응답의 log_id (UUID)
 //   - keyword   : 사용자가 검색한 키워드 (안내 표시용)
 //   - startedAt : 서버 기록 미션 시작 시각 (UTC) — 타이머 기준값
+//   - tagIndex  : 정답 태그 순서 (1-based, 없으면 null) — 태그 위치 안내용
 //
 // 화면 상태 흐름:
 //   진입 → "네이버에서 검색 중..." 대기 화면
@@ -26,10 +27,11 @@ import 'mission_active_provider.dart';
 //   [리워드 받기] → verify_mission RPC → 성공/오답/타임아웃/오류 처리
 
 class MissionActiveScreen extends ConsumerStatefulWidget {
-  final String id;         // campaign_id (path param)
-  final String logId;      // mission_logs.id (UUID)
-  final String keyword;    // 안내 표시용 키워드
+  final String id;          // campaign_id (path param)
+  final String logId;       // mission_logs.id (UUID)
+  final String keyword;     // 안내 표시용 키워드
   final DateTime startedAt; // 서버 UTC 시각 — 타이머 기준
+  final int? tagIndex;      // 정답 태그 순서 (1-based, null이면 안내 미표시)
 
   const MissionActiveScreen({
     super.key,
@@ -37,6 +39,7 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
     required this.logId,
     required this.keyword,
     required this.startedAt,
+    this.tagIndex,
   });
 
   @override
@@ -237,6 +240,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
                             remainingSeconds: _remainingSeconds,
                             isTimedOut:       _isTimedOut,
                             tagController:    _tagController,
+                            tagIndex:         widget.tagIndex,
                           ),
                         )
                       : const _WaitingBody(),
@@ -342,12 +346,14 @@ class _ActiveBody extends StatelessWidget {
   final int remainingSeconds;
   final bool isTimedOut;
   final TextEditingController tagController;
+  final int? tagIndex;
 
   const _ActiveBody({
     required this.keyword,
     required this.remainingSeconds,
     required this.isTimedOut,
     required this.tagController,
+    this.tagIndex,
   });
 
   @override
@@ -367,7 +373,10 @@ class _ActiveBody extends StatelessWidget {
         const SizedBox(height: 28),
 
         // 정답 입력
-        if (!isTimedOut) _TagInputSection(controller: tagController),
+        if (!isTimedOut) _TagInputSection(
+          controller: tagController,
+          tagIndex: tagIndex,
+        ),
 
         // 타임아웃 메시지
         if (isTimedOut) _TimeoutMessage(),
@@ -483,7 +492,12 @@ class _KeywordReminder extends StatelessWidget {
 
 class _TagInputSection extends StatelessWidget {
   final TextEditingController controller;
-  const _TagInputSection({required this.controller});
+  final int? tagIndex; // 정답 태그 순서 (1-based). null이면 안내 미표시.
+
+  const _TagInputSection({
+    required this.controller,
+    this.tagIndex,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -497,13 +511,46 @@ class _TagInputSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          '상품 페이지에서 찾은 태그를 입력하세요',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey.shade600,
+
+        // tag_index 안내 문구 (있을 경우 강조 박스로 표시)
+        if (tagIndex != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.indigo.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 18, color: Colors.indigo.shade700),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '상품 페이지에서 $tagIndex번째 태그를 입력하세요',
+                    style: TextStyle(
+                      color: Colors.indigo.shade800,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              '상품 페이지에서 찾은 태그를 입력하세요',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.grey.shade600,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+
         TextField(
           controller: controller,
           textInputAction: TextInputAction.done,

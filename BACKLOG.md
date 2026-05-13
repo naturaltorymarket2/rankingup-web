@@ -20,29 +20,31 @@
       ⚠️ Supabase migration 0018 적용 필요
       ⚠️ Flutter campaign_new_screen에서 seed_keyword 전달 별도 작업 필요
 
-## 🟡 신규 기능 — 태그 자동 수집 + 정답 태그 선택 (광고주/앱 연동) (최우선)
+## 🟡 신규 기능 — 태그 수동 입력 + 정답 태그 선택 (광고주/앱 연동) (최우선)
 
 > 광고주 캠페인 등록 → 앱 미션 안내까지 연결되는 흐름
+> (태그 자동 크롤링 방식 폐기 → 광고주 직접 입력 방식으로 변경)
 
-- [x] [랭킹 서버] GET /tags?url={smartstore_url} 엔드포인트 추가 (2026-05-13)
-      네이버 스마트스토어 상품 페이지 크롤링
-      class="JM1MDEN1tq" 요소 전체 파싱 → 태그 목록 반환 (최대 10개)
-      requirements.txt에 beautifulsoup4==4.12.3 추가
+- [x] [랭킹 서버] GET /tags 엔드포인트 추가 후 제거 (2026-05-13)
+      Playwright 로컬 테스트 결과 smartstore.naver.com 봇 차단 확인 → 자동 크롤링 방식 폐기
+      /tags 엔드포인트, fetch_product_tags 함수, beautifulsoup4 모두 제거
 
-- [ ] [DB] campaign_tags 테이블 구조 변경
-      기존: 광고주 수동 입력 태그 저장
-      변경: 크롤링한 태그 전체 저장 + is_answer boolean 컬럼 추가
-      register_campaign RPC 수정: p_tags[] 대신 태그 전체 + 정답 index 받도록 변경
+- [x] [DB] campaign_tags 테이블 구조 변경 (2026-05-13)
+      is_answer BOOLEAN DEFAULT false 컬럼 추가
+      sort_order INTEGER DEFAULT 0 컬럼 추가 (태그 입력 순서, 1-based)
+      register_campaign RPC: p_answer_index INT 파라미터 추가 (정답 태그 위치)
+      register_campaign RPC: 태그 최소 2개 검증 추가
+      ⚠️ Supabase migration 0019 적용 필요
 
-- [ ] [광고주 웹] 캠페인 등록 Step 1 — 태그 자동 수집 UI
-      상품 URL 입력 후 [태그 불러오기] 버튼
-      → GET /tags API 호출 → 태그 목록 표시
-      → 광고주가 정답 태그 1개 선택
-      → 선택된 태그 + 전체 태그 목록을 register_campaign RPC로 전달
+- [x] [광고주 웹] 캠페인 등록 Step 2 — 태그 수동 입력 UI (2026-05-13)
+      [추가] 버튼으로 태그 추가 (최소 2개, 최대 10개, 중복 불가)
+      라디오 버튼으로 정답 태그 1개 선택
+      태그 2개 이상 + 정답 선택 시 [다음] 버튼 활성화
+      p_tags + p_answer_index를 register_campaign RPC로 전달
 
-- [ ] [앱] 미션 진행 화면 — 정답 태그 안내 문구 개선
-      start_mission RPC 반환값에 tag_index(몇 번째 태그인지) 포함
-      "상품 페이지에서 N번째 태그를 입력하세요" 안내 문구 표시
+- [x] [앱] 미션 진행 화면 — 정답 태그 안내 문구 개선 (2026-05-13)
+      start_mission RPC 반환값에 tag_index 포함 (sort_order 값)
+      "상품 페이지에서 N번째 태그를 입력하세요" 강조 박스 표시
 
 - [ ] [앱] 미션 진행 화면 — 네이버 태그 보는 방법 안내 이미지 추가
       초보자용 캡쳐 이미지 삽입 (이미지 에셋 준비 필요 — 수동 작업)
