@@ -16,7 +16,8 @@ import 'withdraw_provider.dart';
 //   - 실제 이체 금액 = 신청 금액 - 500P
 //   - 잔액 부족 시 버튼 비활성화
 //
-// 주의: 신청 시점에 wallets.balance 차감 안 함 — 어드민 RPC에서 처리
+// 주의: 신청 시점에 wallets.balance 즉시 차감 (submit_withdraw RPC 내부 처리)
+//        출금 거절 시 reject_withdraw RPC가 잔액 복구 처리
 
 class WithdrawScreen extends ConsumerStatefulWidget {
   const WithdrawScreen({super.key});

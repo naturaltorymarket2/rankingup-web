@@ -32,7 +32,11 @@ class MissionVerifyNotifier extends AutoDisposeNotifier<bool> {
   }) async {
     state = true;
     try {
-      final userId = supabase.auth.currentUser?.id ?? '';
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        // 세션 만료 — 빈 문자열을 UUID로 전달하면 PostgreSQL 형식 오류 발생
+        return VerifyMissionResult.error;
+      }
       return await ref.read(missionRepositoryProvider).verifyMission(
         logId:        logId,
         userId:       userId,

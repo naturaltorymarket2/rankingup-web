@@ -32,7 +32,11 @@ class WithdrawNotifier extends AutoDisposeNotifier<bool> {
   }) async {
     state = true;
     try {
-      final userId = supabase.auth.currentUser?.id ?? '';
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        // 세션 만료 — 빈 문자열을 UUID로 전달하면 PostgreSQL 형식 오류 발생
+        throw Exception('로그인이 필요합니다. 다시 로그인해 주세요.');
+      }
       await ref.read(walletRepositoryProvider).submitWithdraw(
         userId:  userId,
         amount:  amount,
@@ -43,7 +47,9 @@ class WithdrawNotifier extends AutoDisposeNotifier<bool> {
     } on PostgrestException catch (e) {
       // RPC RAISE EXCEPTION 메시지를 그대로 전파
       throw Exception(e.message);
-    } catch (_) {
+    } catch (e) {
+      // Exception(userId 오류 등)은 그대로 rethrow, 그 외는 래핑
+      if (e is Exception) rethrow;
       throw Exception('오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       try {
