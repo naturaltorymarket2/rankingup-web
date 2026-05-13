@@ -24,9 +24,10 @@
 
 > 광고주 캠페인 등록 → 앱 미션 안내까지 연결되는 흐름
 
-- [ ] [랭킹 서버] GET /tags?url={smartstore_url} 엔드포인트 추가
+- [x] [랭킹 서버] GET /tags?url={smartstore_url} 엔드포인트 추가 (2026-05-13)
       네이버 스마트스토어 상품 페이지 크롤링
       class="JM1MDEN1tq" 요소 전체 파싱 → 태그 목록 반환 (최대 10개)
+      requirements.txt에 beautifulsoup4==4.12.3 추가
 
 - [ ] [DB] campaign_tags 테이블 구조 변경
       기존: 광고주 수동 입력 태그 저장
