@@ -64,10 +64,42 @@
 
 ---
 
+## 🔴 긴급 — 어뷰징 방지 미완성
+
+- [x] [DB] start_mission RPC 일일 참여 제한 주석 해제 필수 (2026-05-14)
+      migration 0022_enable_daily_mission_limit.sql 신규 생성
+      step 3 주석 해제 + campaign_tags 컬럼 IF NOT EXISTS 보장
+      ⚠️ Supabase SQL Editor에서 migration 0022 적용 필요
+
+- [x] [DB] register_campaign 시그니처 회귀 버그 수정 (2026-05-14)
+      migration 0018이 p_start_date/p_end_date를 p_duration_days로 되돌림 (회귀)
+      migration 0023_fix_register_campaign_signature.sql 신규 생성
+      p_start_date, p_end_date, p_answer_index, p_seed_keyword 시그니처 강제 적용
+      필수 컬럼(seed_keyword, start_date, end_date, is_answer, sort_order) IF NOT EXISTS 포함
+      ⚠️ Supabase SQL Editor에서 migration 0023 적용 필요
+
 ## 🔴 긴급 — 앱 핵심 기능 장애
 
 - [ ] 미션 시작 시 네이버 앱 딥링크 미작동 (naversearchapp:// scheme 실행 안 됨)
 - [ ] 네이버 앱이 열린 후 앱 복귀 시 MissionActiveScreen 백화면 현상
+
+## 🟠 버그 수정 권장
+
+- [ ] [광고주 웹] campaign_new_screen.dart userId 강제 언래핑 크래시 위험
+      현재: `supabase.auth.currentUser!.id` — 세션 만료 시 Null Pointer Exception
+      수정: `currentUser?.id` + null 체크 + 로그인 오류 안내
+      참고: withdraw_provider.dart, mission_active_provider.dart는 올바르게 처리됨
+
+- [ ] [광고주 웹 / DB] fetchCampaignStats와 get_dashboard_data 오늘 유입수 기준 불일치
+      fetchCampaignStats (캠페인 상세 화면): started_at >= KST 자정 기준
+      get_dashboard_data RPC (대시보드): completed_at = KST 오늘 기준
+      KST 자정 근처에서 두 화면 수치 불일치 가능
+      수정: fetchCampaignStats의 필드 기준을 completed_at으로 통일
+
+- [ ] [앱] mission_detail_screen에서 start_mission 응답의 tag_index 전달 경로 검증
+      migration 0019: start_mission이 tag_index 반환
+      MissionActiveScreen: tagIndex 파라미터 수신
+      mission_detail_screen → 라우터 extra → MissionActiveScreen 경로에서 올바르게 전달되는지 확인 필요
 
 ## 🟠 UX 개선
 

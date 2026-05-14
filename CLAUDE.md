@@ -919,6 +919,49 @@ curl -X POST http://localhost:8000/run-scheduler \
 
 ---
 
+### Supabase 수동 적용 필요 Migration
+
+> Supabase SQL Editor에서 아래 순서대로 실행.
+> `CREATE OR REPLACE` / `ADD COLUMN IF NOT EXISTS` 이므로 중복 실행 안전.
+
+| 순서 | 파일명 | 핵심 내용 | 상태 |
+|------|--------|-----------|------|
+| 1 | `20260317000017_fix_verify_mission_null_tag.sql` | verify_mission NULL 태그 보안 버그 수정 (어떤 태그든 통과되는 취약점 차단) | ⚠️ 미적용 확인 필요 |
+| 2 | `20260317000018_add_seed_keyword.sql` | campaigns.seed_keyword 컬럼 추가 + register_campaign p_seed_keyword 파라미터 | ⚠️ 미적용 확인 필요 |
+| 3 | `20260317000019_update_campaign_tags.sql` | campaign_tags.is_answer + sort_order 컬럼 추가, register_campaign p_answer_index 추가, start_mission tag_index 응답 | ⚠️ 미적용 확인 필요 |
+| 4 | `20260317000020_create_notices.sql` | notices 테이블 + RLS + get_notices / create_notice RPC | ⚠️ 미적용 확인 필요 |
+| 5 | `20260317000021_fix_campaigns_rls.sql` | campaigns RLS 강화 (타 광고주 ACTIVE 캠페인 접근 차단) | ⚠️ 미적용 확인 필요 |
+| 6 | `20260317000022_enable_daily_mission_limit.sql` | **start_mission 일일 참여 제한 활성화** (어뷰징 방지 핵심) | ❌ 신규 — 즉시 적용 필요 |
+| 7 | `20260317000023_fix_register_campaign_signature.sql` | register_campaign 시그니처 확정 (0018 회귀 버그 방지, Flutter 완전 일치) | ❌ 신규 — 즉시 적용 필요 |
+
+**적용 명령 (Supabase SQL Editor):**
+```sql
+-- 파일 내용을 복사하여 순서대로 실행
+-- 각 파일 실행 후 오류 없으면 다음 파일로
+```
+
+**적용 후 검증:**
+```sql
+-- 1. register_campaign 시그니처 확인
+SELECT proname, pg_get_function_arguments(oid)
+FROM pg_proc
+WHERE proname = 'register_campaign' AND pronamespace = 'public'::regnamespace;
+-- 결과에 p_start_date, p_end_date, p_answer_index, p_seed_keyword 포함 확인
+
+-- 2. start_mission 일일 제한 활성화 확인
+SELECT prosrc FROM pg_proc
+WHERE proname = 'start_mission' AND pronamespace = 'public'::regnamespace;
+-- 결과에 'ALREADY_PARTICIPATED_TODAY' 문자열 포함 확인
+
+-- 3. campaign_tags 컬럼 확인
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'campaign_tags' AND table_schema = 'public'
+ORDER BY ordinal_position;
+-- is_answer, sort_order 컬럼 포함 확인
+```
+
+---
+
 ## 14. 추후 개선 사항
 
 개선사항, 버그, 신규 기능 요청은 모두 **`BACKLOG.md`** 파일에서 관리한다.
