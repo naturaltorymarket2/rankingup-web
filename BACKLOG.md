@@ -110,6 +110,24 @@
       태그 입력 상태(canGoBack)에서 AppBar 뒤로가기 버튼 + 시스템 뒤로가기 제스처 처리
       PopScope(canPop: false) + _goBackToWaiting() → _WaitingBody로 복귀 (미션 취소 아님)
 
+## 🟡 확인 필요 — QA 점검
+
+- [x] [랭킹 서버] rank_api_client.dart GET /rank, /keywords 응답 파싱 검증 (2026-05-14)
+      GET /rank: {"rank", "product_name", "thumbnail_url"} — Flutter 파싱 필드명 완전 일치
+      GET /keywords: {"keywords": [{keyword, rank}]} — Flutter 파싱 필드명 완전 일치
+      코드 변경 불필요
+
+- [x] [랭킹 서버] scheduler.py seed_keyword 기반 그룹화 검증 (2026-05-14)
+      select('id, product_url, keyword, seed_keyword') — seed_keyword SELECT 확인
+      track_kw = c.get('seed_keyword') or c['keyword'] — NULL 시 keyword fallback 확인
+      key = (product_url, track_kw) — (product_url, 추적 키워드) 그룹화 정상
+      코드 변경 불필요
+
+- [x] [앱] _goBackToWaiting() _remainingSeconds = 600 하드코딩 검증 (2026-05-14)
+      _isResumed = false와 동시 설정 → 타이머(_ActiveBody) 미표시 상태에서만 할당됨
+      복귀 시 _onResumedFromNaver() → _calcRemaining() → widget.startedAt(서버 시각) 기준 정확히 재계산
+      코드 변경 불필요
+
 ## 🟡 신규 기능
 
 - [x] [어드민 웹] 공지사항 등록 섹션 추가 (2026-05-14) → 위 공지사항 항목 참조
