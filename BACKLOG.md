@@ -85,21 +85,22 @@
 
 ## 🟠 버그 수정 권장
 
-- [ ] [광고주 웹] campaign_new_screen.dart userId 강제 언래핑 크래시 위험
-      현재: `supabase.auth.currentUser!.id` — 세션 만료 시 Null Pointer Exception
-      수정: `currentUser?.id` + null 체크 + 로그인 오류 안내
+- [x] [광고주 웹] campaign_new_screen.dart userId 강제 언래핑 크래시 위험 (2026-05-14)
+      수정: currentUser != null 체크 → null 시 SnackBar("로그인이 필요합니다") + 조기 return
       참고: withdraw_provider.dart, mission_active_provider.dart는 올바르게 처리됨
 
-- [ ] [광고주 웹 / DB] fetchCampaignStats와 get_dashboard_data 오늘 유입수 기준 불일치
-      fetchCampaignStats (캠페인 상세 화면): started_at >= KST 자정 기준
-      get_dashboard_data RPC (대시보드): completed_at = KST 오늘 기준
-      KST 자정 근처에서 두 화면 수치 불일치 가능
-      수정: fetchCampaignStats의 필드 기준을 completed_at으로 통일
+- [x] [광고주 웹 / DB] fetchCampaignStats와 get_dashboard_data 오늘 유입수 기준 불일치 (2026-05-14)
+      수정: fetchCampaignStats completed_at 기준으로 통일
+            `.not('completed_at', 'is', null).gte('completed_at', kstMidnight)` 적용
 
-- [ ] [앱] mission_detail_screen에서 start_mission 응답의 tag_index 전달 경로 검증
-      migration 0019: start_mission이 tag_index 반환
-      MissionActiveScreen: tagIndex 파라미터 수신
-      mission_detail_screen → 라우터 extra → MissionActiveScreen 경로에서 올바르게 전달되는지 확인 필요
+- [x] [앱] mission_detail_screen에서 start_mission 응답의 tag_index 전달 경로 검증 (2026-05-14)
+      검증 결과: mission_detail_screen.dart `result.tagIndex` → `'tag_index': result.tagIndex` (extra)
+                mission_model.dart StartMissionResult.fromMap: `map['tag_index'] as int?`
+                MissionActiveScreen: tagIndex 파라미터 수신 — 이미 올바르게 구현됨 (코드 변경 불필요)
+
+- [x] [DB] migration 0015 NOTE 주석 오류 수정 (2026-05-14)
+      기존: "reject_withdraw RPC도 잔액을 복구하지 않음 → 수동 복구 필요"
+      수정: migration 0016에서 reject_withdraw 잔액 복구 로직이 이미 추가됨을 명시
 
 ## 🟠 UX 개선
 

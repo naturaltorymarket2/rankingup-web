@@ -881,7 +881,13 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   Future<void> _submit() async {
     setState(() => _isSubmitting = true);
 
-    final userId = supabase.auth.currentUser!.id;
+    final currentUser = supabase.auth.currentUser;
+    if (currentUser == null) {
+      _showSnack('로그인이 필요합니다. 다시 로그인해 주세요.');
+      setState(() => _isSubmitting = false);
+      return;
+    }
+    final userId = currentUser.id;
     final repo   = ref.read(campaignRepositoryProvider);
     int successCount = 0;
 

@@ -102,7 +102,8 @@ class CampaignRepository {
         .select('id')
         .eq('campaign_id', campaignId)
         .eq('status', 'SUCCESS')
-        .gte('started_at', kstMidnight.toIso8601String());
+        .not('completed_at', 'is', null)
+        .gte('completed_at', kstMidnight.toIso8601String());
     final todaySuccess = (todayRes as List).length;
 
     // 전체 누적 성공 건수

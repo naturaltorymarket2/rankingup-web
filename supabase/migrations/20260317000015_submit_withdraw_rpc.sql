@@ -17,9 +17,9 @@
 --
 -- NOTE:
 --   process_withdraw RPC는 COMPLETED 처리만 하고 잔액을 차감하지 않음.
---   reject_withdraw RPC도 잔액을 복구하지 않음.
---   → 출금 거절 시 어드민이 Supabase Studio에서 수동으로 잔액 복구 필요.
---   (향후 reject_withdraw에 잔액 복구 로직 추가 권장)
+--   (잔액 차감은 이 함수 submit_withdraw에서 출금 신청 시 즉시 처리됨)
+--   reject_withdraw RPC는 migration 0016에서 잔액 복구 로직이 추가됨.
+--   → 출금 거절 시 reject_withdraw 호출로 신청 금액이 잔액에 자동 복구됨.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.submit_withdraw(
