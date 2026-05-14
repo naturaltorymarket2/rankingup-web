@@ -155,6 +155,18 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     });
   }
 
+  // ── 대기 화면으로 복귀 (태그 입력 → 네이버 재확인용) ──────────
+  // 미션 취소 아님: _isResumed만 false로 재설정, 다음 resumed 감지 시 재활성화
+  void _goBackToWaiting() {
+    _countdownTimer?.cancel();
+    _lockTimer?.cancel();
+    setState(() {
+      _isResumed        = false;
+      _isButtonLocked   = false;
+      _remainingSeconds = 600;
+    });
+  }
+
   // ── verify_mission 호출 ───────────────────────────────────
   Future<void> _onRewardTapped() async {
     final tag = _tagController.text.trim();
@@ -218,13 +230,27 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   Widget build(BuildContext context) {
     final isVerifying = ref.watch(missionVerifyProvider);
     final canPress    = _isResumed && !_isButtonLocked && !_isTimedOut && !isVerifying;
+    // 태그 입력 화면에서만 뒤로가기 허용 (대기 화면 복귀, 미션 취소 아님)
+    final canGoBack   = _isResumed && !_isTimedOut && !_isSuccess;
 
-    return Stack(
+    return PopScope(
+      canPop: false, // 시스템 뒤로가기로 화면 이탈 방지
+      onPopInvokedWithResult: (didPop, result) {
+        if (canGoBack) _goBackToWaiting();
+      },
+      child: Stack(
       children: [
         Scaffold(
           appBar: AppBar(
             title: const Text('미션 진행 중'),
-            automaticallyImplyLeading: false, // 뒤로가기 비활성화 (미션 중단 방지)
+            automaticallyImplyLeading: false,
+            leading: canGoBack
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    onPressed: _goBackToWaiting,
+                    tooltip: '네이버에서 다시 확인하기',
+                  )
+                : null,
           ),
           body: SafeArea(
             child: Column(
@@ -264,6 +290,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
         if (_isSuccess)
           _ConfettiOverlay(animation: _confettiAnim),
       ],
+      ),
     );
   }
 }
@@ -551,11 +578,39 @@ class _TagInputSection extends StatelessWidget {
             ),
           ),
 
+        // 태그 위치 설명 (tagIndex 여부와 무관하게 항상 표시)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.amber.shade200),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(Icons.lightbulb_outline,
+                    size: 15, color: Colors.amber.shade700),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  '태그는 상품명 아래 #으로 시작하는 키워드입니다',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF7B5800)),
+                ),
+              ),
+            ],
+          ),
+        ),
+
         TextField(
           controller: controller,
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
-            hintText: '태그 입력',
+            hintText: '예) #헬스장갑',
             prefixIcon: Icon(Icons.tag_rounded, color: Colors.indigo.shade400),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
