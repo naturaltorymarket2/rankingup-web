@@ -84,4 +84,7 @@
 
 ## 🔵 알려진 이슈 (기존 CLAUDE.md 14섹션에서 이전)
 
-- [ ] campaigns RLS 정책 보완 — fetchCampaignDetail이 campaigns를 직접 SELECT함. UUID를 아는 경우 다른 광고주 캠페인 정보 노출 위험. 수정안: auth.uid() = user_id 조건만 허용하도록 SELECT 정책 강화 필요
+- [x] campaigns RLS 정책 보완 — fetchCampaignDetail이 campaigns를 직접 SELECT함. UUID를 아는 경우 다른 광고주 캠페인 정보 노출 위험. (2026-05-14)
+      migration 0021: Permissive 2개(owner_select, active_select) + Restrictive 1개(advertiser_restrict)
+      광고주(business_info 존재)의 타인 ACTIVE 캠페인 접근 차단
+      ⚠️ Supabase migration 0021 수동 적용 필요
