@@ -18,7 +18,7 @@
       register_campaign RPC에 p_seed_keyword 파라미터 추가 (DEFAULT NULL, 하위 호환)
       scheduler.py: (product_url, seed_keyword) 기준 그룹화 → API 1회 호출/그룹
       ⚠️ Supabase migration 0018 적용 필요
-      ⚠️ Flutter campaign_new_screen에서 seed_keyword 전달 별도 작업 필요
+      ✅ Flutter campaign_new_screen seed_keyword 전달 완료 (2026-05-14)
 
 ## 🟡 신규 기능 — 태그 수동 입력 + 정답 태그 선택 (광고주/앱 연동) (최우선)
 

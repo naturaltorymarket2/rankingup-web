@@ -294,7 +294,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 6 (재빌드 + 배포) — 완료**
+현재 진행 Phase: **Phase 7 (운영 안정화 + 신규 기능) — 완료**
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -742,6 +742,31 @@ Phase 4 (1~2주): 어드민 + 배포
   - 랭킹 서버: GET /tags 엔드포인트 + fetch_product_tags 함수 + beautifulsoup4 제거 (봇 차단 확인)
   ⚠️ Supabase migration 0018, 0019 수동 적용 필요
 
+- ✅ 완료: Phase 7-4 — UX 개선: 태그 입력 화면 안내 문구 + 뒤로가기 버튼 (2026-05-14)
+  - `lib/features/mission/presentation/mission_active_screen.dart`
+    - 태그 입력 섹션에 amber 설명 박스 추가: "태그는 상품명 아래 #으로 시작하는 키워드입니다"
+    - hintText `'태그 입력'` → `'예) #헬스장갑'` 변경
+    - `_goBackToWaiting()` 메서드 추가: 타이머/잠금 리셋 + `_isResumed = false` 전환 (미션 취소 아님)
+    - `PopScope(canPop: false)` 전체 빌드 래핑
+    - `canGoBack` 조건(`_isResumed && !_isTimedOut && !_isSuccess`)에서 AppBar leading 뒤로가기 버튼 표시
+
+- ✅ 완료: Phase 7-5 — 보안: campaigns RLS SELECT 정책 강화 (2026-05-14)
+  - `supabase/migrations/20260317000021_fix_campaigns_rls.sql` 신규
+  - 기존 단일 정책(`campaigns_read`) 제거
+  - Permissive 2개:
+    - `campaigns_owner_select`: 소유자(광고주) — 본인 캠페인 전체
+    - `campaigns_active_select`: 앱 유저(B2C) — ACTIVE 캠페인만
+  - Restrictive 1개:
+    - `campaigns_advertiser_restrict`: `business_info` 등록 광고주는 본인 캠페인만 허용
+      → 타인의 ACTIVE 캠페인 UUID 직접 접근 차단
+  ⚠️ Supabase migration 0021 수동 적용 필요
+
+- ✅ 완료: Phase 7-6 — AAB 빌드 versionCode 6 (2026-05-14)
+  - `android/app/build.gradle.kts`: versionCode 5 → 6
+  - Phase 7 전체 반영 (UX 개선 + 보안 + 공지사항 + seed_keyword 전달)
+  - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (49.9MB)
+  - Flutter commit: d8b8a0a
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -771,7 +796,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 5` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 5)
+- [x] `versionCode = 6` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 6)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -813,7 +838,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-05-13 기준)
+## 13. 배포 현황 (2026-05-14 기준)
 
 ### 서비스 URL
 
@@ -830,8 +855,8 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 5 |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (47MB) |
+| 현재 빌드 versionCode | 6 |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (49.9MB) |
 
 ### GitHub 저장소
 
@@ -840,7 +865,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-05-13 |
+| 마지막 push | 2026-05-14 |
 
 ### GitHub Actions
 
