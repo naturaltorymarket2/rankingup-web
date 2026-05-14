@@ -897,6 +897,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           endDate:     _dateRange!.end,
           tags:        _validTags,
           answerIndex: _answerIndex + 1, // 0-based → 1-based
+          seedKeyword: _seedCtrl.text.trim().isEmpty ? null : _seedCtrl.text.trim(),
         );
         successCount++;
       } catch (e) {
