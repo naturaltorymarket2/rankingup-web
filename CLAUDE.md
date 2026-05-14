@@ -767,6 +767,40 @@ Phase 4 (1~2주): 어드민 + 배포
   - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (49.9MB)
   - Flutter commit: d8b8a0a
 
+- ✅ 완료: Phase 7-7 — QA 전수 점검 및 버그 수정 (2026-05-14)
+
+  **어뷰징 방지 / DB 회귀 수정**
+  - migration 0022: `start_mission` 일일 참여 제한 주석 해제 활성화 (어뷰징 방지 핵심)
+  - migration 0023: `register_campaign` 시그니처 회귀 버그 수정 (0018이 `p_duration_days`로 되돌린 문제)
+    - 올바른 시그니처 강제 적용: `p_start_date, p_end_date, p_answer_index, p_seed_keyword`
+    - 필수 컬럼 `IF NOT EXISTS` 포함 (migration 0018/0019 미적용 환경 대비)
+
+  **Flutter 수정**
+  - `campaign_repository.dart`: `fetchCampaignStats()` `started_at` → `completed_at` 기준 통일 (KST 자정 필터)
+  - `campaign_new_screen.dart`: `currentUser!.id` 강제 언래핑 → null-safe 패턴 (`?.id` + 조기 return + SnackBar)
+  - `migration 0015`: NOTE 주석 오류 수정 (reject_withdraw 잔액 복구 로직 migration 0016에서 추가됨 명시)
+
+  **QA 검증 (코드 변경 없음)**
+  - `rank_api_client.dart` GET /rank, /keywords 응답 파싱 — Python 서버 필드명 완전 일치 확인
+  - `scheduler.py` seed_keyword 그룹화 — SELECT/fallback/key 정상 동작 확인
+  - `_goBackToWaiting()` `_remainingSeconds = 600` 하드코딩 — `_isResumed = false` 동시 설정으로 안전 확인
+
+  **배포 환경 수정**
+  - `Dockerfile`: `ARG RANK_API_URL` 주입 방식 → URL 직접 하드코딩 (Railway 빌드 변수 미전달 문제 해결)
+  - `dashboard_repository.dart`: `fetchRankHistory()` 날짜 중복 제거 재수정
+    - `limit(30)` → `limit(100)` (하루 여러 번 실행 대비)
+    - `seen Set` + 조기 break → `Map<String, RankHistory>` + `putIfAbsent` 패턴으로 재구현
+  ⚠️ Supabase migration 0022, 0023 수동 적용 필요
+
+- ✅ 완료: Phase 7-8 — 대시보드 및 캠페인 등록 운영 개선 (2026-05-14)
+  - `supabase/migrations/20260317000024_fix_dashboard_campaign_limit.sql` 신규
+    - `get_dashboard_data` RPC 캠페인 목록 서브쿼리 `LIMIT 5` 제거 → 전체 반환
+    - 원인: migration 0008에 하드코딩된 `LIMIT 5` (캠페인 6개 이상 시 목록 잘림)
+  - `supabase/migrations/20260317000025_fix_tag_min_count.sql` 신규
+    - `register_campaign` RPC 태그 검증: `array_length(p_tags, 1) < 2` → `< 1` (최소 1개로 완화)
+  - `campaign_new_screen.dart`: `_tags.length >= 1`, 안내 문구 "최소 1개, 최대 10개"로 변경
+  ⚠️ Supabase migration 0024, 0025 수동 적용 필요
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
