@@ -4,10 +4,9 @@ FROM ghcr.io/cirruslabs/flutter:stable AS build
 WORKDIR /app
 COPY . .
 
-# RANK_API_URL: Railway 빌드 환경변수(Variables > Build)로 주입
-ARG RANK_API_URL
+# RANK_API_URL: 빌드 시 직접 하드코딩 (Railway Runtime 변수는 ARG로 전달 안 됨)
 RUN flutter build web --release \
-    --dart-define=RANK_API_URL=${RANK_API_URL}
+    --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
 
 # ── Stage 2: Nginx 서빙 ────────────────────────────────────────────
 FROM nginx:alpine
