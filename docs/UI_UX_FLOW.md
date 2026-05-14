@@ -1,6 +1,6 @@
 # UI/UX Flow — 겟머니 (스토어 트래픽 부스터)
 
-> 최종 업데이트: 2026-05-13
+> 최종 업데이트: 2026-05-14
 > 실제 구현 코드 기반 (lib/ 전체 검증 완료)
 
 ---
@@ -67,8 +67,8 @@
 1. `mission_logs`에서 동일 user_id + campaign_id + 오늘 날짜 중복 체크
 2. `campaigns.current_count < daily_target` 수량 체크
 3. `mission_logs` INSERT (status=STARTED)
-4. `campaign_tags`에서 랜덤 태그 1개 할당 → log에 저장 (클라이언트 미반환)
-5. log_id + keyword 반환
+4. `campaign_tags`에서 `is_answer = true` 태그 선택 → log에 저장 (tag_word 클라이언트 미반환)
+5. log_id + keyword + tag_index (sort_order 값, 1-based) 반환
 
 ### 1-4. 미션 진행
 
@@ -79,6 +79,9 @@
   ├─ AppLifecycleState.resumed 감지 → 앱 복귀 확인
   ├─ 복귀 후 3초 카운트다운 → [리워드 받기] 버튼 활성화
   ├─ 타이머 (10분, started_at 기준 서버 시간)
+  ├─ 정답 태그 안내 박스 (_TagInputSection)
+  │    tag_index 있을 때: "상품 페이지에서 N번째 태그를 입력하세요" 강조 박스 (인디고 배경)
+  │    tag_index 없을 때: "상품 페이지에서 찾은 태그를 입력하세요" 안내 텍스트
   ├─ [리워드 받기] → 정답 태그 입력 모달
   │    └─ verify_mission RPC 호출 (p_log_id, p_user_id, p_submitted_tag)
   │         ├─ 성공 → +7원 적립 + 폭죽 애니메이션 → /home
@@ -155,6 +158,9 @@
 
 ```
 /web/dashboard (WebDashboardScreen)
+  ├─ 공지사항 섹션 (noticesProvider, 공지 없으면 미표시)
+  │    공지 있으면 상단 연한 노란 카드로 표시
+  │    공지 2개 이상이면 [전체 보기 (N)] 버튼으로 펼치기 가능
   ├─ 포인트 잔액 카드
   ├─ 총 유입 수 / 캠페인 수 요약
   ├─ 캠페인 목록 (DashboardCampaign)
@@ -169,6 +175,7 @@
 **데이터 흐름:**
 - `dashboardDataProvider` → `dashboard_repository.fetchDashboardData()` → `get_dashboard_data` RPC
 - RPC 반환: wallets.balance + campaigns (with today/total mission count + latest rank)
+- `noticesProvider` → `dashboard_repository.fetchNotices()` → `get_notices` RPC
 
 ### 2-3. 광고 등록 (Step 1~3)
 
@@ -191,7 +198,9 @@
   │    └─ URL + 시드 + 선택 키워드 1개 이상 시 [다음] 버튼 활성화
   │
   ├─ Step 2: 캠페인 설정
-  │    ├─ 정답 태그 등록 (3~5개 단어, 미션 정답 풀)
+  │    ├─ 태그 수동 입력 ([추가] 버튼, 최소 2개, 최대 10개, 중복 불가)
+  │    │    └─ 라디오 버튼으로 정답 태그 1개 선택 (p_answer_index 전달)
+  │    │         (태그 2개 이상 + 정답 선택 시 [다음] 버튼 활성화)
   │    ├─ 시작일 / 종료일 선택 (최소 7일)
   │    ├─ 일일 목표 유입 수 입력 (명/일)
   │    ├─ 예산 미리보기: 키워드 수 × 기간 × 일일 목표 × 50P
@@ -207,10 +216,11 @@
 ```
 
 **register_campaign RPC 서버 처리 (키워드당 1회):**
-1. 포인트 잔액 확인 (일수 × daily_target × 50)
-2. `campaigns` INSERT
-3. `campaign_tags` INSERT (태그 배열)
-4. `wallets.balance -= 예산` + `transactions` SPEND INSERT
+1. 태그 최소 2개 + p_answer_index 유효성 검증
+2. 포인트 잔액 확인 (일수 × daily_target × 50)
+3. `campaigns` INSERT (seed_keyword 포함)
+4. `campaign_tags` INSERT (is_answer + sort_order 포함)
+5. `wallets.balance -= 예산` + `transactions` SPEND INSERT
 
 ### 2-4. 광고 상세
 
@@ -296,6 +306,23 @@
   └─ [처리 완료] 탭
        처리된 출금 내역 목록
 ```
+
+### 3-4. 공지사항 등록
+
+```
+/admin/notice (AdminNoticeScreen)
+  ├─ AppBar: [충전 승인] / [출금 처리] 이동 버튼
+  ├─ 공지 등록 폼
+  │    제목 입력 필드 + 내용 입력 필드 (multiline, 최대 6줄)
+  │    └─ [등록] → create_notice RPC
+  │         ├─ ADMIN role 검증
+  │         ├─ 제목/내용 비어 있으면 오류
+  │         └─ notices INSERT → 목록 새로고침
+  └─ 등록된 공지 목록 (adminNoticesProvider → get_notices RPC)
+       각 항목: 제목 / 등록일 / 내용 (최대 3줄, 말줄임)
+```
+
+**공지사항 이동 경로:** `/admin/charge` AppBar의 [공지 등록] 버튼 → `/admin/notice`
 
 ---
 
@@ -416,7 +443,8 @@ GitHub Actions (cron: '0 18 * * *' = KST 03:00):
 ```
 start_mission RPC
   → mission_logs INSERT (status=STARTED)
-  → 반환: {log_id, keyword}
+  → campaign_tags에서 is_answer=true 태그 선택 (tag_word 미반환)
+  → 반환: {log_id, keyword, tag_index}
 
 사용자: 네이버 앱 이동 → 검색 → 구매 페이지 확인 → 앱 복귀
 
