@@ -933,6 +933,7 @@ curl -X POST http://localhost:8000/run-scheduler \
 | 5 | `20260317000021_fix_campaigns_rls.sql` | campaigns RLS 강화 (타 광고주 ACTIVE 캠페인 접근 차단) | ⚠️ 미적용 확인 필요 |
 | 6 | `20260317000022_enable_daily_mission_limit.sql` | **start_mission 일일 참여 제한 활성화** (어뷰징 방지 핵심) | ❌ 신규 — 즉시 적용 필요 |
 | 7 | `20260317000023_fix_register_campaign_signature.sql` | register_campaign 시그니처 확정 (0018 회귀 버그 방지, Flutter 완전 일치) | ❌ 신규 — 즉시 적용 필요 |
+| 8 | `20260317000024_fix_dashboard_campaign_limit.sql` | get_dashboard_data RPC 캠페인 목록 LIMIT 5 제거 → 전체 반환 | ❌ 신규 — 즉시 적용 필요 |
 
 **적용 명령 (Supabase SQL Editor):**
 ```sql

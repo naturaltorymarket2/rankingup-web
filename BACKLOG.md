@@ -10,6 +10,10 @@
 - [x] [광고주 웹] 순위 대시보드 동일 날짜 중복 노출 (2026-05-13)
 - [x] [앱] 태그 입력 시 오류 발생 (2026-05-13)
 - [x] [앱] 출금 신청 시 오류 발생 (2026-05-13)
+- [x] [광고주 웹] 대시보드 내 광고 목록 일부만 노출 (2026-05-14)
+      원인: get_dashboard_data RPC 캠페인 서브쿼리에 LIMIT 5 하드코딩 (migration 0008)
+      수정: migration 0024_fix_dashboard_campaign_limit.sql 신규 생성 — LIMIT 제거
+      ⚠️ Supabase SQL Editor에서 migration 0024 적용 필요
 
 ## 🟠 기능 변경 (최우선)
 
