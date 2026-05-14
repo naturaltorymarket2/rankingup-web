@@ -1,4 +1,5 @@
 import '../../../app/supabase_client.dart';
+import '../../admin/domain/notice_model.dart';
 import '../domain/dashboard_model.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -57,5 +58,15 @@ class DashboardRepository {
     // 차트 표시를 위해 오름차순 정렬
     deduped.sort((a, b) => a.checkedAt.compareTo(b.checkedAt));
     return deduped;
+  }
+
+  /// 공지사항 전체 목록 최신순 (get_notices RPC)
+  ///
+  /// 광고주 대시보드 상단 공지 섹션에서 사용
+  Future<List<NoticeModel>> fetchNotices() async {
+    final res = await supabase.rpc('get_notices');
+    return (res as List<dynamic>)
+        .map((e) => NoticeModel.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 }

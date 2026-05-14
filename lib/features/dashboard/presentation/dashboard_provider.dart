@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../admin/domain/notice_model.dart';
 import '../data/dashboard_repository.dart';
 import '../domain/dashboard_model.dart';
 
@@ -40,3 +41,10 @@ final rankHistoryProvider =
     return ref.read(_dashboardRepoProvider).fetchRankHistory(campaignId);
   },
 );
+
+// ── 공지사항 목록 (광고주 대시보드 상단 표시) ────────────────────────
+
+final noticesProvider =
+    FutureProvider.autoDispose<List<NoticeModel>>((ref) {
+  return ref.read(_dashboardRepoProvider).fetchNotices();
+});

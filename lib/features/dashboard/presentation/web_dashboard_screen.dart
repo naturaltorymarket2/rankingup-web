@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/supabase_client.dart';
+import '../../admin/domain/notice_model.dart';
 import '../domain/dashboard_model.dart';
 import 'dashboard_provider.dart';
 
@@ -133,6 +134,8 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
   // ── 본문 ────────────────────────────────────────────────────
 
   Widget _buildBody(BuildContext context, DashboardData data) {
+    final noticesAsync = ref.watch(noticesProvider);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -141,6 +144,17 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // ── 공지사항 섹션 (공지 있을 때만 표시) ──────────────
+              noticesAsync.whenOrNull(
+                data: (notices) => notices.isEmpty
+                    ? const SizedBox.shrink()
+                    : _NoticeSection(notices: notices),
+              ) ?? const SizedBox.shrink(),
+              noticesAsync.whenOrNull(
+                data: (notices) =>
+                    notices.isNotEmpty ? const SizedBox(height: 24) : null,
+              ) ?? const SizedBox.shrink(),
+
               _buildSummaryRow(data),
               const SizedBox(height: 24),
               _buildRankChartSection(data),
@@ -643,6 +657,134 @@ class _CampaignRow extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 공지사항 섹션 (대시보드 상단, 공지 있을 때만 렌더)
+// ─────────────────────────────────────────────────────────────────
+
+class _NoticeSection extends StatefulWidget {
+  final List<NoticeModel> notices;
+  const _NoticeSection({required this.notices});
+
+  @override
+  State<_NoticeSection> createState() => _NoticeSectionState();
+}
+
+class _NoticeSectionState extends State<_NoticeSection> {
+  // 최초에는 첫 번째 공지만 펼쳐 보임
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = _expanded ? widget.notices : widget.notices.take(1).toList();
+
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFFFF8E1), // 연한 노란 배경
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFFFE082)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── 헤더 ──────────────────────────────────────────────
+            Row(
+              children: [
+                const Icon(Icons.campaign_outlined,
+                    size: 20, color: Color(0xFFE65100)),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    '공지사항',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFE65100),
+                    ),
+                  ),
+                ),
+                if (widget.notices.length > 1)
+                  TextButton(
+                    onPressed: () =>
+                        setState(() => _expanded = !_expanded),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      foregroundColor: const Color(0xFFE65100),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      _expanded
+                          ? '접기'
+                          : '전체 보기 (${widget.notices.length})',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ── 공지 목록 ─────────────────────────────────────────
+            ...shown.map((n) => _NoticeTile(notice: n)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoticeTile extends StatelessWidget {
+  final NoticeModel notice;
+  const _NoticeTile({required this.notice});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  notice.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF4E342E),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _fmtDate(notice.createdAt),
+                style: const TextStyle(
+                    fontSize: 11, color: Color(0xFF8D6E63)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            notice.content,
+            style: const TextStyle(
+                fontSize: 13, color: Color(0xFF5D4037), height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtDate(DateTime dt) {
+    final d = dt.toLocal();
+    return '${d.year}.${_p(d.month)}.${_p(d.day)}';
+  }
+
+  String _p(int n) => n.toString().padLeft(2, '0');
 }
 
 // ─────────────────────────────────────────────────────────────────

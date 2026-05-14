@@ -105,6 +105,12 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
           label: const Text('출금 처리'),
           style: TextButton.styleFrom(foregroundColor: _kBlue),
         ),
+        TextButton.icon(
+          onPressed: () => context.go('/admin/notice'),
+          icon: const Icon(Icons.campaign_outlined, size: 18),
+          label: const Text('공지 등록'),
+          style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
         const SizedBox(width: 8),
       ],
     );
