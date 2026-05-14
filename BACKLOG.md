@@ -41,10 +41,13 @@
       ⚠️ Supabase migration 0019 적용 필요
 
 - [x] [광고주 웹] 캠페인 등록 Step 2 — 태그 수동 입력 UI (2026-05-13)
-      [추가] 버튼으로 태그 추가 (최소 2개, 최대 10개, 중복 불가)
+      [추가] 버튼으로 태그 추가 (최소 1개, 최대 10개, 중복 불가) ← 최소 2→1로 변경 (2026-05-14)
       라디오 버튼으로 정답 태그 1개 선택
-      태그 2개 이상 + 정답 선택 시 [다음] 버튼 활성화
+      태그 1개 이상 + 정답 선택 시 [다음] 버튼 활성화
       p_tags + p_answer_index를 register_campaign RPC로 전달
+      [수정] campaign_new_screen.dart: _tags.length >= 1, 안내 문구 변경 (2026-05-14)
+      [수정] migration 0025: register_campaign array_length < 2 → < 1 (2026-05-14)
+      ⚠️ Supabase migration 0025 적용 필요
 
 - [x] [앱] 미션 진행 화면 — 정답 태그 안내 문구 개선 (2026-05-13)
       start_mission RPC 반환값에 tag_index 포함 (sort_order 값)

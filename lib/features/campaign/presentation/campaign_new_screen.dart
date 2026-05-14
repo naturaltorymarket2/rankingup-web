@@ -67,7 +67,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       _selectedKeywords.isNotEmpty;
 
   bool get _step2Valid =>
-      _tags.length >= 2 &&
+      _tags.length >= 1 &&
       _answerIndex >= 0 &&
       _dateRange != null &&
       _durationDays >= 7;
@@ -331,7 +331,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const Text('정답 태그', style: _kLabel),
               const SizedBox(height: 4),
               Text(
-                '상품 페이지에 있는 네이버 태그를 입력하세요. (최소 2개, 최대 10개)',
+                '상품 페이지에 있는 네이버 태그를 입력하세요. (최소 1개, 최대 10개)',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 4),
@@ -385,7 +385,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
-                    '태그를 2개 이상 입력해주세요.',
+                    '태그를 1개 이상 입력해주세요.',
                     style: TextStyle(color: Colors.red, fontSize: 12),
                   ),
                 )
@@ -935,7 +935,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       return '포인트가 부족합니다. 충전 후 다시 시도해주세요.';
     }
     if (err.contains('TAGS_REQUIRED')) {
-      return '태그를 2개 이상 입력해주세요.';
+      return '태그를 1개 이상 입력해주세요.';
     }
     if (err.contains('INVALID_ANSWER_INDEX')) {
       return '정답 태그를 선택해주세요.';
