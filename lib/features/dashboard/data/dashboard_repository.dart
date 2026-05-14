@@ -28,36 +28,33 @@ class DashboardRepository {
     final sevenDaysAgo =
         DateTime.now().toUtc().subtract(const Duration(days: 7));
 
-    // 최신순으로 충분히 가져온 뒤 Dart에서 KST 날짜 기준 중복 제거
+    // 최신순 정렬로 가져옴 — limit은 하루 최대 재실행 횟수를 고려해 넉넉하게
     final res = await supabase
         .from('campaign_rank_history')
         .select('rank, checked_at')
         .eq('campaign_id', campaignId)
         .gte('checked_at', sevenDaysAgo.toIso8601String())
         .order('checked_at', ascending: false)
-        .limit(30);
+        .limit(100);
 
     final rows = (res as List<dynamic>)
         .map((e) => RankHistory.fromMap(e as Map<String, dynamic>))
         .toList();
 
-    // KST 날짜별 첫 번째(최신) 항목만 유지 → 최대 7일치
-    final seen = <String>{};
-    final deduped = <RankHistory>[];
+    // KST 날짜 → 해당 날짜의 가장 최신 RankHistory
+    // 최신순으로 정렬된 상태에서 putIfAbsent: 날짜별 첫 등장(= 최신)만 보존
+    final byDate = <String, RankHistory>{};
     for (final r in rows) {
       final kst = r.checkedAt.toUtc().add(const Duration(hours: 9));
       final dateKey =
           '${kst.year}-${kst.month.toString().padLeft(2, '0')}-${kst.day.toString().padLeft(2, '0')}';
-      if (!seen.contains(dateKey)) {
-        seen.add(dateKey);
-        deduped.add(r);
-        if (deduped.length >= 7) break;
-      }
+      byDate.putIfAbsent(dateKey, () => r);
     }
 
-    // 차트 표시를 위해 오름차순 정렬
-    deduped.sort((a, b) => a.checkedAt.compareTo(b.checkedAt));
-    return deduped;
+    // 날짜 키 오름차순 정렬 → 차트용 반환
+    final sorted = byDate.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return sorted.map((e) => e.value).toList();
   }
 
   /// 공지사항 전체 목록 최신순 (get_notices RPC)
