@@ -88,7 +88,11 @@
 
 ## 🔴 긴급 — 앱 핵심 기능 장애
 
-- [ ] 미션 시작 시 네이버 앱 딥링크 미작동 (naversearchapp:// scheme 실행 안 됨)
+- [x] 미션 시작 시 네이버 앱 딥링크 미작동 (2026-05-15)
+      원인 A: userId null check 누락 — `?.id ?? ''` 빈 문자열 UUID로 RPC 호출 → UUID parse 오류
+      원인 C: `catch (_)` 에러 무음 처리 — 실제 오류 내용이 사용자에게 미표시
+      원인 D: `canLaunchUrl()` 사전 체크 없이 `launchUrl()` 직접 호출 — false 반환 시 /active 미이동
+      수정: mission_detail_screen.dart (케이스 A/C/D), AndroidManifest.xml (<package com.naver.search> 추가)
 - [ ] 네이버 앱이 열린 후 앱 복귀 시 MissionActiveScreen 백화면 현상
 
 ## 🟠 버그 수정 권장

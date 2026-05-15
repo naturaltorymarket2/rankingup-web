@@ -52,9 +52,17 @@ class MissionDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     CampaignMissionModel campaign,
   ) async {
-    final userId   = supabase.auth.currentUser?.id ?? '';
-    final deviceId = await getDeviceId();
+    // ── 케이스 A: userId null 체크 (세션 만료 방어) ───────────
+    // ?? '' 대신 명시적 null 체크 — 빈 문자열 UUID로 RPC 호출 방지
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      if (context.mounted) {
+        _showSnackBar(context, '로그인이 필요합니다. 다시 로그인해 주세요.');
+      }
+      return;
+    }
 
+    final deviceId = await getDeviceId();
     if (!context.mounted) return;
 
     // ── 1. start_mission RPC 호출 ─────────────────────────────
@@ -70,9 +78,10 @@ class MissionDetailScreen extends ConsumerWidget {
         _showSnackBar(context, e.error.message);
       }
       return;
-    } catch (_) {
+    } catch (e) {
+      // 케이스 C: 에러 무음 처리 방지 — 실제 오류 내용을 SnackBar로 표시
       if (context.mounted) {
-        _showSnackBar(context, StartMissionError.unknown.message);
+        _showSnackBar(context, '오류가 발생했습니다: ${e.toString()}');
       }
       return;
     }
@@ -93,6 +102,25 @@ class MissionDetailScreen extends ConsumerWidget {
       'naversearchapp://search?where=nexearch&query=$encoded',
     );
 
+    // 케이스 D: canLaunchUrl 사전 체크 (Android 11+ 패키지 가시성 대비)
+    // AndroidManifest.xml <queries> 에 naversearchapp scheme 선언 필수
+    bool canLaunch = false;
+    try {
+      canLaunch = await canLaunchUrl(naverUri);
+    } catch (_) {
+      canLaunch = false;
+    }
+
+    if (!canLaunch) {
+      if (context.mounted) {
+        _showSnackBar(
+          context,
+          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
+        );
+      }
+      return;
+    }
+
     bool launched = false;
     try {
       launched = await launchUrl(naverUri, mode: LaunchMode.externalApplication);
@@ -101,9 +129,11 @@ class MissionDetailScreen extends ConsumerWidget {
     }
 
     if (!launched) {
-      // 딥링크 실패 → /active 화면 이동 차단 (미션이 시작되지 않은 것과 동일)
       if (context.mounted) {
-        _showSnackBar(context, '네이버 앱을 설치해주세요');
+        _showSnackBar(
+          context,
+          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
+        );
       }
       return;
     }

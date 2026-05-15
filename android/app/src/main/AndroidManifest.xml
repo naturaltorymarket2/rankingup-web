@@ -53,5 +53,7 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="naversearchapp"/>
         </intent>
+        <!-- 네이버 검색 앱 패키지 직접 선언 (canLaunchUrl 보완, Android 11+) -->
+        <package android:name="com.naver.search" />
     </queries>
 </manifest>
