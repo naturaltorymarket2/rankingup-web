@@ -381,7 +381,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               ],
 
               // 안내 메시지
-              if (_tags.length < 2)
+              if (_tags.isEmpty)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
