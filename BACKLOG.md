@@ -128,12 +128,13 @@
           p_answer_index = 정답 태그의 실제 순서값 (p_sort_orders 내 값)
           is_answer: p_sort_orders[i] = p_answer_index 조건으로 변경
         mission_active_screen.dart: 변경 불필요 (tagIndex → sort_order 이미 올바름)
-      ⚠️ Supabase SQL Editor에서 migration 0026 적용 필요
+      ✅ Supabase migration 0026 적용 완료 (2026-05-16)
 
-- [ ] [앱] 출금 신청 — 에러 원인 불명 (2026-05-16)
+- [x] [앱] 출금 신청 — 에러 원인 불명 (2026-05-16)
       증상: "오류가 발생했습니다. 다시 시도해주세요" 고정 문구 → 실제 오류 내용 미표시
-      개선: withdraw_provider.dart catch(e) 블록 → e.runtimeType + e.toString() 포함 메시지로 변경 (versionCode 8)
-      현재: 실기기 테스트 후 e.runtimeType 확인 필요 — PostgrestException 외 Error 계열 예외 의심
+      개선: withdraw_provider.dart catch(e) 블록 → e.runtimeType + e.toString() 포함 메시지로 변경 (versionCode 9 배포 완료)
+      다음 단계: 실기기 테스트 후 e.runtimeType 로그 확인 — PostgrestException 외 Error 계열 예외 의심
+      관련 파일: lib/features/wallet/presentation/withdraw_provider.dart
 
 ## 🟠 UX 개선
 

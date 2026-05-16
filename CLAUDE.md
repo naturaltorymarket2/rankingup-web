@@ -835,6 +835,37 @@ Phase 4 (1~2주): 어드민 + 배포
   - 개선 후 실기기에서 `e.runtimeType` 확인으로 실제 오류 원인 추적 가능
   - **versionCode 8** → AAB 빌드 완료 (49.9MB)
 
+- ✅ 완료: Phase 8-3 — 태그 안내 이미지 삽입 (2026-05-16)
+  - `assets/images/mission_guide.png` 신규 추가 (438KB)
+  - `pubspec.yaml`: `flutter.assets` 섹션 신규 추가
+  - `lib/features/mission/presentation/mission_active_screen.dart`
+    - `_TagInputSection` amber 안내 박스("태그는 상품명 아래 #으로 시작하는 키워드입니다") 바로 아래
+    - `Image.asset('assets/images/mission_guide.png', width: double.infinity, fit: BoxFit.contain)` 삽입
+    - 이미지 위아래 `SizedBox(height: 8)` 여백
+
+- ✅ 완료: Phase 8-4 — 태그 순서 입력 프로세스 개선 (2026-05-16)
+
+  **배경**: 광고주가 태그 이름만 입력하고 몇 번째인지 입력 UI 없음
+  → `sort_order` = 루프 카운터(추가 순서, 의미 없는 값)
+  → 앱 유저에게 "N번째 태그를 입력하세요" 안내가 실제 위치와 불일치
+
+  **변경 파일:**
+  - `lib/features/campaign/presentation/campaign_new_screen.dart`
+    - `_tags`: `List<String>` → `List<Map<String, dynamic>>` (`{'name': String, 'order': int}`)
+    - 태그 추가 UI: `[태그 이름]` + `[순서(몇 번째)]` + `[추가]` 3개 필드로 변경
+    - 태그 목록: `"3번째 | #헬스장갑"` 형식 표시
+    - 이름 중복 + 순서 중복 방지 검증 추가
+    - `answerIndex`: 목록 인덱스(1-based) → 선택 태그의 실제 순서값
+  - `lib/features/campaign/data/campaign_repository.dart`
+    - `sortOrders: List<int>` 파라미터 추가, RPC에 `p_sort_orders` 전달
+  - `supabase/migrations/20260317000026_fix_sort_order_input.sql` (신규)
+    - `register_campaign` RPC: `p_sort_orders INTEGER[]` 파라미터 추가
+    - `sort_order = p_sort_orders[i]` (광고주 직접 입력값)
+    - `is_answer = (p_sort_orders[i] = p_answer_index)` 조건으로 변경
+  ✅ Supabase migration 0026 적용 완료 (2026-05-16)
+
+  **versionCode 9** → AAB 빌드 완료 (50.4MB)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -864,7 +895,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 8` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 8)
+- [x] `versionCode = 9` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 9)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -923,8 +954,8 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 8 |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (49.9MB) |
+| 현재 빌드 versionCode | 9 |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
 
 ### GitHub 저장소
 
@@ -1002,7 +1033,8 @@ curl -X POST http://localhost:8000/run-scheduler \
 | 6 | `20260317000022_enable_daily_mission_limit.sql` | **start_mission 일일 참여 제한 활성화** (어뷰징 방지 핵심) | ❌ 신규 — 즉시 적용 필요 |
 | 7 | `20260317000023_fix_register_campaign_signature.sql` | register_campaign 시그니처 확정 (0018 회귀 버그 방지, Flutter 완전 일치) | ❌ 신규 — 즉시 적용 필요 |
 | 8 | `20260317000024_fix_dashboard_campaign_limit.sql` | get_dashboard_data RPC 캠페인 목록 LIMIT 5 제거 → 전체 반환 | ❌ 신규 — 즉시 적용 필요 |
-| 9 | `20260317000025_fix_tag_min_count.sql` | register_campaign RPC 태그 최소 개수 2 → 1로 완화 | ❌ 신규 — 즉시 적용 필요 |
+| 9 | `20260317000025_fix_tag_min_count.sql` | register_campaign RPC 태그 최소 개수 2 → 1로 완화 | ✅ 적용 완료 (2026-05-14) |
+| 10 | `20260317000026_fix_sort_order_input.sql` | register_campaign p_sort_orders INTEGER[] 추가 — 광고주 직접 입력 태그 순서 저장 | ✅ 적용 완료 (2026-05-16) |
 
 **적용 명령 (Supabase SQL Editor):**
 ```sql
@@ -1016,7 +1048,7 @@ curl -X POST http://localhost:8000/run-scheduler \
 SELECT proname, pg_get_function_arguments(oid)
 FROM pg_proc
 WHERE proname = 'register_campaign' AND pronamespace = 'public'::regnamespace;
--- 결과에 p_start_date, p_end_date, p_answer_index, p_seed_keyword 포함 확인
+-- 결과에 p_start_date, p_end_date, p_sort_orders, p_answer_index, p_seed_keyword 포함 확인
 
 -- 2. start_mission 일일 제한 활성화 확인
 SELECT prosrc FROM pg_proc
