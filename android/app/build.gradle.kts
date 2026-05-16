@@ -42,7 +42,7 @@ android {
         applicationId = "com.storetrafficbooster.app"
         minSdk = flutter.minSdkVersion
         targetSdk     = 35
-        versionCode   = 7
+        versionCode   = 8
         versionName   = "1.0.0"
     }
 
