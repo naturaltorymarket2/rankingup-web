@@ -606,6 +606,15 @@ class _TagInputSection extends StatelessWidget {
           ),
         ),
 
+        // 태그 위치 안내 이미지
+        const SizedBox(height: 8),
+        Image.asset(
+          'assets/images/mission_guide.png',
+          width: double.infinity,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 8),
+
         TextField(
           controller: controller,
           textInputAction: TextInputAction.done,

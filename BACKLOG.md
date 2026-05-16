@@ -56,8 +56,9 @@
       start_mission RPC 반환값에 tag_index 포함 (sort_order 값)
       "상품 페이지에서 N번째 태그를 입력하세요" 강조 박스 표시
 
-- [ ] [앱] 미션 진행 화면 — 네이버 태그 보는 방법 안내 이미지 추가
-      초보자용 캡쳐 이미지 삽입 (이미지 에셋 준비 필요 — 수동 작업)
+- [x] [앱] 미션 진행 화면 — 네이버 태그 보는 방법 안내 이미지 추가 (2026-05-16)
+      assets/images/mission_guide.png 추가, pubspec.yaml assets 섹션 등록
+      mission_active_screen.dart _TagInputSection: amber 박스 바로 아래 Image.asset 삽입
 
 ## 🟡 신규 기능 — 공지사항 (최우선)
 
