@@ -117,6 +117,19 @@
       기존: "reject_withdraw RPC도 잔액을 복구하지 않음 → 수동 복구 필요"
       수정: migration 0016에서 reject_withdraw 잔액 복구 로직이 이미 추가됨을 명시
 
+- [x] [광고주 웹 + 앱] 태그 순서 입력 프로세스 개선 (2026-05-16)
+      문제: sort_order = 루프 카운터(추가 순서) → 실제 네이버 상품 페이지 태그 순서와 무관
+      수정:
+        campaign_new_screen.dart: _tags List<String> → List<Map> {'name','order'}
+          순서 입력 필드(숫자) 추가, 태그 목록에 "N번째 | 태그명" 표시
+        campaign_repository.dart: sortOrders 파라미터 추가, p_sort_orders RPC 전달
+        migration 0026: p_sort_orders INTEGER[] 파라미터 추가
+          sort_order = p_sort_orders[i] (광고주 직접 입력값)
+          p_answer_index = 정답 태그의 실제 순서값 (p_sort_orders 내 값)
+          is_answer: p_sort_orders[i] = p_answer_index 조건으로 변경
+        mission_active_screen.dart: 변경 불필요 (tagIndex → sort_order 이미 올바름)
+      ⚠️ Supabase SQL Editor에서 migration 0026 적용 필요
+
 - [ ] [앱] 출금 신청 — 에러 원인 불명 (2026-05-16)
       증상: "오류가 발생했습니다. 다시 시도해주세요" 고정 문구 → 실제 오류 내용 미표시
       개선: withdraw_provider.dart catch(e) 블록 → e.runtimeType + e.toString() 포함 메시지로 변경 (versionCode 8)

@@ -30,9 +30,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   List<KeywordRankResult> _selectedKeywords = [];
 
   // ── Step 2 ────────────────────────────────────────────────────
-  final _tags       = <String>[];          // 입력된 태그 목록
-  final _newTagCtrl = TextEditingController(); // 태그 추가 입력 필드
-  int _answerIndex  = -1;                  // 정답 태그 인덱스 (0-based, -1=미선택)
+  final _tags         = <Map<String, dynamic>>[]; // {'name': String, 'order': int}
+  final _newTagCtrl   = TextEditingController();  // 태그 이름 입력 필드
+  final _newOrderCtrl = TextEditingController();  // 태그 순서 입력 필드
+  int _answerIndex  = -1;                         // 정답 태그 인덱스 (0-based, -1=미선택)
   int          _dailyTarget = 100;
   DateTimeRange? _dateRange;
 
@@ -54,7 +55,11 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       ? _dateRange!.end.difference(_dateRange!.start).inDays + 1
       : 0;
 
-  List<String> get _validTags => List.unmodifiable(_tags);
+  List<String> get _validTags =>
+      List.unmodifiable(_tags.map((t) => t['name'] as String).toList());
+
+  List<int> get _validSortOrders =>
+      List.unmodifiable(_tags.map((t) => t['order'] as int).toList());
 
   /// 선택된 키워드 수 × 기간 × 일일목표 × 50P
   int get _totalCost =>
@@ -79,6 +84,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     _urlCtrl.dispose();
     _seedCtrl.dispose();
     _newTagCtrl.dispose();
+    _newOrderCtrl.dispose();
     super.dispose();
   }
 
@@ -331,18 +337,17 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const Text('정답 태그', style: _kLabel),
               const SizedBox(height: 4),
               Text(
-                '상품 페이지에 있는 네이버 태그를 입력하세요. (최소 1개, 최대 10개)',
+                '태그 이름과 네이버 상품 페이지에서의 실제 순서(몇 번째인지)를 함께 입력하세요. (최소 1개, 최대 10개)',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 4),
               Text(
-                '★ 라디오 버튼으로 정답 태그 1개를 선택해주세요. '
-                '유저에게 몇 번째 태그인지 안내됩니다.',
+                '★ 라디오 버튼으로 정답 태그를 선택하면 앱 유저에게 해당 순서가 안내됩니다.',
                 style: const TextStyle(fontSize: 12, color: Colors.orange),
               ),
               const SizedBox(height: 12),
 
-              // 태그 추가 입력 행
+              // 태그 추가 입력 행 (태그 이름 + 순서 + [추가] 버튼)
               if (_tags.length < 10)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,7 +356,22 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                       child: TextField(
                         controller: _newTagCtrl,
                         decoration: const InputDecoration(
-                          hintText: '태그를 입력하고 추가 버튼을 누르세요',
+                          hintText: '태그 이름 (예: #헬스장갑)',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 100,
+                      child: TextField(
+                        controller: _newOrderCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          hintText: '순서 (예: 3)',
                           border: OutlineInputBorder(),
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(
@@ -566,7 +586,11 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                   value:
                       '${_fmtDate(_dateRange!.start)} ~ ${_fmtDate(_dateRange!.end)} ($_durationDays일)',
                 ),
-              _SummaryRow(label: '태그', value: _validTags.join(', ')),
+              _SummaryRow(
+                label: '태그',
+                value: _tags.map((t) => '${t['order']}번째: ${t['name']}').join(' / '),
+                maxLines: 4,
+              ),
             ],
           ),
         ),
@@ -792,21 +816,40 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     }
   }
 
-  /// 태그 추가 (최대 10개, 중복 불가)
+  /// 태그 추가 (최대 10개, 이름 중복 불가, 순서 중복 불가)
   void _addTag() {
-    final tag = _newTagCtrl.text.trim();
-    if (tag.isEmpty) return;
+    final name = _newTagCtrl.text.trim();
+    final orderStr = _newOrderCtrl.text.trim();
+
+    if (name.isEmpty) {
+      _showSnack('태그 이름을 입력해주세요.');
+      return;
+    }
+    if (orderStr.isEmpty) {
+      _showSnack('태그 순서(몇 번째인지)를 입력해주세요.');
+      return;
+    }
+    final order = int.tryParse(orderStr);
+    if (order == null || order < 1) {
+      _showSnack('순서는 1 이상의 숫자를 입력해주세요.');
+      return;
+    }
     if (_tags.length >= 10) {
       _showSnack('태그는 최대 10개까지 추가할 수 있습니다.');
       return;
     }
-    if (_tags.contains(tag)) {
+    if (_tags.any((t) => t['name'] == name)) {
       _showSnack('이미 추가된 태그입니다.');
       return;
     }
+    if (_tags.any((t) => t['order'] == order)) {
+      _showSnack('$order번째 순서에 태그가 이미 등록되어 있습니다.');
+      return;
+    }
     setState(() {
-      _tags.add(tag);
+      _tags.add({'name': name, 'order': order});
       _newTagCtrl.clear();
+      _newOrderCtrl.clear();
     });
   }
 
@@ -822,8 +865,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     });
   }
 
-  /// 태그 행 위젯 (라디오 버튼 + 태그 텍스트 + 삭제 버튼)
+  /// 태그 행 위젯 (라디오 버튼 + 순서/이름 + 삭제 버튼)
   Widget _buildTagRow(int index) {
+    final tag = _tags[index];
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -837,7 +881,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           ),
           Expanded(
             child: Text(
-              '${index + 1}. ${_tags[index]}',
+              '${tag['order']}번째 | ${tag['name']}',
               style: const TextStyle(fontSize: 14),
             ),
           ),
@@ -902,7 +946,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           startDate:   _dateRange!.start,
           endDate:     _dateRange!.end,
           tags:        _validTags,
-          answerIndex: _answerIndex + 1, // 0-based → 1-based
+          sortOrders:  _validSortOrders,
+          answerIndex: _tags[_answerIndex]['order'] as int, // 광고주 입력 실제 순서값
           seedKeyword: _seedCtrl.text.trim().isEmpty ? null : _seedCtrl.text.trim(),
         );
         successCount++;
