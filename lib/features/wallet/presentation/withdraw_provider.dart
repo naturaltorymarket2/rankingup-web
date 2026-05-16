@@ -48,9 +48,10 @@ class WithdrawNotifier extends AutoDisposeNotifier<bool> {
       // RPC RAISE EXCEPTION 메시지를 그대로 전파
       throw Exception(e.message);
     } catch (e) {
-      // Exception(userId 오류 등)은 그대로 rethrow, 그 외는 래핑
+      // Exception이면 rethrow(메시지 보존), 그 외(Error 등)는 실제 내용 포함해 래핑
+      // → 이전에는 Error 계열 예외를 "오류가 발생했습니다" 고정 문구로 숨겼음
       if (e is Exception) rethrow;
-      throw Exception('오류가 발생했습니다. 다시 시도해 주세요.');
+      throw Exception('오류가 발생했습니다: ${e.runtimeType} — ${e.toString()}');
     } finally {
       try {
         state = false;
