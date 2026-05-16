@@ -801,6 +801,40 @@ Phase 4 (1~2주): 어드민 + 배포
   - `campaign_new_screen.dart`: `_tags.length >= 1`, 안내 문구 "최소 1개, 최대 10개"로 변경
   ⚠️ Supabase migration 0024, 0025 수동 적용 필요
 
+- ✅ 완료: Phase 8-1 — 미션 딥링크 + 캠페인 태그 에러 버그 수정 (2026-05-16)
+
+  **딥링크 버그 수정 (`lib/features/mission/presentation/mission_detail_screen.dart`)**
+  - 케이스 A: `supabase.auth.currentUser?.id ?? ''` 빈 문자열 → `?.id` null 체크 + 조기 return + SnackBar
+    - 빈 문자열을 UUID 타입으로 RPC 전달 시 PostgreSQL UUID parse 오류 발생
+  - 케이스 C: `catch (_)` 무음 처리 → `catch (e)` + `e.toString()` SnackBar 표시
+    - 실제 오류 내용이 완전히 숨겨져 디버깅 불가한 상태였음
+  - 케이스 D: `launchUrl()` 직접 호출 → `canLaunchUrl()` 사전 체크 추가
+    - false 반환 시 "네이버 앱을 실행할 수 없습니다" SnackBar + 조기 return
+    - false 반환 시 `/mission/:id/active` 라우팅이 아예 실행되지 않았음
+
+  **`android/app/src/main/AndroidManifest.xml`**
+  - `<queries>` 블록에 `<package android:name="com.naver.search" />` 추가
+  - Android 11+ 패키지 가시성 정책: scheme intent(`naversearchapp://`) 만으로는 `canLaunchUrl()` 신뢰 불가
+  - 패키지 직접 선언으로 보완
+
+  **캠페인 태그 에러 조건 재수정 (`lib/features/campaign/presentation/campaign_new_screen.dart`)**
+  - 에러 표시 조건: `if (_tags.length < 2)` → `if (_tags.isEmpty)`
+  - `_step2Valid`는 `_tags.length >= 1`로 이미 수정됐으나 에러 문구 표시 분기만 누락
+  - 태그 1개 입력 시에도 "태그를 1개 이상 입력해주세요." 에러가 표시되는 버그
+
+  **versionCode 7** → AAB 빌드 완료 (48MB)
+
+- ✅ 완료: Phase 8-2 — 출금 오류 메시지 개선 (2026-05-16)
+  - `lib/features/wallet/presentation/withdraw_provider.dart` catch 블록 개선
+  - 기존: `catch(e)` 에서 `throw Exception('오류가 발생했습니다. 다시 시도해 주세요.')` 고정 문구
+  - 변경:
+    - `on PostgrestException catch (e)`: `e.message` 그대로 전파 (RPC RAISE EXCEPTION 메시지 보존)
+    - `catch (e)`: `e is Exception`이면 rethrow, 아니면 `runtimeType + toString()` 포함 메시지로 래핑
+  - 배경: Dart `Error` 계열(AssertionError, TypeError 등)은 `on Exception`에 걸리지 않음
+    - 기존 코드에서 `Error` 계열 예외가 `catch(e)`에 도달하면 고정 문구로 숨겨짐
+  - 개선 후 실기기에서 `e.runtimeType` 확인으로 실제 오류 원인 추적 가능
+  - **versionCode 8** → AAB 빌드 완료 (49.9MB)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -830,7 +864,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 6` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 6)
+- [x] `versionCode = 8` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 8)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -872,7 +906,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-05-14 기준)
+## 13. 배포 현황 (2026-05-16 기준)
 
 ### 서비스 URL
 
@@ -889,7 +923,7 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 6 |
+| 현재 빌드 versionCode | 8 |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (49.9MB) |
 
 ### GitHub 저장소
@@ -899,7 +933,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-05-14 |
+| 마지막 push | 2026-05-16 |
 
 ### GitHub Actions
 

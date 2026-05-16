@@ -47,6 +47,8 @@
       태그 1개 이상 + 정답 선택 시 [다음] 버튼 활성화
       p_tags + p_answer_index를 register_campaign RPC로 전달
       [수정] campaign_new_screen.dart: _tags.length >= 1, 안내 문구 변경 (2026-05-14)
+      [재수정] campaign_new_screen.dart: 에러 표시 조건 if (_tags.length < 2) → if (_tags.isEmpty) (2026-05-16)
+              _step2Valid는 이미 수정됐으나 에러 문구 표시 분기만 누락 — 태그 1개 입력 시 에러 문구 미표시 버그 수정
       [수정] migration 0025: register_campaign array_length < 2 → < 1 (2026-05-14)
       ⚠️ Supabase migration 0025 적용 필요
 
@@ -113,6 +115,11 @@
 - [x] [DB] migration 0015 NOTE 주석 오류 수정 (2026-05-14)
       기존: "reject_withdraw RPC도 잔액을 복구하지 않음 → 수동 복구 필요"
       수정: migration 0016에서 reject_withdraw 잔액 복구 로직이 이미 추가됨을 명시
+
+- [ ] [앱] 출금 신청 — 에러 원인 불명 (2026-05-16)
+      증상: "오류가 발생했습니다. 다시 시도해주세요" 고정 문구 → 실제 오류 내용 미표시
+      개선: withdraw_provider.dart catch(e) 블록 → e.runtimeType + e.toString() 포함 메시지로 변경 (versionCode 8)
+      현재: 실기기 테스트 후 e.runtimeType 확인 필요 — PostgrestException 외 Error 계열 예외 의심
 
 ## 🟠 UX 개선
 
