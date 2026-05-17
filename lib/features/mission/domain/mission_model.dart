@@ -9,7 +9,8 @@
 
 /// 캠페인 미션 모델 (홈/상세 공용)
 ///
-/// product_url, tag_word 는 절대 포함하지 않는다.
+/// tag_word, assigned_tag_id 는 절대 포함하지 않는다.
+/// product_url 은 미션 진행 화면에서 유저 안내용으로 표시 (READ-ONLY).
 /// currentRank 는 파이썬 랭킹 모듈 연동 후 설정되는 nullable 필드.
 class CampaignMissionModel {
   final String campaignId;
@@ -24,6 +25,10 @@ class CampaignMissionModel {
 
   final String status;
 
+  /// 상품 URL — 미션 진행 화면 안내용 (클립보드 복사)
+  /// 홈 목록 조회 시에는 null
+  final String? productUrl;
+
   const CampaignMissionModel({
     required this.campaignId,
     required this.keyword,
@@ -31,6 +36,7 @@ class CampaignMissionModel {
     required this.todaySuccessCount,
     this.currentRank,
     required this.status,
+    this.productUrl,
   });
 
   /// 오늘 달성률 0.0 ~ 1.0
@@ -58,6 +64,7 @@ class CampaignMissionModel {
       dailyTarget: map['daily_target'] as int,
       todaySuccessCount: todaySuccessCount,
       status: map['status'] as String,
+      productUrl: map['product_url'] as String?,
     );
   }
 }

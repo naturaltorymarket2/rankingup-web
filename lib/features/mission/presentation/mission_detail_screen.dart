@@ -145,10 +145,11 @@ class MissionDetailScreen extends ConsumerWidget {
       context.push(
         '/mission/$campaignId/active',
         extra: {
-          'log_id':     result.logId,
-          'keyword':    result.keyword,
-          'started_at': result.startedAt.toIso8601String(),
-          'tag_index':  result.tagIndex,
+          'log_id':      result.logId,
+          'keyword':     result.keyword,
+          'started_at':  result.startedAt.toIso8601String(),
+          'tag_index':   result.tagIndex,
+          'product_url': campaign.productUrl,
         },
       );
     }

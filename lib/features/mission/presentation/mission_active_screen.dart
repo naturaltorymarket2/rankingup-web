@@ -15,10 +15,11 @@ import 'mission_active_provider.dart';
 // ─────────────────────────────────────────────────────────────────
 //
 // go_router extra 수신:
-//   - logId     : start_mission RPC 응답의 log_id (UUID)
-//   - keyword   : 사용자가 검색한 키워드 (안내 표시용)
-//   - startedAt : 서버 기록 미션 시작 시각 (UTC) — 타이머 기준값
-//   - tagIndex  : 정답 태그 순서 (1-based, 없으면 null) — 태그 위치 안내용
+//   - logId      : start_mission RPC 응답의 log_id (UUID)
+//   - keyword    : 사용자가 검색한 키워드 (안내 표시용)
+//   - startedAt  : 서버 기록 미션 시작 시각 (UTC) — 타이머 기준값
+//   - tagIndex   : 정답 태그 순서 (1-based, 없으면 null) — 태그 위치 안내용
+//   - productUrl : 캠페인 상품 URL (클립보드 복사용, 없으면 null)
 //
 // 화면 상태 흐름:
 //   진입 → "네이버에서 검색 중..." 대기 화면
@@ -27,11 +28,12 @@ import 'mission_active_provider.dart';
 //   [리워드 받기] → verify_mission RPC → 성공/오답/타임아웃/오류 처리
 
 class MissionActiveScreen extends ConsumerStatefulWidget {
-  final String id;          // campaign_id (path param)
-  final String logId;       // mission_logs.id (UUID)
-  final String keyword;     // 안내 표시용 키워드
-  final DateTime startedAt; // 서버 UTC 시각 — 타이머 기준
-  final int? tagIndex;      // 정답 태그 순서 (1-based, null이면 안내 미표시)
+  final String id;           // campaign_id (path param)
+  final String logId;        // mission_logs.id (UUID)
+  final String keyword;      // 안내 표시용 키워드
+  final DateTime startedAt;  // 서버 UTC 시각 — 타이머 기준
+  final int? tagIndex;       // 정답 태그 순서 (1-based, null이면 안내 미표시)
+  final String? productUrl;  // 캠페인 상품 URL (클립보드 복사용, null이면 미표시)
 
   const MissionActiveScreen({
     super.key,
@@ -40,6 +42,7 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
     required this.keyword,
     required this.startedAt,
     this.tagIndex,
+    this.productUrl,
   });
 
   @override
@@ -267,6 +270,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
                             isTimedOut:       _isTimedOut,
                             tagController:    _tagController,
                             tagIndex:         widget.tagIndex,
+                            productUrl:       widget.productUrl,
                           ),
                         )
                       : const _WaitingBody(),
@@ -374,6 +378,7 @@ class _ActiveBody extends StatelessWidget {
   final bool isTimedOut;
   final TextEditingController tagController;
   final int? tagIndex;
+  final String? productUrl;
 
   const _ActiveBody({
     required this.keyword,
@@ -381,6 +386,7 @@ class _ActiveBody extends StatelessWidget {
     required this.isTimedOut,
     required this.tagController,
     this.tagIndex,
+    this.productUrl,
   });
 
   @override
@@ -403,6 +409,7 @@ class _ActiveBody extends StatelessWidget {
         if (!isTimedOut) _TagInputSection(
           controller: tagController,
           tagIndex: tagIndex,
+          productUrl: productUrl,
         ),
 
         // 타임아웃 메시지
@@ -519,11 +526,13 @@ class _KeywordReminder extends StatelessWidget {
 
 class _TagInputSection extends StatelessWidget {
   final TextEditingController controller;
-  final int? tagIndex; // 정답 태그 순서 (1-based). null이면 안내 미표시.
+  final int? tagIndex;      // 정답 태그 순서 (1-based). null이면 안내 미표시.
+  final String? productUrl; // 상품 URL. null이면 미표시.
 
   const _TagInputSection({
     required this.controller,
     this.tagIndex,
+    this.productUrl,
   });
 
   @override
@@ -538,6 +547,53 @@ class _TagInputSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
+
+        // 상품 URL 표시 + 복사 버튼 (productUrl 있을 경우)
+        if (productUrl != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.link_rounded, size: 16, color: Colors.grey.shade500),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    productUrl!,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.copy_rounded,
+                      size: 18, color: Colors.indigo.shade400),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'URL 복사',
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: productUrl!));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('URL이 복사되었습니다'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
 
         // tag_index 안내 문구 (있을 경우 강조 박스로 표시)
         if (tagIndex != null)

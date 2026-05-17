@@ -108,7 +108,7 @@ class MissionRepository {
 
     final campaignRaw = await supabase
         .from('campaigns')
-        .select('id, keyword, daily_target, status')
+        .select('id, keyword, daily_target, status, product_url')
         .eq('id', campaignId)
         .single() as Map<String, dynamic>;
 

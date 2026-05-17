@@ -97,13 +97,14 @@ final appRouter = GoRouter(
             final extra      = state.extra as Map<String, dynamic>?;
             final startedRaw = extra?['started_at'] as String?;
             return MissionActiveScreen(
-              id:        state.pathParameters['id']!,
-              logId:     extra?['log_id']  as String? ?? '',
-              keyword:   extra?['keyword'] as String? ?? '',
-              startedAt: startedRaw != null
+              id:         state.pathParameters['id']!,
+              logId:      extra?['log_id']  as String? ?? '',
+              keyword:    extra?['keyword'] as String? ?? '',
+              startedAt:  startedRaw != null
                   ? DateTime.parse(startedRaw).toUtc()
                   : DateTime.now().toUtc(),
-              tagIndex:  extra?['tag_index'] as int?,
+              tagIndex:   extra?['tag_index'] as int?,
+              productUrl: extra?['product_url'] as String?,
             );
           },
         ),
