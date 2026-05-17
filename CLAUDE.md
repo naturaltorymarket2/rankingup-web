@@ -866,6 +866,14 @@ Phase 4 (1~2주): 어드민 + 배포
 
   **versionCode 9** → AAB 빌드 완료 (50.4MB)
 
+- ✅ 완료: Phase 8-5 — 미션 설명 페이지 태그 안내 이미지 추가 (2026-05-17)
+  - `lib/features/mission/presentation/mission_detail_screen.dart`
+    - `_InstructionSection` 4단계 안내 텍스트 아래 `Image.asset` 삽입
+    - `ClipRRect(borderRadius: BorderRadius.circular(10))` 적용
+  - 배경: Phase 8-3에서 미션 진행 화면(active)에 이미지 추가 완료,
+    이번에 미션 시작 전 설명 화면(detail)에도 동일 이미지 추가
+  - **versionCode 10** → AAB 빌드 완료 (50.4MB)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -895,7 +903,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 9` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 9)
+- [x] `versionCode = 10` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 10)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -954,7 +962,7 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 9 |
+| 현재 빌드 versionCode | 10 |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
 
 ### GitHub 저장소

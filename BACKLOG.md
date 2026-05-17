@@ -60,6 +60,10 @@
       assets/images/mission_guide.png 추가, pubspec.yaml assets 섹션 등록
       mission_active_screen.dart _TagInputSection: amber 박스 바로 아래 Image.asset 삽입
 
+- [x] [앱] 미션 설명 페이지 — 네이버 태그 보는 방법 안내 이미지 추가 (2026-05-17)
+      mission_detail_screen.dart _InstructionSection: 4단계 안내 아래 Image.asset 삽입
+      ClipRRect(borderRadius: 10) 적용
+
 ## 🟡 신규 기능 — 공지사항 (최우선)
 
 - [x] [DB] notices 테이블 신규 생성 (id, title, content, created_at, created_by) (2026-05-14)
