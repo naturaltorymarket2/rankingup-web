@@ -11,6 +11,7 @@
       재수정 (2026-05-14): fetchRankHistory() limit 30→100, seen Set → Map+putIfAbsent 패턴으로 완전 재구현
 - [x] [앱] 태그 입력 시 오류 발생 (2026-05-13)
 - [x] [앱] 출금 신청 시 오류 발생 (2026-05-13)
+      완료: submit_withdraw RPC가 Supabase에 미적용 상태였음. migration 0015(submit_withdraw RPC), 0016(process_withdraw/reject_withdraw 수정) Supabase SQL Editor 적용으로 해결. (2026-05-18)
 - [x] [광고주 웹] 대시보드 내 광고 목록 일부만 노출 (2026-05-14)
       원인: get_dashboard_data RPC 캠페인 서브쿼리에 LIMIT 5 하드코딩 (migration 0008)
       수정: migration 0024_fix_dashboard_campaign_limit.sql 신규 생성 — LIMIT 제거
@@ -101,6 +102,10 @@
       원인 D: `canLaunchUrl()` 사전 체크 없이 `launchUrl()` 직접 호출 — false 반환 시 /active 미이동
       수정: mission_detail_screen.dart (케이스 A/C/D), AndroidManifest.xml (<package com.naver.search> 추가)
 - [ ] 네이버 앱이 열린 후 앱 복귀 시 MissionActiveScreen 백화면 현상
+- [x] Railway rankingup-web 배포 중단 (2026-05-18)
+      원인: Dockerfile 21번째 줄 nginx.conf 경로 오류 (/app/build/web/nginx.conf → /app/web/nginx.conf)
+            Flutter build output에 nginx.conf가 포함되지 않으므로 복사 실패 → nginx 시작 불가
+      수정: Dockerfile 경로를 소스 파일 위치(/app/web/nginx.conf)로 수정 후 GitHub push → Railway 자동 재배포 성공
 
 ## 🟠 버그 수정 권장
 
@@ -147,6 +152,11 @@
 - [x] [APP] 태그 입력 화면 — 뒤로가기 버튼 누락, 모달 닫기 수단 필요 (2026-05-14)
       태그 입력 상태(canGoBack)에서 AppBar 뒤로가기 버튼 + 시스템 뒤로가기 제스처 처리
       PopScope(canPop: false) + _goBackToWaiting() → _WaitingBody로 복귀 (미션 취소 아님)
+- [x] [앱] 미션 진행 화면 — 상품 URL 표시 추가 (2026-05-18)
+      네이버 딥링크 미작동 시 유저가 직접 상품 페이지에 접근할 수 있도록 URL 제공
+      _TagInputSection 내 상품 URL 텍스트(말줄임표) + 클립보드 복사 버튼 추가
+      변경 파일: mission_model.dart, mission_repository.dart, mission_detail_screen.dart, router.dart, mission_active_screen.dart
+      versionCode 11 AAB 빌드 완료 (50.4MB)
 
 ## 🟡 확인 필요 — QA 점검
 

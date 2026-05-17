@@ -874,6 +874,29 @@ Phase 4 (1~2주): 어드민 + 배포
     이번에 미션 시작 전 설명 화면(detail)에도 동일 이미지 추가
   - **versionCode 10** → AAB 빌드 완료 (50.4MB)
 
+- ✅ 완료: Phase 8-6 — 출금 RPC Supabase 적용 (2026-05-18)
+  - submit_withdraw RPC (migration 0015), process_withdraw/reject_withdraw 수정 (migration 0016) Supabase SQL Editor 직접 적용
+  - 원인: RPC 코드는 migration 파일로 존재했으나 Supabase에 미적용 상태 → 출금 신청 시 오류 발생
+  - migration 0019 (campaign_tags is_answer+sort_order 컬럼) 적용 완료
+  - migration 0022 (start_mission 일일 참여 제한 활성화) 적용 완료
+
+- ✅ 완료: Phase 8-7 — Railway 광고주 웹 배포 복구 (2026-05-18)
+  - 원인: `Dockerfile` 21번째 줄 `COPY --from=build /app/build/web/nginx.conf`
+    → Flutter `build web` 출력물에 nginx.conf 미포함 → 복사 실패 → nginx 시작 불가
+  - 수정: `COPY --from=build /app/web/nginx.conf` (소스 파일 위치로 변경)
+  - commit 6812132 push → Railway 자동 재배포 성공
+
+- ✅ 완료: Phase 8-8 — 미션 진행 화면 상품 URL 표시 (2026-05-18)
+  - `lib/features/mission/domain/mission_model.dart` — `CampaignMissionModel.productUrl: String?` 필드 추가
+  - `lib/features/mission/data/mission_repository.dart` — `fetchCampaignDetail()` SELECT에 `product_url` 추가
+  - `lib/features/mission/presentation/mission_detail_screen.dart` — extra 맵에 `'product_url': campaign.productUrl` 추가
+  - `lib/app/router.dart` — `MissionActiveScreen(productUrl: extra?['product_url'] as String?)` 전달
+  - `lib/features/mission/presentation/mission_active_screen.dart`
+    - `MissionActiveScreen` / `_ActiveBody` / `_TagInputSection`: `productUrl` 파라미터 추가
+    - `_TagInputSection`: 상품 URL 텍스트(말줄임표) + 복사 버튼 컨테이너 삽입
+  - 배경: 네이버 딥링크 미작동 시 유저가 직접 상품 페이지에 접근할 수 있도록 URL 제공
+  - **versionCode 11** → AAB 빌드 완료 (50.4MB)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -903,7 +926,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 10` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 10)
+- [x] `versionCode = 11` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 11)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -945,7 +968,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-05-16 기준)
+## 13. 배포 현황 (2026-05-18 기준)
 
 ### 서비스 URL
 
@@ -962,7 +985,7 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 10 |
+| 현재 빌드 versionCode | 11 |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
 
 ### GitHub 저장소
@@ -972,7 +995,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-05-16 |
+| 마지막 push | 2026-05-18 |
 
 ### GitHub Actions
 
@@ -1035,10 +1058,10 @@ curl -X POST http://localhost:8000/run-scheduler \
 |------|--------|-----------|------|
 | 1 | `20260317000017_fix_verify_mission_null_tag.sql` | verify_mission NULL 태그 보안 버그 수정 (어떤 태그든 통과되는 취약점 차단) | ⚠️ 미적용 확인 필요 |
 | 2 | `20260317000018_add_seed_keyword.sql` | campaigns.seed_keyword 컬럼 추가 + register_campaign p_seed_keyword 파라미터 | ⚠️ 미적용 확인 필요 |
-| 3 | `20260317000019_update_campaign_tags.sql` | campaign_tags.is_answer + sort_order 컬럼 추가, register_campaign p_answer_index 추가, start_mission tag_index 응답 | ⚠️ 미적용 확인 필요 |
+| 3 | `20260317000019_update_campaign_tags.sql` | campaign_tags.is_answer + sort_order 컬럼 추가, register_campaign p_answer_index 추가, start_mission tag_index 응답 | ✅ 적용 완료 (2026-05-18) |
 | 4 | `20260317000020_create_notices.sql` | notices 테이블 + RLS + get_notices / create_notice RPC | ⚠️ 미적용 확인 필요 |
 | 5 | `20260317000021_fix_campaigns_rls.sql` | campaigns RLS 강화 (타 광고주 ACTIVE 캠페인 접근 차단) | ⚠️ 미적용 확인 필요 |
-| 6 | `20260317000022_enable_daily_mission_limit.sql` | **start_mission 일일 참여 제한 활성화** (어뷰징 방지 핵심) | ❌ 신규 — 즉시 적용 필요 |
+| 6 | `20260317000022_enable_daily_mission_limit.sql` | **start_mission 일일 참여 제한 활성화** (어뷰징 방지 핵심) | ✅ 적용 완료 (2026-05-18) |
 | 7 | `20260317000023_fix_register_campaign_signature.sql` | register_campaign 시그니처 확정 (0018 회귀 버그 방지, Flutter 완전 일치) | ❌ 신규 — 즉시 적용 필요 |
 | 8 | `20260317000024_fix_dashboard_campaign_limit.sql` | get_dashboard_data RPC 캠페인 목록 LIMIT 5 제거 → 전체 반환 | ❌ 신규 — 즉시 적용 필요 |
 | 9 | `20260317000025_fix_tag_min_count.sql` | register_campaign RPC 태그 최소 개수 2 → 1로 완화 | ✅ 적용 완료 (2026-05-14) |
