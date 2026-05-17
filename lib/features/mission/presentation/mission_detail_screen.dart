@@ -368,6 +368,16 @@ class _InstructionSection extends StatelessWidget {
         ..._steps.asMap().entries.map(
           (e) => _StepItem(step: e.key + 1, text: e.value),
         ),
+        const SizedBox(height: 8),
+        // 네이버 태그 위치 안내 이미지
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.asset(
+            'assets/images/mission_guide.png',
+            width: double.infinity,
+            fit: BoxFit.contain,
+          ),
+        ),
       ],
     );
   }
