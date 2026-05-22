@@ -897,6 +897,15 @@ Phase 4 (1~2주): 어드민 + 배포
   - 배경: 네이버 딥링크 미작동 시 유저가 직접 상품 페이지에 접근할 수 있도록 URL 제공
   - **versionCode 11** → AAB 빌드 완료 (50.4MB)
 
+- ✅ 완료: Phase 9 — QA 피드백 반영 + 코드 품질 개선 (2026-05-22)
+  - brand.naver.com 브랜드스토어 URL 파싱 지원 (`_BRAND_PATTERN` 추가, `_extract_product_id` 분기)
+  - 일일 유입 수량 입력 개선 — 최대 3,000명, 100단위 자유 입력
+  - 순위 추적 키워드 / 미션 키워드 섹션 분리 UI
+  - 태그 입력 Step 2 amber 안내 카드 추가 (①②③ 입력 방법 + 예시)
+  - Code Review 수정: Critical(`_answerIndex` 경계 가드) / Major(`threading.Lock`, unused var) / Minor(`Colors.amber.shadeN`)
+  - Playwright MCP QA 전 항목 PASS (TC-01~TC-04)
+  - **versionCode 12** → AAB 빌드 완료 (50.4MB)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -926,7 +935,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 11` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 11)
+- [x] `versionCode = 12` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 12)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -985,7 +994,7 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 11 |
+| 현재 빌드 versionCode | 12 |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
 
 ### GitHub 저장소

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -24,17 +25,18 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   int _step = 1;
 
   // ── Step 1 ────────────────────────────────────────────────────
-  final _urlCtrl     = TextEditingController();
-  final _seedCtrl    = TextEditingController(); // 대표 키워드 (시드)
+  final _urlCtrl  = TextEditingController();
+  final _seedCtrl = TextEditingController(); // 순위 추적 키워드
+  bool _seedTouched        = false;           // 포커스 해제 or [다음] 시도 후 에러 표시
   bool _isFetchingKeywords = false;
   List<KeywordRankResult> _selectedKeywords = [];
 
   // ── Step 2 ────────────────────────────────────────────────────
-  final _tags         = <Map<String, dynamic>>[]; // {'name': String, 'order': int}
-  final _newTagCtrl   = TextEditingController();  // 태그 이름 입력 필드
-  final _newOrderCtrl = TextEditingController();  // 태그 순서 입력 필드
+  final _tags            = <Map<String, dynamic>>[]; // {'name': String, 'order': int}
+  final _newTagCtrl      = TextEditingController();  // 태그 이름 입력 필드
+  final _newOrderCtrl    = TextEditingController();  // 태그 순서 입력 필드
+  final _dailyTargetCtrl = TextEditingController(text: '100'); // 일일 유입 수량
   int _answerIndex  = -1;                         // 정답 태그 인덱스 (0-based, -1=미선택)
-  int          _dailyTarget = 100;
   DateTimeRange? _dateRange;
 
   // ── Step 3 ────────────────────────────────────────────────────
@@ -61,6 +63,23 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   List<int> get _validSortOrders =>
       List.unmodifiable(_tags.map((t) => t['order'] as int).toList());
 
+  /// 컨트롤러에서 파싱한 일일 목표 수 (파싱 실패 시 0)
+  int get _dailyTarget => int.tryParse(_dailyTargetCtrl.text.trim()) ?? 0;
+
+  /// 일일 목표 유효성 메시지 (null = 정상)
+  String? get _dailyTargetError {
+    final text = _dailyTargetCtrl.text.trim();
+    if (text.isEmpty) return '일일 유입 수량을 입력해주세요';
+    final v = int.tryParse(text);
+    if (v == null) return '숫자를 입력해주세요';
+    if (v < 100) return '최소 100명 이상 입력하세요';
+    if (v > 3000) return '최대 3,000명까지 가능합니다';
+    if (v % 100 != 0) return '100 단위로 입력해주세요 (예: 100, 500, 1000)';
+    return null;
+  }
+
+  bool get _isDailyTargetValid => _dailyTargetError == null;
+
   /// 선택된 키워드 수 × 기간 × 일일목표 × 50P
   int get _totalCost =>
       _dailyTarget * _durationDays * 50 * _selectedKeywords.length;
@@ -72,8 +91,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       _selectedKeywords.isNotEmpty;
 
   bool get _step2Valid =>
-      _tags.length >= 1 &&
+      _tags.isNotEmpty &&
       _answerIndex >= 0 &&
+      _answerIndex < _tags.length &&
+      _isDailyTargetValid &&
       _dateRange != null &&
       _durationDays >= 7;
 
@@ -85,6 +106,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     _seedCtrl.dispose();
     _newTagCtrl.dispose();
     _newOrderCtrl.dispose();
+    _dailyTargetCtrl.dispose();
     super.dispose();
   }
 
@@ -172,26 +194,28 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Step 1 — 상품 URL + 키워드 자동완성
+  // Step 1 — 상품 정보 / 순위 추적 키워드 / 미션 키워드
   // ─────────────────────────────────────────────────────────────
 
   Widget _buildStep1() {
+    final seedEmpty  = _seedCtrl.text.trim().isEmpty;
+    final showSeedError = _seedTouched && seedEmpty;
     final canFetch = _urlCtrl.text.trim().isNotEmpty &&
-        _seedCtrl.text.trim().isNotEmpty &&
+        !seedEmpty &&
         !_isFetchingKeywords;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── 섹션 A: 상품 정보 ────────────────────────────────────
         _WebCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('상품 URL', style: _kLabel),
+              const Text('상품 정보', style: _kLabel),
               const SizedBox(height: 8),
               TextField(
                 controller: _urlCtrl,
-                // URL 변경 시 기존 선택 키워드 초기화
                 onChanged: (_) => setState(() => _selectedKeywords = []),
                 decoration: const InputDecoration(
                   hintText: 'https://smartstore.naver.com/...',
@@ -201,26 +225,61 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                       EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text('대표 키워드', style: _kLabel),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── 섹션 B: 순위 추적 키워드 ─────────────────────────────
+        _WebCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('순위 추적 키워드', style: _kLabel),
               const SizedBox(height: 4),
               Text(
-                '상품을 대표하는 키워드를 입력하세요. 이를 기반으로 연관 키워드를 자동 생성합니다.',
+                '실제 네이버 쇼핑에서 내 상품의 순위를 추적할 대표 키워드입니다.\n'
+                '미션 키워드와 달리 광고 효과 측정용으로만 사용됩니다.',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _seedCtrl,
-                onChanged: (_) => setState(() => _selectedKeywords = []),
-                decoration: const InputDecoration(
-                  hintText: '예: 무선 블루투스 이어폰',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              // Focus 위젯으로 포커스 해제 시 에러 표시 활성화
+              Focus(
+                onFocusChange: (hasFocus) {
+                  if (!hasFocus) setState(() => _seedTouched = true);
+                },
+                child: TextField(
+                  controller: _seedCtrl,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: '예) 양파즙',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    errorText: showSeedError ? '순위 추적 키워드를 입력해주세요' : null,
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── 섹션 C: 미션 키워드 ──────────────────────────────────
+        _WebCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('미션 키워드', style: _kLabel),
+              const SizedBox(height: 4),
+              Text(
+                '앱 유저가 네이버에서 실제로 검색할 키워드입니다. 여러 개 설정 가능합니다.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: canFetch ? _fetchKeywords : null,
                 icon: _isFetchingKeywords
@@ -242,27 +301,13 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                   minimumSize: const Size(double.infinity, 44),
                 ),
               ),
-            ],
-          ),
-        ),
-
-        // ── 선택된 키워드 목록 ────────────────────────────────
-        if (_selectedKeywords.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          _WebCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '선택된 키워드 (${_selectedKeywords.length}개)',
-                  style: _kLabel,
-                ),
+              if (_selectedKeywords.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 ..._selectedKeywords.map(_buildKeywordChip),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
 
         const SizedBox(height: 16),
       ],
@@ -329,6 +374,54 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // ── 태그 입력 방법 안내 카드 ──────────────────────────
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.amber.shade50,
+            border: Border.all(color: Colors.amber.shade300),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.amber.shade700, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    '태그 입력 방법',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber.shade700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '① 네이버 스마트스토어 상품 페이지에서 상품명 아래 #태그를 확인하세요.\n'
+                '② 태그 이름과 상품 페이지에서의 순서(몇 번째인지)를 함께 입력하세요.\n'
+                '③ 정답 태그를 라디오 버튼으로 1개 선택하세요.',
+                style: TextStyle(fontSize: 13, height: 1.6),
+              ),
+              const Divider(height: 20),
+              Text(
+                '입력 예시  |  태그명: #티비거치대   순서: 3',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "→ 앱 유저에게 '3번째 태그를 입력하세요'로 안내됩니다",
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
         // ── 태그 ──────────────────────────────────────────────
         _WebCard(
           child: Column(
@@ -356,7 +449,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                       child: TextField(
                         controller: _newTagCtrl,
                         decoration: const InputDecoration(
-                          hintText: '태그 이름 (예: #헬스장갑)',
+                          hintText: '예) #티비거치대',
                           border: OutlineInputBorder(),
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(
@@ -371,7 +464,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                         controller: _newOrderCtrl,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          hintText: '순서 (예: 3)',
+                          hintText: '예) 3',
                           border: OutlineInputBorder(),
                           isDense: true,
                           contentPadding: EdgeInsets.symmetric(
@@ -425,31 +518,32 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
         // ── 일일 유입 수량 ────────────────────────────────────
         _WebCard(
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('일일 유입 수량', style: _kLabel),
-                    SizedBox(height: 2),
-                    Text(
-                      '하루 목표 미션 수행 인원',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
-                ),
+              const Text('일일 유입 수량', style: _kLabel),
+              const SizedBox(height: 4),
+              Text(
+                '하루 목표 미션 수행 인원 (100단위 입력, 최대 3,000명)',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
-              DropdownButton<int>(
-                value: _dailyTarget,
-                underline: const SizedBox.shrink(),
-                items: const [100, 200, 300, 400, 500]
-                    .map((v) => DropdownMenuItem<int>(
-                          value: v,
-                          child: Text('$v명'),
-                        ))
-                    .toList(),
-                onChanged: (v) => setState(() => _dailyTarget = v!),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _dailyTargetCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: '예) 500 (100단위 입력, 최대 3,000)',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  suffixText: '명',
+                  errorText: _dailyTargetCtrl.text.trim().isEmpty
+                      ? null
+                      : _dailyTargetError,
+                ),
               ),
             ],
           ),
@@ -502,7 +596,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 const Text('예산 미리보기', style: _kLabel),
                 const SizedBox(height: 8),
                 Text(
-                  '${_selectedKeywords.length}개 키워드 × $_durationDays일 × $_dailyTarget명 × 50P',
+                  '${_selectedKeywords.length}개 키워드 × $_durationDays일'
+                  ' × ${_isDailyTargetValid ? '$_dailyTarget명' : '?명'} × 50P',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 10),
@@ -518,7 +613,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                           ),
                         ),
                         Text(
-                          '${_fmtNum(_dailyTarget * _durationDays * 50)}P',
+                          _isDailyTargetValid
+                              ? '${_fmtNum(_dailyTarget * _durationDays * 50)}P'
+                              : '— P',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ],
@@ -535,7 +632,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                       ),
                     ),
                     Text(
-                      '${_fmtNum(_totalCost)}P',
+                      _isDailyTargetValid ? '${_fmtNum(_totalCost)}P' : '— P',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -723,10 +820,15 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         top: false,
         child: switch (_step) {
           1 => ElevatedButton(
-                onPressed: _step1Valid
-                    ? () => setState(() => _step = 2)
-                    : null,
-                style: _primaryStyle,
+                // 항상 탭 가능 — 유효하지 않으면 에러 표시 후 이동 차단
+                onPressed: () {
+                  if (_step1Valid) {
+                    setState(() => _step = 2);
+                  } else {
+                    setState(() => _seedTouched = true);
+                  }
+                },
+                style: _step1Valid ? _primaryStyle : _disabledStyle,
                 child: const Text('다음 단계 (2/3)'),
               ),
           2 => ElevatedButton(
@@ -757,6 +859,13 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
   static final _primaryStyle = ElevatedButton.styleFrom(
     backgroundColor: _kBlue,
+    foregroundColor: Colors.white,
+    minimumSize: const Size(double.infinity, 48),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  );
+
+  static final _disabledStyle = ElevatedButton.styleFrom(
+    backgroundColor: Color(0xFFBDBDBD),
     foregroundColor: Colors.white,
     minimumSize: const Size(double.infinity, 48),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

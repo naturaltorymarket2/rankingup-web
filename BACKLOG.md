@@ -145,6 +145,11 @@
       다음 단계: 실기기 테스트 후 e.runtimeType 로그 확인 — PostgrestException 외 Error 계열 예외 의심
       관련 파일: lib/features/wallet/presentation/withdraw_provider.dart
 
+- [x] [랭킹 서버] brand.naver.com 브랜드스토어 URL 파싱 지원 — _BRAND_PATTERN 추가, _extract_product_id 분기 처리 (2026-05-22)
+- [x] [랭킹 서버] _NaverApiClient._idx threading.Lock race condition 수정 — fetch_items 전체 Lock 적용 (2026-05-22)
+- [x] [광고주 웹] _step2Valid _answerIndex 경계 조건 가드 추가 — `_answerIndex < _tags.length` 인덱스 경계 방어 (Critical 버그) (2026-05-22)
+- [x] [광고주 웹] Colors.amber 강제 언래핑(`!`) → .shadeN 교체 (2026-05-22)
+
 ## 🟠 UX 개선
 
 - [x] [APP] 태그 입력 화면 — 어떤 값을 입력해야 하는지 안내 문구 및 예시 화면 추가 필요 (2026-05-14)
@@ -157,6 +162,10 @@
       _TagInputSection 내 상품 URL 텍스트(말줄임표) + 클립보드 복사 버튼 추가
       변경 파일: mission_model.dart, mission_repository.dart, mission_detail_screen.dart, router.dart, mission_active_screen.dart
       versionCode 11 AAB 빌드 완료 (50.4MB)
+
+- [x] [광고주 웹] 일일 유입 수량 입력 개선 — 최대 3,000명, 100단위 자유 입력 (2026-05-22)
+- [x] [광고주 웹] 순위 추적 키워드 / 미션 키워드 섹션 분리 UI (2026-05-22)
+- [x] [광고주 웹] 태그 입력 안내 카드 추가 — Step 2 amber 박스 (①②③ 입력 방법 안내 + 예시) (2026-05-22)
 
 ## 🟡 확인 필요 — QA 점검
 
