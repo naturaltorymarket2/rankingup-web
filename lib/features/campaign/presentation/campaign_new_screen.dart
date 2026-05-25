@@ -1,3 +1,5 @@
+import 'package:uuid/uuid.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,9 +82,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
   bool get _isDailyTargetValid => _dailyTargetError == null;
 
-  /// 선택된 키워드 수 × 기간 × 일일목표 × 50P
-  int get _totalCost =>
-      _dailyTarget * _durationDays * 50 * _selectedKeywords.length;
+  /// 그룹 일일목표 × 기간 × 50P (키워드 수 무관, 그룹 1회 과금)
+  int get _totalCost => _dailyTarget * _durationDays * 50;
 
   /// URL + 시드 키워드 입력 + 키워드 1개 이상 선택
   bool get _step1Valid =>
@@ -596,30 +597,38 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 const Text('예산 미리보기', style: _kLabel),
                 const SizedBox(height: 8),
                 Text(
-                  '${_selectedKeywords.length}개 키워드 × $_durationDays일'
-                  ' × ${_isDailyTargetValid ? '$_dailyTarget명' : '?명'} × 50P',
+                  '${_isDailyTargetValid ? '$_dailyTarget명' : '?명'} × $_durationDays일 × 50P'
+                  ' (그룹 1회 과금)',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
+                if (_selectedKeywords.length > 1) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_selectedKeywords.length}개 서브키워드 균등 분배'
+                    ' (각 ${_dailyTarget ~/ _selectedKeywords.length}명'
+                    '${_dailyTarget % _selectedKeywords.length > 0 ? ', 첫 번째 +${_dailyTarget % _selectedKeywords.length}명' : ''})',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
+                ],
                 const SizedBox(height: 10),
-                ..._selectedKeywords.map(
-                  (kw) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            kw.keyword,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        Text(
-                          _isDailyTargetValid
-                              ? '${_fmtNum(_dailyTarget * _durationDays * 50)}P'
-                              : '— P',
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _selectedKeywords.map((k) => k.keyword).join(' / '),
                           style: const TextStyle(fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                      Text(
+                        _isDailyTargetValid
+                            ? '${_fmtNum(_totalCost)}P'
+                            : '— P',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ],
                   ),
                 ),
                 const Divider(height: 20),
@@ -703,7 +712,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const SizedBox(height: 12),
               _SummaryRow(
                   label: '키워드 수',
-                  value: '${_selectedKeywords.length}개'),
+                  value: '${_selectedKeywords.length}개 (그룹 1회 과금)'),
               _SummaryRow(label: '일일 유입', value: '$_dailyTarget명'),
               _SummaryRow(label: '광고 기간', value: '$_durationDays일'),
               _SummaryRow(label: '단가', value: '50P / 1명'),
@@ -732,7 +741,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '$_dailyTarget명 × $_durationDays일 × 50P × ${_selectedKeywords.length}개 키워드',
+                  '$_dailyTarget명 × $_durationDays일 × 50P',
                   textAlign: TextAlign.end,
                   style:
                       TextStyle(fontSize: 12, color: Colors.grey[500]),
@@ -850,7 +859,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : Text('${_selectedKeywords.length}개 캠페인 포인트 차감 후 등록'),
+                    : const Text('광고 등록 (포인트 1회 차감)'),
               ),
         },
       ),
@@ -1026,8 +1035,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     setState(() => _dateRange = picked);
   }
 
-  /// 선택된 키워드 수만큼 register_campaign RPC 순차 호출
+  /// 서브키워드 수만큼 register_campaign RPC 순차 호출 (그룹 1회 과금)
   ///
+  /// - 동일 group_id로 순차 호출 → RPC가 첫 번째에만 포인트 차감
   /// - 전체 성공 → 대시보드 이동
   /// - 부분 성공 → 성공한 수 SnackBar + 대시보드 이동
   /// - 전부 실패 → 오류 SnackBar, 화면 유지
@@ -1040,24 +1050,40 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       setState(() => _isSubmitting = false);
       return;
     }
-    final userId = currentUser.id;
-    final repo   = ref.read(campaignRepositoryProvider);
+
+    final keywordCount = _selectedKeywords.length;
+    if (keywordCount == 0) {
+      setState(() => _isSubmitting = false);
+      return;
+    }
+
+    final userId           = currentUser.id;
+    final repo             = ref.read(campaignRepositoryProvider);
+    final groupId          = const Uuid().v4();
+    final groupDailyTarget = _dailyTarget;
+    final base             = _dailyTarget ~/ keywordCount;
+    final remainder        = _dailyTarget % keywordCount;
+
     int successCount = 0;
 
-    for (int i = 0; i < _selectedKeywords.length; i++) {
+    for (int i = 0; i < keywordCount; i++) {
       final kw = _selectedKeywords[i];
+      // 첫 번째 서브키워드에 나머지 추가 (균등 분배 후 잉여분)
+      final perKeywordTarget = i == 0 ? base + remainder : base;
       try {
         await repo.registerCampaign(
-          userId:      userId,
-          productUrl:  _urlCtrl.text.trim(),
-          keyword:     kw.keyword,
-          dailyTarget: _dailyTarget,
-          startDate:   _dateRange!.start,
-          endDate:     _dateRange!.end,
-          tags:        _validTags,
-          sortOrders:  _validSortOrders,
-          answerIndex: _tags[_answerIndex]['order'] as int, // 광고주 입력 실제 순서값
-          seedKeyword: _seedCtrl.text.trim().isEmpty ? null : _seedCtrl.text.trim(),
+          userId:           userId,
+          productUrl:       _urlCtrl.text.trim(),
+          keyword:          kw.keyword,
+          dailyTarget:      perKeywordTarget,
+          groupDailyTarget: groupDailyTarget,
+          groupId:          groupId,
+          startDate:        _dateRange!.start,
+          endDate:          _dateRange!.end,
+          tags:             _validTags,
+          sortOrders:       _validSortOrders,
+          answerIndex:      _tags[_answerIndex]['order'] as int,
+          seedKeyword:      _seedCtrl.text.trim().isEmpty ? null : _seedCtrl.text.trim(),
         );
         successCount++;
       } catch (e) {
@@ -1065,7 +1091,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         _showSnack(
           '${i + 1}번째 키워드(${kw.keyword}) 등록 실패: ${_mapRpcError(e.toString())}',
         );
-        break; // 이후 키워드 등록 중단
+        break;
       }
     }
 
@@ -1074,7 +1100,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     if (successCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$successCount개 광고가 등록되었습니다.'),
+          content: Text('$successCount개 키워드 광고 그룹이 등록되었습니다.'),
           backgroundColor: _kGreen,
         ),
       );
@@ -1083,6 +1109,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       setState(() => _isSubmitting = false);
     }
   }
+
 
   String _mapRpcError(String err) {
     if (err.contains('INSUFFICIENT_BALANCE')) {

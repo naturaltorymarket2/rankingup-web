@@ -27,12 +27,13 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
   Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(dashboardDataProvider);
 
-    // 첫 로드 시 첫 번째 캠페인 자동 선택
+    // 첫 로드 시 첫 번째 그룹의 대표 캠페인 자동 선택
     ref.listen<AsyncValue<DashboardData>>(dashboardDataProvider, (_, next) {
       if (next is AsyncData<DashboardData> && _selectedCampaignId == null) {
         final campaigns = next.value.campaigns;
         if (campaigns.isNotEmpty) {
-          setState(() => _selectedCampaignId = campaigns.first.id);
+          setState(() => _selectedCampaignId =
+              campaigns.first.representativeCampaignId);
         }
       }
     });
@@ -222,8 +223,8 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
               hint: const Text('캠페인 선택'),
               items: data.campaigns
                   .map((c) => DropdownMenuItem<String>(
-                        value: c.id,
-                        child: Text(c.keyword,
+                        value: c.representativeCampaignId,
+                        child: Text(c.seedKeyword,
                             overflow: TextOverflow.ellipsis),
                       ))
                   .toList(),
@@ -374,8 +375,8 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
                 ...data.campaigns.map(
                   (c) => _CampaignRow(
                     campaign: c,
-                    onTap: () =>
-                        context.push('/web/campaign/${c.id}'),
+                    onTap: () => context.push(
+                        '/web/campaign/${c.representativeCampaignId}'),
                   ),
                 ),
               ],
@@ -561,8 +562,8 @@ class _CampaignRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = campaign.dailyTarget > 0
-        ? (campaign.todaySuccess / campaign.dailyTarget)
+    final progress = campaign.groupDailyTarget > 0
+        ? (campaign.todayCount / campaign.groupDailyTarget)
             .clamp(0.0, 1.0)
         : 0.0;
 
@@ -574,14 +575,28 @@ class _CampaignRow extends StatelessWidget {
             const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         child: Row(
           children: [
-            // 키워드
+            // 순위 추적 키워드 + 서브키워드 목록
             Expanded(
               flex: 3,
-              child: Text(
-                campaign.keyword,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w500, fontSize: 14),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    campaign.seedKeyword,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w500, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (campaign.subKeywords.length > 1) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      campaign.subKeywords.join(' / '),
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey[500]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ),
             ),
 
@@ -610,7 +625,7 @@ class _CampaignRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${campaign.todaySuccess} / ${campaign.dailyTarget}',
+                      '${campaign.todayCount} / ${campaign.groupDailyTarget}',
                       style: const TextStyle(fontSize: 12),
                     ),
                     const SizedBox(height: 4),

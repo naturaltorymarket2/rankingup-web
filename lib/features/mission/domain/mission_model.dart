@@ -29,6 +29,10 @@ class CampaignMissionModel {
   /// 홈 목록 조회 시에는 null
   final String? productUrl;
 
+  /// 그룹 식별자 (group_id) — 그룹 단위 중복 참여 체크 및 DISTINCT용
+  /// 기존 캠페인(마이그레이션 전)은 null 가능
+  final String? groupId;
+
   const CampaignMissionModel({
     required this.campaignId,
     required this.keyword,
@@ -37,6 +41,7 @@ class CampaignMissionModel {
     this.currentRank,
     required this.status,
     this.productUrl,
+    this.groupId,
   });
 
   /// 오늘 달성률 0.0 ~ 1.0
@@ -59,12 +64,13 @@ class CampaignMissionModel {
     required int todaySuccessCount,
   }) {
     return CampaignMissionModel(
-      campaignId: map['id'] as String,
-      keyword: map['keyword'] as String,
-      dailyTarget: map['daily_target'] as int,
+      campaignId:       map['id']           as String,
+      keyword:          map['keyword']      as String,
+      dailyTarget:      map['daily_target'] as int,
       todaySuccessCount: todaySuccessCount,
-      status: map['status'] as String,
-      productUrl: map['product_url'] as String?,
+      status:           map['status']       as String,
+      productUrl:       map['product_url']  as String?,
+      groupId:          map['group_id']     as String?,
     );
   }
 }

@@ -196,3 +196,56 @@
       migration 0021: Permissive 2개(owner_select, active_select) + Restrictive 1개(advertiser_restrict)
       광고주(business_info 존재)의 타인 ACTIVE 캠페인 접근 차단
       ⚠️ Supabase migration 0021 수동 적용 필요
+
+---
+
+## 🟠 Phase 10 — 그룹 과금 구조 변경 (2026-05-25)
+
+> Flutter 구현 완료. Supabase 마이그레이션 0027~0030 적용 후 실서비스 반영.
+
+### ✅ Flutter 구현 완료 항목
+
+- [x] [광고주 웹] campaign_new_screen.dart — uuid 패키지로 groupId 생성, 예산 계산 `dailyTarget × duration × 50` (키워드수 제거), Step 2 "N개 서브키워드 균등 분배" 안내, 버튼 텍스트 "광고 등록 (포인트 1회 차감)" (2026-05-25)
+- [x] [광고주 웹] campaign_repository.dart — `registerCampaign()` `groupId, groupDailyTarget` 파라미터 추가, RPC에 `p_group_id, p_group_daily_target` 전달 (2026-05-25)
+- [x] [광고주 웹] campaign_repository.dart — `fetchCampaignDetail()` group_id 기준 서브키워드 목록 추가 조회, `fetchCampaignStats()` group_id 기준 그룹 전체 mission_logs 합산 (2026-05-25)
+- [x] [광고주 웹] campaign_model.dart — `groupId, groupDailyTarget, seedKeyword, subKeywords` 필드, `displayDailyTarget / displayKeyword` getter 추가 (2026-05-25)
+- [x] [광고주 웹] campaign_detail_screen.dart — `displayKeyword` / `displayDailyTarget` 사용, 서브키워드 목록 `A · B` 형식 표시 (2026-05-25)
+- [x] [광고주 웹] dashboard_model.dart — DashboardCampaign에 `groupId, seedKeyword, groupDailyTarget, subKeywords, representativeCampaignId` 추가 (2026-05-25)
+- [x] [광고주 웹] dashboard_repository.dart — `get_dashboard_data` RPC 신규 반환 필드 파싱 (2026-05-25)
+- [x] [광고주 웹] web_dashboard_screen.dart — seedKeyword 메인·subKeywords 서브 표시, 그룹 합산 통계, `representativeCampaignId` 라우팅 (2026-05-25)
+- [x] [앱] mission_repository.dart — `fetchActiveMissions()` group_id 기반 완료 그룹 제외, `seenGroupKeys` Set으로 group_id DISTINCT 처리 (2026-05-25)
+- [x] pubspec.yaml — `uuid: ^4.5.1` 추가 (2026-05-25)
+
+### ✅ Supabase DB 마이그레이션 적용 완료 (2026-05-25)
+
+- [x] migration 0027 — campaigns 테이블: `group_id uuid`, `group_daily_target int DEFAULT 0` 컬럼 추가. mission_logs: `group_id uuid` 컬럼 추가 (2026-05-25)
+- [x] migration 0028 — `register_campaign` RPC: `p_group_id, p_group_daily_target` 파라미터 추가. 예산 차감 기준 `group_daily_target × duration × 50`으로 변경 (2026-05-25)
+- [x] migration 0029 — `get_dashboard_data` RPC: `group_id, seed_keyword, group_daily_target, sub_keywords(text[]), representative_campaign_id` 반환 필드 추가, group_id DISTINCT ON 처리 (2026-05-25)
+- [x] migration 0030 — `start_mission` RPC: 일일 참여 체크를 `group_id` 기준으로 변경, `mission_logs.group_id` INSERT 처리 (2026-05-25)
+- [x] migration 0031 — `campaigns.budget CHECK (budget >= 0)` 수정 — 두 번째 서브키워드 budget=0 INSERT 허용 (2026-05-25)
+
+### ✅ QA 수동 검증 완료 (2026-05-25)
+
+- [x] TC-01 실제 등록: 5,000,000P 충전 후 2개 서브키워드 그룹 등록 → 35,000P 차감, 대시보드 리디렉트 성공
+      **버그 발견 및 수정**: 두 번째 서브키워드 등록 시 `budget=0` → `CHECK (budget > 0)` 위반 400 에러
+      **수정**: migration 0031 — `CHECK (budget >= 0)`으로 완화. 재테스트 후 **PASS** (2026-05-25)
+- [x] TC-02 대시보드: seedKeyword 메인 / subKeywords 서브 / group_daily_target 일일 목표 표시 확인
+      **PASS**: 남자수영복(메인) + "남자수영복 / 남자수영복바지"(서브) 1행 표시, 0/100 일일 목표, 상세 화면 진입 정상 (2026-05-25)
+- [ ] TC-03 미션 보드 DISTINCT: 동일 group_id 2개 캠페인 → 미션 보드에 카드 1개만 노출 확인 (앱 실기기 필요)
+- [ ] TC-04 중복 참여 방지: 미션 완료(SUCCESS) 후 동일 그룹 카드가 보드에서 사라지는지 확인 (앱 실기기 필요)
+
+### 📝 Playwright QA 발견 사항 (2026-05-25)
+
+- Flutter Web 요소 탭: `PointerEvent(pointerType:'touch', pointerId:1)` 방식 필수 (MouseEvent / PointerEvent 기본값 불가)
+  ```javascript
+  node.dispatchEvent(new PointerEvent('pointerdown', {
+    bubbles: true, pointerId: 1, pointerType: 'touch', isPrimary: true,
+    clientX: cx, clientY: cy, pressure: 1
+  }));
+  ```
+- TC-01 UI 검증: ✅ PASS — 예산 계산식·버튼 텍스트·서브키워드 분배 안내 확인
+- TC-01 실제 등록: ✅ PASS (migration 0031 적용 후) — 2개 서브키워드 모두 등록 성공
+- TC-02 대시보드: ✅ PASS — 1행 그룹 표시, 서브키워드 부제 표시, 상세 화면 정상 진입
+- TC-03 카드 네비게이션: ✅ PASS — 미션 카드 → 미션 상세 이동 정상
+- TC-04 RPC 동작: ✅ PASS — `startMission` 정상 호출, "신발장 2026.05.25 15:40 진행 중" 이력 생성
+

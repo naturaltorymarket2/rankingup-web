@@ -25,10 +25,12 @@ class MissionRepository {
   // 홈 미션 보드: 활성 캠페인 목록 페이지 조회
   // ─────────────────────────────────────────────────────────────
 
-  /// 활성 캠페인 목록 (무한 스크롤 페이지 단위)
+  /// 활성 캠페인 목록 (무한 스크롤 페이지 단위, group_id별 DISTINCT)
   ///
   /// - status = 'ACTIVE' + expires_at >= 지금
-  /// - 오늘 이미 SUCCESS 한 캠페인 제외
+  /// - 오늘 이미 SUCCESS 한 그룹(group_id) 제외
+  /// - 그룹 내 남은 슬롯이 없는 서브키워드 제외
+  /// - group_id별 1개 카드 (DISTINCT — 클라이언트 처리)
   /// - 보안: product_url, tag_word SELECT 금지
   Future<List<CampaignMissionModel>> fetchActiveMissions({
     required String userId,
@@ -37,32 +39,41 @@ class MissionRepository {
     final now = DateTime.now().toUtc();
     final todayStartIso = _kstTodayStartIso();
 
-    // 1. 오늘 내가 SUCCESS 한 캠페인 ID
+    // 1. 오늘 내가 SUCCESS 한 mission_logs → group_id / campaign_id 수집
     final completedRaw = await supabase
         .from('mission_logs')
-        .select('campaign_id')
+        .select('campaign_id, group_id')
         .eq('user_id', userId)
         .eq('status', 'SUCCESS')
-        .gte('started_at', todayStartIso);
+        .gte('started_at', todayStartIso) as List<dynamic>;
 
-    final completedIds = (completedRaw as List<dynamic>)
-        .map((r) => (r as Map<String, dynamic>)['campaign_id'] as String)
-        .toSet()
-        .take(50) // A-012: not-in 쿼리 과부하 방지 (최대 50개)
-        .toList();
+    final completedGroupIds  = <String>{};
+    final completedCampaignIds = <String>{}; // group_id NULL 폴백
+    for (final r in completedRaw) {
+      final m       = r as Map<String, dynamic>;
+      final groupId = m['group_id'] as String?;
+      if (groupId != null) {
+        completedGroupIds.add(groupId);
+      } else {
+        completedCampaignIds.add(m['campaign_id'] as String);
+      }
+    }
 
-    // 2. 활성 캠페인 조회 (완료 캠페인 제외)
+    // 2. 활성 캠페인 조회 (group_id 포함, 완료 캠페인 ID 제외)
+    //    group_id 기준 제외는 클라이언트에서 처리 (Supabase 클라이언트는 DISTINCT ON 미지원)
     final start = page * pageSize;
-    final end = start + pageSize - 1;
+    final end   = start + pageSize - 1;
 
     var qb = supabase
         .from('campaigns')
-        .select('id, keyword, daily_target, status')
+        .select('id, keyword, daily_target, group_id, status')
         .eq('status', 'ACTIVE')
         .gte('expires_at', now.toIso8601String());
 
-    if (completedIds.isNotEmpty) {
-      qb = qb.not('id', 'in', '(${completedIds.join(',')})');
+    // 레거시 campaign_id 기반 제외 (group_id NULL 폴백용)
+    if (completedCampaignIds.isNotEmpty) {
+      final ids = completedCampaignIds.take(50).toList(); // A-012: 최대 50개
+      qb = qb.not('id', 'in', '(${ids.join(',')})');
     }
 
     final campaignsRaw = await qb.range(start, end) as List<dynamic>;
@@ -86,14 +97,30 @@ class MissionRepository {
       todayCounts[id] = (todayCounts[id] ?? 0) + 1;
     }
 
-    return campaignsRaw.map<CampaignMissionModel>((raw) {
-      final map = raw as Map<String, dynamic>;
-      final id = map['id'] as String;
-      return CampaignMissionModel.fromMap(
-        map,
-        todaySuccessCount: todayCounts[id] ?? 0,
-      );
-    }).toList();
+    // 4. 모델 구성 + 필터 + 그룹별 DISTINCT
+    final seenGroupKeys = <String>{};
+    final result        = <CampaignMissionModel>[];
+
+    for (final raw in campaignsRaw) {
+      final map      = raw as Map<String, dynamic>;
+      final id       = map['id'] as String;
+      final groupId  = map['group_id'] as String?;
+      final count    = todayCounts[id] ?? 0;
+      final target   = map['daily_target'] as int;
+
+      // 이미 참여한 그룹 제외
+      if (groupId != null && completedGroupIds.contains(groupId)) continue;
+
+      // 일일 목표 도달한 서브키워드 제외
+      if (count >= target) continue;
+
+      // group_id별 DISTINCT (첫 번째 등장 = 쿼리 반환 순서 기준)
+      final key = groupId ?? id;
+      if (!seenGroupKeys.add(key)) continue;
+
+      result.add(CampaignMissionModel.fromMap(map, todaySuccessCount: count));
+    }
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────────

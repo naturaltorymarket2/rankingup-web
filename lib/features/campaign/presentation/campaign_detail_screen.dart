@@ -26,7 +26,7 @@ class CampaignDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
-      appBar: _buildAppBar(context, detailAsync.valueOrNull?.keyword),
+      appBar: _buildAppBar(context, detailAsync.valueOrNull?.displayKeyword),
       body: detailAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -66,7 +66,7 @@ class CampaignDetailScreen extends ConsumerWidget {
             : context.go('/web/dashboard'),
       ),
       title: Text(
-        keyword ?? '광고 상세',
+        keyword?.isNotEmpty == true ? keyword! : '광고 상세',
         style: const TextStyle(
           fontWeight: FontWeight.bold,
           color: Color(0xFF1E3A8A),
@@ -188,11 +188,21 @@ class CampaignDetailScreen extends ConsumerWidget {
       title: '캠페인 정보',
       child: Column(
         children: [
-          _InfoRow(label: '키워드', value: campaign.keyword, bold: true),
+          _InfoRow(label: '키워드', value: campaign.displayKeyword, bold: true),
+          if (campaign.subKeywords.length > 1) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 90),
+              child: Text(
+                campaign.subKeywords.join(' · '),
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ),
+          ],
           const Divider(height: 24),
           _InfoRow(
             label: '일일 목표',
-            value: '${_fmt(campaign.dailyTarget)}명',
+            value: '${_fmt(campaign.displayDailyTarget)}명',
           ),
           const SizedBox(height: 12),
           _InfoRow(
@@ -239,8 +249,9 @@ class CampaignDetailScreen extends ConsumerWidget {
           ),
         ),
         data: (stats) {
-          final progress = campaign.dailyTarget > 0
-              ? (stats.todaySuccess / campaign.dailyTarget).clamp(0.0, 1.0)
+          final dailyTarget = campaign.displayDailyTarget;
+          final progress = dailyTarget > 0
+              ? (stats.todaySuccess / dailyTarget).clamp(0.0, 1.0)
               : 0.0;
           final rankLabel = stats.currentRank != null
               ? '${stats.currentRank}위'
@@ -258,7 +269,7 @@ class CampaignDetailScreen extends ConsumerWidget {
                   Expanded(
                     child: _StatBox(
                       label: '오늘 유입',
-                      value: '${stats.todaySuccess} / ${campaign.dailyTarget}',
+                      value: '${stats.todaySuccess} / $dailyTarget',
                       sub: '달성률 ${(progress * 100).toInt()}%',
                     ),
                   ),

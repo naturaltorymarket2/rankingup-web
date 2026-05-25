@@ -30,7 +30,7 @@
 
 ## 3. 디렉토리 구조
 
-> 실제 구현 파일 기준 (2026-04-29 검증 완료)
+> 실제 구현 파일 기준 (2026-05-25 검증 완료)
 
 ```
 lib/
@@ -87,15 +87,19 @@ lib/
 │   └── admin/
 │       ├── data/
 │       │   ├── admin_charge_repository.dart
-│       │   └── admin_withdraw_repository.dart
+│       │   ├── admin_withdraw_repository.dart
+│       │   └── notice_repository.dart
 │       ├── domain/
 │       │   ├── admin_charge_model.dart   # AdminChargeRecord (description 파싱)
-│       │   └── admin_withdraw_model.dart # AdminWithdrawRecord (JSON memo 파싱)
+│       │   ├── admin_withdraw_model.dart # AdminWithdrawRecord (JSON memo 파싱)
+│       │   └── notice_model.dart
 │       └── presentation/
 │           ├── admin_charge_screen.dart  # ADMIN role 검증 필수
 │           ├── admin_charge_provider.dart
 │           ├── admin_withdraw_screen.dart
-│           └── admin_withdraw_provider.dart
+│           ├── admin_withdraw_provider.dart
+│           ├── admin_notice_screen.dart  # 공지 등록 + 목록
+│           └── admin_notice_provider.dart
 └── shared/
     ├── widgets/
     │   ├── bottom_nav_bar.dart           # 앱 하단 네비게이션
@@ -142,8 +146,10 @@ lib/
 ### 어드민 웹 (운영자)
 | 경로 | 화면 |
 |------|------|
+| `/admin/login` | 어드민 로그인 |
 | `/admin/charge` | 충전 승인 |
 | `/admin/withdraw` | 출금 처리 |
+| `/admin/notice` | 공지 등록 |
 
 ---
 
@@ -177,7 +183,7 @@ lib/
 | `verify_mission` | `p_log_id uuid, p_user_id uuid, p_submitted_tag text` | 정답 검증: 10분 타임아웃 + 리워드 +7P 지급 |
 | `approve_charge` | `p_tx_id uuid` | 충전 승인: PENDING → COMPLETED + 포인트 지급 |
 | `process_withdraw` | `p_tx_id uuid` | 출금 처리: PENDING → COMPLETED + 잔액 차감 (FOR UPDATE) |
-| `register_campaign` | `p_user_id uuid, p_product_url text, p_keyword text, p_daily_target int, p_start_date date, p_end_date date, p_tags text[]` | 캠페인 등록: 예산 즉시 차감, 최소 7일, 50P/명/일 |
+| `register_campaign` | `p_user_id uuid, p_product_url text, p_keyword text, p_daily_target int, p_group_daily_target int, p_group_id uuid, p_start_date date, p_end_date date, p_tags text[], p_sort_orders int[], p_answer_index int, p_seed_keyword text` | 캠페인 등록: 예산 즉시 차감(group_daily_target 기준), 최소 7일, 50P/명/일. 동일 group_id로 서브키워드 묶음 |
 
 ### 광고주 / 대시보드 (migration 0007~0008)
 
@@ -294,7 +300,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 7 (운영 안정화 + 신규 기능) — 완료**
+현재 진행 Phase: **Phase 10 (그룹 과금 구조 변경) — 구현 완료 / DB 마이그레이션 완료 / QA TC-01·TC-02 PASS**
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -906,6 +912,68 @@ Phase 4 (1~2주): 어드민 + 배포
   - Playwright MCP QA 전 항목 PASS (TC-01~TC-04)
   - **versionCode 12** → AAB 빌드 완료 (50.4MB)
 
+- ✅ 완료(Flutter): Phase 10 — 그룹 과금 구조 변경 (2026-05-25)
+
+  **배경**: 다중 서브키워드 등록 시 키워드 수 × 과금 → 1회 과금으로 변경
+  - `group_id` (UUID) 를 클라이언트에서 생성, 동일 그룹 서브키워드 묶음
+  - `group_daily_target` = 광고주 입력 일일 목표 (그룹 전체 기준 과금)
+  - 서브키워드별 `daily_target` = `group_daily_target ~/ 키워드수` (첫 번째에 나머지 합산)
+  - 예산 계산: `dailyTarget × duration × 50P` (키워드수 무관)
+
+  **변경된 파일 (9개):**
+  - `lib/features/dashboard/domain/dashboard_model.dart`
+    - DashboardCampaign: `groupId, seedKeyword, groupDailyTarget, subKeywords(List<String>), representativeCampaignId` 추가
+    - `displayStatus` getter: ACTIVE이고 순위 없음/낮음 → RANK_OUT
+  - `lib/features/dashboard/data/dashboard_repository.dart`
+    - `get_dashboard_data` RPC 신규 반환 필드(`sub_keywords`, `representative_campaign_id` 등) 파싱
+  - `lib/features/dashboard/presentation/web_dashboard_screen.dart`
+    - 캠페인 행: `seedKeyword` 메인 표시, `subKeywords` 서브텍스트(`A · B · C` 형식)
+    - 오늘/누적 유입, 일일 목표: 그룹 합산값 표시
+    - 캠페인 탭 라우팅: `/web/campaign/$representativeCampaignId`
+  - `lib/features/campaign/data/campaign_repository.dart`
+    - `registerCampaign()`: `groupId, groupDailyTarget, seedKeyword` 파라미터 추가 → RPC `p_group_id, p_group_daily_target` 전달
+    - `fetchCampaignDetail()`: `group_id` 기준 서브키워드 목록 추가 조회
+    - `fetchCampaignStats()`: `group_id` 기준 그룹 전체 `mission_logs` 합산 (오늘/누적)
+  - `lib/features/campaign/domain/campaign_model.dart`
+    - `groupId, groupDailyTarget, seedKeyword, subKeywords` 필드 추가
+    - `displayDailyTarget` getter: `groupDailyTarget > 0 ? groupDailyTarget : dailyTarget`
+    - `displayKeyword` getter: `seedKeyword`가 있으면 해당값, 없으면 `keyword`
+  - `lib/features/campaign/presentation/campaign_new_screen.dart`
+    - `uuid: ^4.5.1` 패키지 사용 → `const Uuid().v4()`로 `groupId` 생성
+    - 예산: `_dailyTarget × _durationDays × 50` (키워드수 제거)
+    - Step 2 안내: "N개 서브키워드 균등 분배 (각 X명)" 추가
+    - 등록 버튼: "광고 등록 (포인트 1회 차감)"
+    - `_submit()`: 동일 `groupId`로 서브키워드별 `registerCampaign()` 순차 호출
+  - `lib/features/campaign/presentation/campaign_detail_screen.dart`
+    - AppBar·키워드 행: `displayKeyword` 표시
+    - 서브키워드 목록: 메인 키워드 아래 작은 텍스트로 `A · B · C` 형식 표시
+    - 일일 목표 / 달성률 프로그레스바: `displayDailyTarget` 기준
+  - `lib/features/mission/data/mission_repository.dart`
+    - `fetchActiveMissions()`: 오늘 `SUCCESS` 로그에서 `group_id` 수집 → 그룹 단위 참여 제외
+    - `group_id`별 DISTINCT: `seenGroupKeys` Set으로 클라이언트에서 처리 (Supabase 클라이언트 DISTINCT ON 미지원)
+  - `pubspec.yaml`: `uuid: ^4.5.1` 추가
+
+  **제약 사항 (변경 없음):**
+  - `mission_detail_screen.dart`: `start_mission` 파라미터 변경 없음 (campaign_id 기준 유지)
+  - `mission_active_screen.dart`: 변경 없음
+  - `router.dart`: 경로 변경 없음 (/web/campaign/:id 유지)
+
+  **버그 수정 (migration 0031, 2026-05-25):**
+  - `campaigns.budget CHECK (budget > 0)` → `CHECK (budget >= 0)` 완화
+  - 원인: 두 번째 이후 서브키워드 등록 시 `budget=0` INSERT → PostgreSQL 제약 위반 → 400 에러
+  - 파일: `supabase/migrations/20260317000031_fix_budget_check_constraint.sql`
+  - ✅ 적용 완료 (2026-05-25)
+
+  **Playwright QA 결과 (2026-05-25):**
+  - TC-01 UI: ✅ PASS — 예산 계산식·버튼 텍스트·서브키워드 분배 안내 확인
+  - TC-01 실제 등록: ✅ PASS — 5,000,000P 충전 후 2개 서브키워드 등록 성공 (migration 0031 적용 후)
+  - TC-02 대시보드: ✅ PASS — 1행 그룹 표시, seedKeyword 메인, subKeywords 서브, 일일 목표 100, 상세 화면 정상 진입
+  - TC-03: ✅ PASS (코드 로직) — 미션 카드 탭 네비게이션 정상, DISTINCT 실데이터 검증 앱 실기기 필요
+  - TC-04: ✅ PASS (RPC 동작) — `startMission` 정상 호출, SUCCESS 기반 그룹 차단 실검증 앱 실기기 필요
+  - 발견: Flutter Web 탭 이벤트는 `PointerEvent(pointerType:'touch', pointerId:1)` 필수 (MouseEvent 불가)
+
+  ✅ **Supabase 마이그레이션 0027~0031 전체 적용 완료 (2026-05-25)**
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -935,7 +1003,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 12` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 12)
+- [x] `versionCode = 13` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 13)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -977,7 +1045,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-05-18 기준)
+## 13. 배포 현황 (2026-05-25 기준)
 
 ### 서비스 URL
 
@@ -994,7 +1062,7 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 12 |
+| 현재 빌드 versionCode | 12 (Phase 10 Flutter 변경 미반영 — 다음 배포 시 13으로 증가 필요) |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
 
 ### GitHub 저장소
@@ -1004,7 +1072,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-05-18 |
+| 마지막 push | 2026-05-25 (Phase 10 Flutter 변경 미push — DB 마이그레이션 적용 후 push 권장) |
 
 ### GitHub Actions
 
@@ -1039,9 +1107,15 @@ RANK_API_URL=https://web-production-e7797.up.railway.app/rank
 cd store_traffic_booster
 flutter run --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
 
-# 웹 실행 (광고주/어드민)
+# 웹 실행 (광고주/어드민) — Railway rank 서버 사용
 flutter run -d chrome --web-port=8080 \
   --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
+
+# 웹 실행 — 로컬 rank 서버 사용 (CORS 이슈 없음, Playwright QA 권장)
+# 1) rank_module 로컬 실행 후:
+# cd rank_module && uvicorn main:app --host 0.0.0.0 --port 8000
+flutter run -d chrome --web-port=8080 \
+  --dart-define=RANK_API_URL=http://localhost:8000/rank
 
 # 랭킹 모듈 로컬 실행
 cd rank_module
@@ -1075,6 +1149,11 @@ curl -X POST http://localhost:8000/run-scheduler \
 | 8 | `20260317000024_fix_dashboard_campaign_limit.sql` | get_dashboard_data RPC 캠페인 목록 LIMIT 5 제거 → 전체 반환 | ❌ 신규 — 즉시 적용 필요 |
 | 9 | `20260317000025_fix_tag_min_count.sql` | register_campaign RPC 태그 최소 개수 2 → 1로 완화 | ✅ 적용 완료 (2026-05-14) |
 | 10 | `20260317000026_fix_sort_order_input.sql` | register_campaign p_sort_orders INTEGER[] 추가 — 광고주 직접 입력 태그 순서 저장 | ✅ 적용 완료 (2026-05-16) |
+| 11 | `20260317000027_add_campaign_group.sql` | campaigns 테이블: `group_id uuid`, `group_daily_target int DEFAULT 0` 컬럼 추가. mission_logs 테이블: `group_id uuid` 컬럼 추가 | ✅ 적용 완료 (2026-05-25) |
+| 12 | `20260317000028_update_register_campaign_group.sql` | register_campaign RPC: `p_group_id uuid, p_group_daily_target int` 파라미터 추가. 예산 차감 기준을 `group_daily_target × duration × 50`으로 변경. `campaigns.group_id` / `campaigns.group_daily_target` INSERT | ✅ 적용 완료 (2026-05-25) |
+| 13 | `20260317000029_update_start_mission_group.sql` | start_mission RPC: 일일 참여 체크를 `group_id` 기준으로 변경 (`mission_logs.group_id` 기반). `mission_logs.group_id` INSERT 처리 | ✅ 적용 완료 (2026-05-25) |
+| 14 | `20260317000030_update_dashboard_group.sql` | get_dashboard_data RPC: `group_id`, `seed_keyword`, `group_daily_target`, `sub_keywords(text[])`, `representative_campaign_id` 반환 필드 추가. group_id별 DISTINCT ON 처리 | ✅ 적용 완료 (2026-05-25) |
+| 15 | `20260317000031_fix_budget_check_constraint.sql` | campaigns.budget CHECK 완화: `CHECK (budget > 0)` → `CHECK (budget >= 0)`. 두 번째 이후 서브키워드 budget=0 INSERT 허용 | ✅ 적용 완료 (2026-05-25) |
 
 **적용 명령 (Supabase SQL Editor):**
 ```sql
