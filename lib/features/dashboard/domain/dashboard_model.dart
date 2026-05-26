@@ -65,15 +65,15 @@ class DashboardCampaign {
     }
 
     return DashboardCampaign(
-      groupId:                  map['group_id']                   as String,
+      groupId:                  map['group_id']                   as String? ?? '',
       seedKeyword:              map['seed_keyword']               as String? ?? '',
-      status:                   map['status']                     as String,
+      status:                   map['status']                     as String? ?? 'ENDED',
       groupDailyTarget:         (map['group_daily_target']        as num?)?.toInt() ?? 0,
       subKeywords:              subKeywords,
       todayCount:               (map['today_count']               as num?)?.toInt() ?? 0,
       totalCount:               (map['total_count']               as num?)?.toInt() ?? 0,
       currentRank:              (map['current_rank']              as num?)?.toInt(),
-      representativeCampaignId: map['representative_campaign_id'] as String,
+      representativeCampaignId: map['representative_campaign_id'] as String? ?? '',
     );
   }
 
