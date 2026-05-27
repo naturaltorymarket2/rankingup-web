@@ -359,26 +359,26 @@ class CampaignDetailScreen extends ConsumerWidget {
   }
 
   LineChartData _buildLineChartData(List<RankHistory> history) {
-    // y축 반전: 1위가 상단에 오도록 rank를 음수로 변환
+    // 15위 이내 데이터만 플롯 (초과는 이탈 처리)
     final spots = history.asMap().entries
-        .map((e) => FlSpot(
-              e.key.toDouble(),
-              -e.value.rank.toDouble(),
-            ))
+        .where((e) => e.value.rank <= 15)
+        .map((e) => FlSpot(e.key.toDouble(), e.value.rank.toDouble()))
         .toList();
-
-    final ranks  = history.map((h) => h.rank).toList();
-    final maxRank = ranks.reduce((a, b) => a > b ? a : b);
-    final minRank = ranks.reduce((a, b) => a < b ? a : b);
 
     return LineChartData(
       minX: 0,
       maxX: (history.length - 1).toDouble(),
-      minY: -(maxRank + 1).toDouble(),
-      maxY: -(minRank - 1).toDouble(),
+      minY: 1,
+      maxY: 15,
+      clipData: const FlClipData.all(),
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
+        horizontalInterval: 1,
+        checkToShowHorizontalLine: (value) {
+          final v = value.round();
+          return v == 1 || v == 5 || v == 10 || v == 15;
+        },
         getDrawingHorizontalLine: (_) =>
             FlLine(color: Colors.grey[200]!, strokeWidth: 1),
       ),
@@ -388,12 +388,14 @@ class CampaignDetailScreen extends ConsumerWidget {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 36,
+            interval: 1,
             getTitlesWidget: (value, _) {
-              final rank = (-value).toInt();
-              if (rank <= 0) return const SizedBox.shrink();
-              return Text('$rank위',
-                  style: TextStyle(
-                      fontSize: 11, color: Colors.grey[600]));
+              final rank = value.round();
+              if (rank == 1 || rank == 5 || rank == 10 || rank == 15) {
+                return Text('$rank위',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]));
+              }
+              return const SizedBox.shrink();
             },
           ),
         ),
@@ -444,7 +446,7 @@ class CampaignDetailScreen extends ConsumerWidget {
           getTooltipColor: (_) => const Color(0xFF1E3A8A),
           getTooltipItems: (spots) => spots
               .map((s) => LineTooltipItem(
-                    '${(-s.y).toInt()}위',
+                    '${s.y.toInt()}위',
                     const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
