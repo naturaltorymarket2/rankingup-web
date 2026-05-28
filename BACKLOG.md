@@ -199,9 +199,9 @@
 
 ---
 
-## 🟠 Phase 10 — 그룹 과금 구조 변경 (2026-05-25)
+## ✅ Phase 10 — 그룹 과금 구조 변경 (2026-05-25 완료)
 
-> Flutter 구현 완료. Supabase 마이그레이션 0027~0030 적용 후 실서비스 반영.
+> Flutter 구현 완료. Supabase 마이그레이션 0027~0031 적용 완료. versionCode 13 Play Console 업로드 완료.
 
 ### ✅ Flutter 구현 완료 항목
 
@@ -248,4 +248,43 @@
 - TC-02 대시보드: ✅ PASS — 1행 그룹 표시, 서브키워드 부제 표시, 상세 화면 정상 진입
 - TC-03 카드 네비게이션: ✅ PASS — 미션 카드 → 미션 상세 이동 정상
 - TC-04 RPC 동작: ✅ PASS — `startMission` 정상 호출, "신발장 2026.05.25 15:40 진행 중" 이력 생성
+
+### 🚀 배포 완료 (2026-05-25)
+
+- [x] AAB versionCode 13 빌드 완료 (50.4MB)
+- [x] GitHub push 완료 (`feat(phase10): 그룹 과금 구조 변경 + versionCode 13`, 18 files)
+- [x] Play Console 내부 테스트 트랙 업로드 완료 (versionCode 13)
+
+---
+
+## ✅ Phase 10 배포 후 버그 수정 (2026-05-27~28)
+
+- [x] [광고주 웹] 프로덕션 대시보드 크래시 수정 (2026-05-27)
+      증상: Railway 프로덕션 접속 시 `TypeError: null: type 'minified:z6' is not a subtype of type 'String'`
+      원인: `DashboardCampaign.fromMap` — `group_id`, `status`, `representative_campaign_id` non-nullable String 캐스트
+            Phase 10 마이그레이션 이전 등록 캠페인이 신규 RPC 필드에 null 반환 시 crash
+      수정: `lib/features/dashboard/domain/dashboard_model.dart` — 3개 필드 `as String? ?? ''` (status는 `?? 'ENDED'`)
+      commit: b6c214e
+
+- [x] [광고주 웹] 순위 추이 차트 Y축 개선 (2026-05-27)
+      변경: `lib/features/campaign/presentation/campaign_detail_screen.dart`
+      - 방향 변경: 음수 트릭 제거 → rank 그대로 플롯 (1=하단, 15=상단, 위로 갈수록 숫자 커짐)
+      - Y축 고정: minY=1 / maxY=15 (데이터 범위 무관)
+      - rank > 15 데이터 포인트 필터링 (그래프 미표시, 이탈 처리)
+      - 좌축 레이블: 1위·5위·10위·15위만 표시
+      commit: 42ea637
+
+- [x] [Android] AD_ID 권한 누락 — Play Console 비공개 테스트 제출 차단 (2026-05-28)
+      증상: "광고 ID 선언이 불완전함" 오류 → 업로드 차단
+      원인: google_mobile_ads 사용 + targetSdk=35 → AD_ID 권한 명시 필수 (Android 13+ 정책)
+      수정: `android/app/src/main/AndroidManifest.xml`
+            `<uses-permission android:name="com.google.android.gms.permission.AD_ID"/>` 추가
+      ⚠️ Play Console 데이터 보안 섹션 "광고 ID 수집" 선언 필요 (콘솔 수동 작업)
+      commit: 67fc4c6
+
+### 🚀 배포 완료 (2026-05-28)
+
+- [x] AAB versionCode 14 빌드 완료 (50.4MB) — 프로덕션 크래시 수정 + 차트 개선 + AD_ID 권한 포함
+- [x] GitHub push 완료 (commits: b6c214e, 42ea637, c960ac0, 67fc4c6)
+- [ ] Play Console 비공개 테스트 트랙 업로드 (versionCode 14 AAB 업로드 중)
 

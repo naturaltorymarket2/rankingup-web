@@ -300,7 +300,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 10 (그룹 과금 구조 변경) — 구현 완료 / DB 마이그레이션 완료 / QA TC-01·TC-02 PASS**
+현재 진행 Phase: **Phase 10 완료 + 배포 후 버그 수정** (versionCode 14 Play Console 업로드 완료 2026-05-28)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -974,6 +974,45 @@ Phase 4 (1~2주): 어드민 + 배포
 
   ✅ **Supabase 마이그레이션 0027~0031 전체 적용 완료 (2026-05-25)**
 
+- ✅ 완료: Phase 10 배포 후 버그 수정 (2026-05-27~28)
+
+  **프로덕션 대시보드 크래시 수정 (2026-05-27)**
+  - 증상: `TypeError: null: type 'minified:z6' is not a subtype of type 'String'` — `/web/dashboard` 접속 시 화면 크래시
+  - 원인: `DashboardCampaign.fromMap`에서 `map['group_id'] as String`, `map['status'] as String`, `map['representative_campaign_id'] as String` — non-nullable 캐스트
+    마이그레이션 0027/0030 이전 생성된 캠페인이 신규 RPC 필드에 null 반환 시 crash
+  - 수정: `lib/features/dashboard/domain/dashboard_model.dart`
+    ```dart
+    groupId:                  map['group_id']                   as String? ?? '',
+    status:                   map['status']                     as String? ?? 'ENDED',
+    representativeCampaignId: map['representative_campaign_id'] as String? ?? '',
+    ```
+  - commit: b6c214e (2026-05-27)
+
+  **순위 추이 차트 Y축 개선 (2026-05-27)**
+  - 변경: `lib/features/campaign/presentation/campaign_detail_screen.dart` — `_buildLineChartData()`
+    - Y축 방향 변경: 음수 트릭 제거 → rank 값 그대로 플롯 (1=하단, 15=상단, 위로 갈수록 숫자 커짐)
+    - Y축 고정: `minY=1 / maxY=15` (데이터 범위 무관)
+    - rank > 15 데이터 포인트 필터링 (그래프 미표시 — 이탈 처리)
+    - 좌축 레이블: 1위·5위·10위·15위만 표시
+    - 그리드: 같은 위치(1·5·10·15)에만 수평선 표시
+  - commit: 42ea637 (2026-05-27)
+
+  **Android 광고 ID 권한 선언 추가 (2026-05-28)**
+  - 증상: Play Console 업로드 시 "광고 ID 선언이 불완전함" 오류 — 비공개 테스트 제출 차단
+  - 원인: `google_mobile_ads` 사용 + `targetSdk=35` (Android 13+) → `AD_ID` 권한 명시 필수
+  - 수정: `android/app/src/main/AndroidManifest.xml`
+    ```xml
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
+    ```
+  - commit: 67fc4c6 (2026-05-28)
+  - ⚠️ Play Console 데이터 보안 섹션에서 광고 ID 수집 여부 선언 필요 (콘솔 수동 작업)
+
+  **versionCode 14 AAB 빌드 (2026-05-28)**
+  - `android/app/build.gradle.kts`: versionCode 13 → 14
+  - 포함 내용: 프로덕션 대시보드 크래시 수정 + 차트 개선 + AD_ID 권한
+  - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (50.4MB)
+  - commit: c960ac0 (2026-05-28)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1003,7 +1042,7 @@ Phase 4 (1~2주): 어드민 + 배포
 
 #### 📦 빌드 설정 확인
 - [x] `applicationId = "com.storetrafficbooster.app"` 설정 완료
-- [x] `versionCode = 13` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 13)
+- [x] `versionCode = 14` / `versionName = "1.0.0"` 설정 완료 (내부 테스트 배포: 2, 현재 빌드: 14)
 - [ ] 업데이트 배포 시마다 versionCode 증가 필수
 - [x] AdMob 앱 ID 실제 값으로 교체 완료 (ca-app-pub-6225110164827541~2986900842)
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
@@ -1061,8 +1100,7 @@ flutter pub run flutter_launcher_icons
 |------|-----|
 | 플랫폼 | Google Play Console 내부 테스트 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 2 (내부 테스트) |
-| 현재 빌드 versionCode | 12 (Phase 10 Flutter 변경 미반영 — 다음 배포 시 13으로 증가 필요) |
+| 배포된 versionCode | 14 (2026-05-28 업로드 완료) |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
 
 ### GitHub 저장소
@@ -1072,7 +1110,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-05-25 (Phase 10 Flutter 변경 미push — DB 마이그레이션 적용 후 push 권장) |
+| 마지막 push | 2026-05-28 (fix: AD_ID permission + versionCode 14) |
 
 ### GitHub Actions
 
