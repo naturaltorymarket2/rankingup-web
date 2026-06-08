@@ -16,3 +16,4 @@ ALTER TABLE public.campaigns
 
 ALTER TABLE public.campaigns
   ADD CONSTRAINT campaigns_budget_check CHECK (budget >= 0);
+0

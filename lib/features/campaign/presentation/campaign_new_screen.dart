@@ -421,7 +421,16 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           ),
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.asset(
+            'assets/images/tag_guide.png',
+            width: double.infinity,
+            fit: BoxFit.contain,
+          ),
+        ),
+        const SizedBox(height: 12),
 
         // ── 태그 ──────────────────────────────────────────────
         _WebCard(

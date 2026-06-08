@@ -71,6 +71,7 @@ flutter:
 
   assets:
     - assets/images/mission_guide.png
+    - assets/images/tag_guide.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
