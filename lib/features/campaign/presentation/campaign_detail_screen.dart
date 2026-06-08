@@ -359,15 +359,18 @@ class CampaignDetailScreen extends ConsumerWidget {
   }
 
   LineChartData _buildLineChartData(List<RankHistory> history) {
+    // 날짜 오름차순 정렬 후 인덱스 매핑
+    final sorted = [...history]..sort((a, b) => a.checkedAt.compareTo(b.checkedAt));
+
     // 15위 이내 데이터만 플롯 (초과는 이탈 처리)
-    final spots = history.asMap().entries
+    final spots = sorted.asMap().entries
         .where((e) => e.value.rank <= 15)
         .map((e) => FlSpot(e.key.toDouble(), e.value.rank.toDouble()))
         .toList();
 
     return LineChartData(
       minX: 0,
-      maxX: (history.length - 1).toDouble(),
+      maxX: (sorted.length - 1).toDouble(),
       minY: 1,
       maxY: 15,
       clipData: const FlClipData.all(),
@@ -403,15 +406,14 @@ class CampaignDetailScreen extends ConsumerWidget {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 28,
+            interval: 1,
             getTitlesWidget: (value, _) {
+              if (value != value.roundToDouble()) return const SizedBox.shrink();
               final idx = value.toInt();
-              if (idx < 0 || idx >= history.length) {
-                return const SizedBox.shrink();
-              }
-              final date = history[idx].checkedAt.toLocal();
+              if (idx < 0 || idx >= sorted.length) return const SizedBox.shrink();
+              final date = sorted[idx].checkedAt.toLocal();
               return Text('${date.month}/${date.day}',
-                  style: TextStyle(
-                      fontSize: 11, color: Colors.grey[600]));
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]));
             },
           ),
         ),
