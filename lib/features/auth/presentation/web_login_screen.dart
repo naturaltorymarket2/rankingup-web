@@ -151,6 +151,10 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       _showError('필수 항목을 모두 입력해주세요 (*)');
       return;
     }
+    if (phone.length < 10 || phone.length > 11) {
+      _showError('전화번호는 10~11자리 숫자로 입력해주세요');
+      return;
+    }
     // B-006: 사업자등록번호 10자리 검증
     if (bizNum.length != 10) {
       _showError('사업자등록번호는 10자리 숫자로 입력해주세요');
@@ -493,17 +497,23 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       children: [
         _buildStepIndicator(),
         const SizedBox(height: 24),
-        _fieldLabel('휴대폰 번호 *'),
+        _fieldLabel('전화번호 *'),
         _inputField(
           controller: _signupPhoneCtrl,
-          hint: '010-0000-0000',
+          hint: '숫자만 입력 (10~11자리)',
           keyboardType: TextInputType.phone,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(11),
+          ],
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
         _fieldLabel('상호명 *'),
         _inputField(
           controller: _signupCompanyCtrl,
           hint: '사업자 상호명 입력',
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
         _fieldLabel('사업자등록번호 * (10자리)'),
@@ -515,6 +525,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(10),
           ],
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 14),
         _fieldLabel('세금계산서 이메일 (선택)'),
@@ -526,7 +537,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         const SizedBox(height: 28),
         _submitBtn(
           label: '가입 완료',
-          onPressed: _isLoading ? null : _onSignUpStep2,
+          onPressed: _isLoading || !_step2Valid ? null : _onSignUpStep2,
         ),
         const SizedBox(height: 12),
         Text(
@@ -625,6 +636,15 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
     );
   }
 
+  bool get _step2Valid {
+    final phone   = _signupPhoneCtrl.text.trim();
+    final company = _signupCompanyCtrl.text.trim();
+    final bizNum  = _signupBizNumCtrl.text.trim();
+    return RegExp(r'^\d{10,11}$').hasMatch(phone) &&
+        company.isNotEmpty &&
+        bizNum.length == 10;
+  }
+
   Widget _inputField({
     required TextEditingController controller,
     required String hint,
@@ -632,6 +652,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
     bool obscure = false,
     VoidCallback? onObscureToggle,
     ValueChanged<String>? onSubmitted,
+    ValueChanged<String>? onChanged,
     List<TextInputFormatter>? inputFormatters, // B-006
   }) {
     return TextField(
@@ -639,6 +660,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       keyboardType: keyboardType,
       obscureText: obscure,
       onSubmitted: onSubmitted,
+      onChanged: onChanged,
       inputFormatters: inputFormatters,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
