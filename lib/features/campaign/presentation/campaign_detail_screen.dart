@@ -359,18 +359,31 @@ class CampaignDetailScreen extends ConsumerWidget {
   }
 
   LineChartData _buildLineChartData(List<RankHistory> history) {
-    // 날짜 오름차순 정렬 후 인덱스 매핑
+    // 날짜 오름차순 정렬
     final sorted = [...history]..sort((a, b) => a.checkedAt.compareTo(b.checkedAt));
 
+    // KST 날짜 기준 중복 제거 — repository 레벨에서 이미 처리되나 이중 방어
+    // 오름차순 순회이므로 마지막 값이 당일 최신 레코드
+    final byDate = <String, RankHistory>{};
+    for (final r in sorted) {
+      final kst = r.checkedAt.toUtc().add(const Duration(hours: 9));
+      final key = '${kst.year}-'
+          '${kst.month.toString().padLeft(2, '0')}-'
+          '${kst.day.toString().padLeft(2, '0')}';
+      byDate[key] = r;
+    }
+    final deduped = byDate.values.toList()
+      ..sort((a, b) => a.checkedAt.compareTo(b.checkedAt));
+
     // 15위 이내 데이터만 플롯 (초과는 이탈 처리)
-    final spots = sorted.asMap().entries
+    final spots = deduped.asMap().entries
         .where((e) => e.value.rank <= 15)
         .map((e) => FlSpot(e.key.toDouble(), e.value.rank.toDouble()))
         .toList();
 
     return LineChartData(
       minX: 0,
-      maxX: (sorted.length - 1).toDouble(),
+      maxX: deduped.isEmpty ? 0 : (deduped.length - 1).toDouble(),
       minY: 1,
       maxY: 15,
       clipData: const FlClipData.all(),
@@ -410,8 +423,8 @@ class CampaignDetailScreen extends ConsumerWidget {
             getTitlesWidget: (value, _) {
               if (value != value.roundToDouble()) return const SizedBox.shrink();
               final idx = value.toInt();
-              if (idx < 0 || idx >= sorted.length) return const SizedBox.shrink();
-              final date = sorted[idx].checkedAt.toLocal();
+              if (idx < 0 || idx >= deduped.length) return const SizedBox.shrink();
+              final date = deduped[idx].checkedAt.toLocal();
               return Text('${date.month}/${date.day}',
                   style: TextStyle(fontSize: 11, color: Colors.grey[600]));
             },
