@@ -27,7 +27,7 @@ class StoreTrafficBoosterApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: '겟머니',
+      title: '퀴즈캐시나우',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,

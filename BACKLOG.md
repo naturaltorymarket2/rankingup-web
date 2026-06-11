@@ -288,3 +288,70 @@
 - [x] GitHub push 완료 (commits: b6c214e, 42ea637, c960ac0, 67fc4c6)
 - [ ] Play Console 비공개 테스트 트랙 업로드 (versionCode 14 AAB 업로드 중)
 
+---
+
+## ✅ Phase 11 — 배포 후 UI/차트 버그 수정 (2026-06-08)
+
+- [x] [광고주 웹] 캠페인 등록 Step 2 — 태그 안내 이미지 삽입 (2026-06-08)
+      campaign_new_screen.dart _buildStep2(): amber 안내 카드 아래, 정답 태그 _WebCard 위에
+      assets/images/tag_guide.png 추가 + pubspec.yaml 등록
+      ClipRRect(borderRadius: 10) + Image.asset, 위아래 SizedBox(height: 12)
+      commit: 291b427
+
+- [x] [광고주 웹] 순위 추이 차트 x축 날짜 중복 레이블 수정 (2026-06-08)
+      campaign_detail_screen.dart _buildLineChartData():
+      - history → sorted (checkedAt 오름차순 정렬 복사본)
+      - bottomTitles SideTitles에 interval: 1 추가
+      - getTitlesWidget: 비정수값 가드 (value != value.roundToDouble() → SizedBox.shrink())
+      commit: 70fb049
+
+### 🚀 배포 완료 (2026-06-08)
+
+- [x] Flutter web 빌드 완료 (291b427, 70fb049)
+- [x] GitHub push 완료 → Railway 자동 재배포
+- [x] AAB versionCode 15 빌드 완료 (51.3MB) — commit: a0cbb9e (공개 테스트용, 이미 사용된 코드로 프로덕션 불가)
+- [x] AAB versionCode 16 빌드 완료 (51.3MB) — commit: 6ef3649 (2026-06-09)
+- [x] Play Console 프로덕션 트랙 업로드 완료 (versionCode 16)
+
+---
+
+## ✅ Phase 12 — x축 날짜 중복 근본 수정 + DB 정리 (2026-06-09)
+
+> Phase 11-2에서 fl_chart interval 렌더링 중복을 수정했으나, DB 누적 중복 레코드 및 scheduler INSERT-always 로직이 근본 원인으로 남아 있었음. 실데이터 분석(169건 → 중복 85건) 후 3-레이어 완전 수정.
+
+- [x] [광고주 웹] 회원가입 Step 2 전화번호 유효성 검사 강화 (2026-06-09)
+      web_login_screen.dart: `_step2Valid` getter (RegExp `^\d{10,11}$`)
+      FilteringTextInputFormatter.digitsOnly + LengthLimitingTextInputFormatter(11)
+      버튼: `_isLoading || !_step2Valid ? null : _onSignUpStep2`
+      레이블: '휴대폰 번호 *' → '전화번호 *', hintText → '숫자만 입력 (10~11자리)'
+      commit: 030a37f
+
+- [x] [랭킹 서버] crawler.py 브랜드스토어 URL 감지 로그 개선 (2026-06-09)
+      _extract_product_id(): 스마트스토어(_SS_PATTERN) 우선 → 브랜드스토어(_BRAND_PATTERN) fallback
+      fetch_naver_rank(): target_id = _extract_product_id(url) or _extract_numeric_id(url)
+      브랜드스토어 URL 감지 시 INFO 로그 추가
+      commit: 730d655
+
+- [x] [랭킹 서버] scheduler.py INSERT → upsert 변경 (2026-06-09)
+      기존: 매 실행마다 INSERT → 하루 여러 번 실행(수동 트리거, Railway 재시작) 시 중복 레코드 발생
+      변경: 당일 레코드 SELECT → 있으면 UPDATE(rank, checked_at), 없으면 INSERT
+      day_start/day_end: KST 자정 기준 범위, 루프 외부 1회 계산
+      commit: 839f544
+
+- [x] [광고주 웹] 순위 추이 차트 KST 날짜 dedup 이중 방어 (2026-06-09)
+      campaign_detail_screen.dart _buildLineChartData(): byDate map으로 KST 날짜 기준 당일 최신 레코드만 유지
+      sorted → deduped 변수명, maxX/spots/getTitlesWidget 모두 deduped 기준
+      dashboard_repository.dart의 기존 dedup에 더한 차트 레이어 방어
+      commit: a35d993
+
+- [x] [DB] campaign_rank_history 중복 레코드 85건 정리 (2026-06-09)
+      분석: 총 169건 중 동일 캠페인+KST날짜 중복 85건 (scheduler 수동 실행 누적)
+      DELETE: WHERE id NOT IN (SELECT MIN(id) ... GROUP BY campaign_id, DATE(checked_at AT TIME ZONE 'Asia/Seoul'))
+      결과: 169 → 84건, 중복 그룹 0개 확인
+      방법: service_role key + PostgREST REST API (Management API Cloudflare 403 우회)
+
+### 🚀 배포 완료 (2026-06-09)
+
+- [x] rankingup 서버 GitHub push 완료 (commits: 730d655, 839f544) → Railway 자동 재배포
+- [x] rankingup-web GitHub push 완료 (commits: 030a37f, a35d993) → Railway 자동 재배포
+

@@ -55,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '겟머니',
+              '퀴즈캐시나우',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 22,

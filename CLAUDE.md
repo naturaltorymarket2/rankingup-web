@@ -3,6 +3,13 @@
 > Claude Code는 이 파일을 모든 작업 전에 읽는다.
 > 모르는 것이 생기면 PRD 문서(store_traffic_booster_PRD.docx)를 참조한다.
 
+## ⚠️ Supabase 계정 주의사항
+
+이 프로젝트의 Supabase project ref는 **wfxlihrqjtexuxvoajny** 이다.
+MCP로 DB 작업 시 반드시 이 프로젝트에만 접근해야 한다.
+다른 프로젝트(n8n-rag, resume-ats-keyword, SQLclass, n8n-test, chs1989b's Project)는 절대 접근 금지.
+작업 전 project ref가 wfxlihrqjtexuxvoajny인지 반드시 확인할 것.
+
 ---
 
 ## 1. 프로젝트 한 줄 정의
@@ -300,7 +307,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 10 완료 + 배포 후 버그 수정** (versionCode 14 Play Console 업로드 완료 2026-05-28)
+현재 진행 Phase: **Phase 12 완료** (x축 중복 근본 수정 + DB 정리, 2026-06-09)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -453,15 +460,16 @@ Phase 4 (1~2주): 어드민 + 배포
   python scheduler.py
   ```
 
-- ✅ 완료: Phase 4-8 — 앱 이름 "겟머니" 변경 (2026-04-23)
+- ✅ 완료: Phase 4-8 — 앱 이름 "겟머니" 변경 (2026-04-23) → "퀴즈캐시나우"로 재변경 (2026-06-11)
 
-  **변경된 파일 (6개 파일, 6곳)**
-  - `android/app/src/main/AndroidManifest.xml` — `android:label` → `"겟머니"`
-  - `lib/main.dart` — `title: 'Store Traffic Booster'` → `'겟머니'`
-  - `lib/features/auth/presentation/splash_screen.dart` — 스플래시 텍스트 → `'겟머니'`
-  - `lib/features/auth/presentation/login_screen.dart` — 로고 하단 텍스트 → `'겟머니'`
-  - `lib/features/auth/presentation/web_login_screen.dart` — 로고 타이틀 + 하단 안내 문구 → `'겟머니'`
-  - `lib/features/dashboard/presentation/web_dashboard_screen.dart` — AppBar 타이틀 → `'겟머니'`
+  **변경된 파일 (7개 파일, 8곳)**
+  - `android/app/src/main/AndroidManifest.xml` — `android:label` → `"퀴즈캐시나우"`
+  - `lib/main.dart` — `title` → `'퀴즈캐시나우'`
+  - `lib/features/auth/presentation/splash_screen.dart` — 스플래시 텍스트 → `'퀴즈캐시나우'`
+  - `lib/features/auth/presentation/login_screen.dart` — 로고 하단 텍스트 → `'퀴즈캐시나우'`
+  - `lib/features/auth/presentation/web_login_screen.dart` — 로고 타이틀 → `'퀴즈캐시나우'`, 하단 안내 문구 → `'퀴즈캐시나우 앱에서 이용해주세요'`
+  - `lib/features/auth/presentation/admin_login_screen.dart` — 부제목 → `'퀴즈캐시나우 관리자 페이지'`
+  - `lib/features/dashboard/presentation/web_dashboard_screen.dart` — AppBar 타이틀 → `'퀴즈캐시나우'`
 
   **패키지 이름 확인**
   - `android/app/build.gradle.kts` — `applicationId = "com.storetrafficbooster.app"` 유지 (변경 없음)
@@ -482,7 +490,7 @@ Phase 4 (1~2주): 어드민 + 배포
   - Flutter 웹 배포: https://rankingup-web-production.up.railway.app
   - 개인정보처리방침: https://naturaltorymarket2.github.io/rankingup-privacy/
   - targetSdk: 35
-  - 앱 아이콘: 임시 아이콘 적용 (파란 배경 + 흰색 "겟머니" 텍스트)
+  - 앱 아이콘: 임시 아이콘 적용 (파란 배경 + 흰색 "퀴즈캐시나우" 텍스트 — 교체 필요)
 
   **배포 후 수동 처리 필요 항목**
   - ⚠️ start_mission RPC 일일 참여 제한 주석 해제 (테스트 완료 후)
@@ -1013,6 +1021,76 @@ Phase 4 (1~2주): 어드민 + 배포
   - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (50.4MB)
   - commit: c960ac0 (2026-05-28)
 
+- ✅ 완료: Phase 11-1 — 캠페인 등록 Step 2 태그 안내 이미지 삽입 (2026-06-08)
+  - `assets/images/tag_guide.png` 신규 추가
+  - `pubspec.yaml`: `flutter.assets` 섹션에 `assets/images/tag_guide.png` 등록
+  - `lib/features/campaign/presentation/campaign_new_screen.dart` — `_buildStep2()`
+    - amber 안내 카드("태그 입력 방법") 바로 아래, "정답 태그" `_WebCard` 바로 위에 삽입
+    - `ClipRRect(borderRadius: 10)` + `Image.asset('assets/images/tag_guide.png', width: double.infinity, fit: BoxFit.contain)`
+    - 이미지 위아래 `SizedBox(height: 12)` 여백
+  - 배경: mission_active_screen.dart / mission_detail_screen.dart의 mission_guide.png 패턴과 동일
+  - commit: 291b427 (2026-06-08)
+
+- ✅ 완료: Phase 11-2 — 순위 추이 차트 x축 날짜 중복 레이블 수정 (2026-06-08)
+  - `lib/features/campaign/presentation/campaign_detail_screen.dart` — `_buildLineChartData()`
+    - 원인: `bottomTitles`에 `interval` 미설정 → fl_chart가 비정수 x값으로 `getTitlesWidget` 호출 → 날짜 중복 표시
+    - `sorted` 변수 추가: `history`를 `checkedAt` 오름차순 정렬한 복사본 (원본 불변)
+    - `spots` / `maxX` / `getTitlesWidget` 모두 `sorted` 참조로 통일
+    - `bottomTitles` `SideTitles`에 `interval: 1` 명시 추가
+    - `getTitlesWidget` 비정수 가드: `value != value.roundToDouble()` 시 `SizedBox.shrink()` 반환
+  - commit: 70fb049 (2026-06-08)
+
+- ✅ 완료: Phase 11-3 — versionCode 15 AAB 빌드 + 공개 테스트 배포 (2026-06-08)
+  - `android/app/build.gradle.kts`: versionCode 14 → 15
+  - 포함 내용: Phase 11-1(Step 2 태그 안내 이미지) + Phase 11-2(차트 x축 중복 레이블 수정) + 기존 전체
+  - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (51.3MB)
+  - commit: a0cbb9e (2026-06-08)
+  - Play Console 공개 테스트 트랙 업로드 완료 (versionCode 15 → 이미 사용됨으로 16으로 재빌드)
+
+- ✅ 완료: Phase 11-4 — versionCode 16 AAB 빌드 + 프로덕션 배포 (2026-06-09)
+  - `android/app/build.gradle.kts`: versionCode 15 → 16
+  - 포함 내용: Phase 11 전체 (태그 안내 이미지 + 차트 x축 수정) + 기존 전체
+  - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (51.3MB)
+  - commit: 6ef3649 (2026-06-09)
+  - Play Console 프로덕션 트랙 업로드 완료
+
+- ✅ 완료: Phase 12 — x축 날짜 중복 근본 수정 + DB 정리 (2026-06-09)
+
+  **배경**: Phase 11-2에서 fl_chart interval 설정으로 렌더링 중복을 수정했으나,
+  scheduler.py INSERT-always 로직과 DB 누적 중복 레코드가 근본 원인으로 남아 있었음.
+  실데이터 확인(169건 중 중복 85건) 후 3-레이어 완전 수정.
+
+  **[광고주 웹] 회원가입 Step 2 전화번호 유효성 검사 강화** (commit: 030a37f)
+  - `lib/features/auth/presentation/web_login_screen.dart`
+    - `_step2Valid` getter 추가: `RegExp(r'^\d{10,11}$')` 정규식 검증
+    - `FilteringTextInputFormatter.digitsOnly` + `LengthLimitingTextInputFormatter(11)` 추가
+    - 등록 버튼: `onPressed: _isLoading || !_step2Valid ? null : _onSignUpStep2`
+    - 레이블 `'휴대폰 번호 *'` → `'전화번호 *'`, hintText `'010-0000-0000'` → `'숫자만 입력 (10~11자리)'`
+
+  **[랭킹 서버] crawler.py 브랜드스토어 URL 감지 로그 개선** (commit: 730d655)
+  - `rank_module/crawler.py`
+    - `_extract_product_id()`: 스마트스토어 `_SS_PATTERN` 우선 매칭, 없으면 브랜드스토어 `_BRAND_PATTERN` fallback
+    - `fetch_naver_rank()`: `target_id = _extract_product_id(product_url) or _extract_numeric_id(product_url)` 순서로 변경
+    - 브랜드스토어 URL 감지 시 INFO 로그 출력
+
+  **[랭킹 서버] scheduler.py INSERT → upsert 변경 (중복 방지)** (commit: 839f544)
+  - `rank_module/scheduler.py`
+    - 기존: 매 실행 시 `INSERT` 무조건 실행 → 하루 여러 번 실행 시 중복 레코드 생성 (근본 원인)
+    - 변경: 당일 레코드 SELECT → 있으면 `UPDATE (rank, checked_at)`, 없으면 `INSERT` (upsert 패턴)
+    - `day_start` / `day_end`: KST 자정 기준 범위 — 루프 외부에서 1회만 계산
+
+  **[광고주 웹] 순위 추이 차트 KST 날짜 dedup 이중 방어** (commit: a35d993)
+  - `lib/features/campaign/presentation/campaign_detail_screen.dart` — `_buildLineChartData()`
+    - KST 날짜 기준 dedup: `byDate <String, RankHistory>` map으로 당일 최신 레코드만 유지
+    - `sorted` → `deduped` 변수명 변경, `maxX` / `getTitlesWidget` / `spots` 모두 `deduped` 참조
+    - 배경: `dashboard_repository.dart`에 이미 dedup 존재하나 차트 레이어 이중 방어로 추가
+
+  **[DB] campaign_rank_history 중복 레코드 정리**
+  - 분석: `campaign_rank_history` 총 169건 중 동일 캠페인+KST날짜 중복 85건 발견
+  - 삭제: `DELETE FROM campaign_rank_history WHERE id NOT IN (SELECT MIN(id) FROM campaign_rank_history GROUP BY campaign_id, DATE(checked_at AT TIME ZONE 'Asia/Seoul'))`
+  - 결과: 169건 → 84건, 중복 그룹 0개 확인
+  - 방법: service_role key + PostgREST REST API (Supabase Management API Cloudflare 403 우회)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1048,7 +1126,7 @@ Phase 4 (1~2주): 어드민 + 배포
 - [x] 배너/전면 광고 단위 ID 실제 값으로 교체 완료
 
 #### 🏪 Play Console 등록 항목
-- [x] 앱 이름: "겟머니" (확정)
+- [x] 앱 이름: "퀴즈캐시나우" (2026-06-11 변경)
 - [ ] 앱 아이콘: 512×512px PNG (현재 기본 Flutter 아이콘 — 교체 필요)
 - [ ] 스크린샷: 최소 2장 (폰), 태블릿 선택
 - [ ] 짧은 설명 (80자 이내) / 전체 설명
@@ -1098,10 +1176,10 @@ flutter pub run flutter_launcher_icons
 
 | 항목 | 값 |
 |------|-----|
-| 플랫폼 | Google Play Console 내부 테스트 트랙 |
+| 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 14 (2026-05-28 업로드 완료) |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (50.4MB) |
+| 배포된 versionCode | 16 (2026-06-09 프로덕션 업로드 완료) |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.3MB) |
 
 ### GitHub 저장소
 
@@ -1110,7 +1188,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-05-28 (fix: AD_ID permission + versionCode 14) |
+| 마지막 push | 2026-06-09 (Phase 12: scheduler upsert + 차트 KST dedup + DB 중복 정리) |
 
 ### GitHub Actions
 

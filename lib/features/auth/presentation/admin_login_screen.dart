@@ -164,7 +164,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          '겟머니 관리자 페이지',
+          '퀴즈캐시나우 관리자 페이지',
           style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
         ),
       ],

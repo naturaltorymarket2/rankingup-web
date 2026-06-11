@@ -324,7 +324,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         ),
         const SizedBox(height: 16),
         const Text(
-          '겟머니',
+          '퀴즈캐시나우',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -612,7 +612,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
 
   Widget _buildFooterNote() {
     return Text(
-      '앱 유저 로그인은 겟머니 앱에서 이용해주세요',
+      '앱 유저 로그인은 퀴즈캐시나우 앱에서 이용해주세요',
       style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
       textAlign: TextAlign.center,
     );

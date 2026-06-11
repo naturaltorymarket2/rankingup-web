@@ -70,7 +70,7 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
       backgroundColor: Colors.white,
       elevation: 1,
       title: const Text(
-        '겟머니',
+        '퀴즈캐시나우',
         style: TextStyle(
           fontWeight: FontWeight.bold,
           color: Color(0xFF1E3A8A),

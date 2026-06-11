@@ -219,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 14),
               const Text(
-                '겟머니',
+                '퀴즈캐시나우',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 20,
