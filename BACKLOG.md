@@ -189,6 +189,9 @@
 
 - [x] [어드민 웹] 공지사항 등록 섹션 추가 (2026-05-14) → 위 공지사항 항목 참조
 - [x] [광고주 웹] 공지사항 확인 섹션 추가 (2026-05-14) → 위 공지사항 항목 참조
+- [ ] [광고주 웹] 회원가입 Step 2 미완료 시 대시보드 접근 차단
+      세션 있음 + business_info 없음 → /web/login Step 2 상태로 강제 리다이렉트
+      router.dart 가드 또는 web_login_screen.dart 초기화 시 business_info 존재 여부 체크
 
 ## 🔵 알려진 이슈 (기존 CLAUDE.md 14섹션에서 이전)
 
@@ -196,6 +199,15 @@
       migration 0021: Permissive 2개(owner_select, active_select) + Restrictive 1개(advertiser_restrict)
       광고주(business_info 존재)의 타인 ACTIVE 캠페인 접근 차단
       ⚠️ Supabase migration 0021 수동 적용 필요
+
+## 🔵 기술부채
+
+- [ ] [앱] StartMissionResult.startedAt 강제 캐스팅 정리
+      파일: lib/features/mission/domain/mission_model.dart (112~113줄, 131줄)
+      내용: startedAt 필드가 Phase 16 이후 어디서도 읽히지 않는 dead code.
+            start_mission RPC 응답에서 started_at을 제거하거나 스펙 변경 시 즉시 crash 위험.
+      처리 시점: start_mission RPC 수정 작업 시 함께 정리
+      우선순위: 낮음
 
 ---
 
@@ -355,3 +367,86 @@
 - [x] rankingup 서버 GitHub push 완료 (commits: 730d655, 839f544) → Railway 자동 재배포
 - [x] rankingup-web GitHub push 완료 (commits: 030a37f, a35d993) → Railway 자동 재배포
 
+---
+
+## ✅ Phase 14 — 이메일 인증 도입 (2026-06-15)
+
+- [x] [앱/웹] 이메일 인증 도입 — splash/login/web_login에 emailConfirmedAt 체크 추가, EmailVerifyScreen 신규, onAuthStateChange 자동 감지 + fallback 버튼 방식 병행 (Phase 14)
+      splash_screen.dart: 세션 복구 후 앱 한정 emailConfirmedAt 체크 → null이면 /email_verify
+      login_screen.dart: 로그인 성공 시 emailConfirmedAt 체크, 회원가입 성공 시 항상 /email_verify
+      email_verify_screen.dart (신규): 인증 메일 재발송 + 인증 완료했어요 버튼 + USER_UPDATED 리스너
+      router.dart: /email_verify 라우트 추가 (extra: {'email': email} 수신)
+      web_login_screen.dart: _signupStep double 변경, Step 1.5 이메일 인증 대기 신규, onAuthStateChange 리스너 + fallback 버튼
+      ⚠️ Supabase 콘솔: Authentication → Providers → Email → "Confirm email" 활성화 필요
+
+---
+
+## ✅ Phase 15 — 미션 보드 참여완료/참여가능 구분 표시 (2026-06-17)
+
+- [x] [앱] 미션 보드 — 오늘 참여완료한 캠페인 카드 표시 (제거하지 않고 구분 표시)
+      변경 전: 참여완료 그룹을 쿼리/루프에서 완전 제거 → 보드에서 사라짐
+      변경 후: isCompleted=true로 마킹 → 보드 하단에 dimmed(opacity 0.5) + "참여완료" 배지로 표시
+      정렬: 참여가능(isCompleted=false) 먼저, 참여완료(isCompleted=true) 나중에
+
+      mission_model.dart: CampaignMissionModel.isCompleted: bool 필드 추가 (기본값 false)
+      mission_repository.dart:
+        - 쿼리에서 .not('id', 'in', ...) 필터 제거 (완료 캠페인 포함)
+        - 루프에서 completedGroupIds 포함 시 continue → isCompleted=true 마킹으로 변경
+        - available / completed 두 리스트 분류 후 [...available, ...completed] 반환
+        - 미완료 캠페인만 일일 목표 도달 시 제외
+      mission_home_screen.dart:
+        - _MissionCard: Opacity(opacity: isCompleted ? 0.5 : 1.0) 래핑
+        - onTap: isCompleted일 때 null (상세 이동 차단)
+        - 뱃지: 참여완료→_CompletedBadge(회색), 마감→_SoldOutBadge, 기본→_RewardBadge
+        - 우측 텍스트: '오늘 참여완료' (회색)
+        - _CompletedBadge 위젯 신규 추가
+
+### 🚀 빌드 완료 (2026-06-17)
+
+- [x] AAB versionCode 19 빌드 완료 (51.5MB) — Play Console 미업로드
+
+---
+
+## ✅ Phase 13 — 앱 이름 퀴즈캐시나우 변경 + versionCode 18 프로덕션 배포 (2026-06-11)
+
+- [x] [앱/웹] 앱 이름 "겟머니" → "퀴즈캐시나우" 전체 변경 (2026-06-11)
+      AndroidManifest.xml / main.dart / splash_screen / login_screen / web_login_screen / admin_login_screen / web_dashboard_screen 7개 파일 수정
+      commit: d7bf299
+
+- [x] [개인정보처리방침] rankingup-privacy 저장소 앱 이름·운영자명 변경 (2026-06-11)
+      앱 이름: 랭킹업 (RankingUp) → 퀴즈캐시나우
+      운영자명: natural tory market → 주식회사 보스턴블루
+      저작권 표시 / <title> / header / 개요 / 연락처 섹션 변경, 이메일 유지
+      commit: 2ddf71a (naturaltorymarket2/rankingup-privacy)
+
+### 🚀 배포 완료 (2026-06-11)
+
+- [x] AAB versionCode 18 빌드 완료 (49MB) — commit: 9d3d2cd
+- [x] GitHub push 완료 (rankingup-web: d7bf299, 9d3d2cd) → Railway 자동 재배포
+- [x] Play Console 프로덕션 트랙 업로드 완료 (versionCode 18)
+
+
+---
+
+## ✅ Phase 16 — 미션 플로우 WebView 전환 + 광고주 상품명/브랜드명 입력 (2026-06-17)
+
+- [x] [DB] campaigns 테이블에 product_name, brand_name 컬럼 추가 (migration 0032)
+- [x] [DB] register_campaign RPC에 p_product_name, p_brand_name 파라미터 추가 (migration 0033)
+- [x] [DB] verify_mission RPC에서 10분 타임아웃 블록 제거 (migration 0034)
+- [x] [앱] webview_flutter ^4.10.0 패키지 추가
+- [x] [앱] MissionSearchScreen 신규 생성 (/mission/:id/search)
+      WebViewController + 네이버 쇼핑 URL 로드 + AppBar [태그 입력] 버튼
+- [x] [앱] router.dart: /mission/:id/search 라우트 추가, /active 라우트 파라미터 업데이트
+- [x] [앱] mission_detail_screen.dart: 딥링크 코드 전체 제거 → /search 화면 이동
+      url_launcher/services import 제거, 미션 방법 안내 문구 변경
+- [x] [앱] mission_active_screen.dart 전면 재작성
+      WidgetsBindingObserver/타이머/라이프사이클 전체 제거, 즉시 활성화
+      AppBar [네이버 쇼핑 보기] 버튼 추가, _ProductInfoCard 신규
+      startedAt 파라미터 제거, productName/brandName 추가
+- [x] [앱] CampaignMissionModel: productName, brandName 필드 추가
+- [x] [앱] mission_repository.fetchCampaignDetail(): product_name, brand_name SELECT 추가
+- [x] [웹] CampaignModel: productName, brandName 필드 추가
+- [x] [웹] campaign_repository.registerCampaign(): p_product_name, p_brand_name 전달
+- [x] [웹] campaign_new_screen.dart: Step 1에 상품명/브랜드명 입력 필드 추가
+      _step1Valid 조건 업데이트, Step 3 요약에 표시
+- [x] [웹] campaign_detail_screen.dart: 상품명/브랜드명 조건부 표시
