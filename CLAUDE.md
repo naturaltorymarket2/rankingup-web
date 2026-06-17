@@ -135,7 +135,8 @@ lib/
 | `/login` | 로그인 |
 | `/home` | 홈 — 미션 보드 |
 | `/mission/:id` | 미션 상세 |
-| `/mission/:id/active` | 미션 진행중 |
+| `/mission/:id/search` | 미션 인앱 WebView 검색 |
+| `/mission/:id/active` | 미션 진행중 (태그 입력) |
 | `/history` | 참여 내역 |
 | `/mypage` | 마이페이지 |
 | `/withdraw` | 출금 신청 |
@@ -187,10 +188,10 @@ lib/
 | RPC 함수명 | 파라미터 | 역할 |
 |------------|----------|------|
 | `start_mission` | `p_campaign_id uuid, p_user_id uuid, p_device_id text` | 미션 시작: 중복 체크 → 수량 체크 → log INSERT → 태그 랜덤 할당 |
-| `verify_mission` | `p_log_id uuid, p_user_id uuid, p_submitted_tag text` | 정답 검증: 10분 타임아웃 + 리워드 +7P 지급 |
+| `verify_mission` | `p_log_id uuid, p_user_id uuid, p_submitted_tag text` | 정답 검증: 리워드 +7P 지급 (타임아웃 제거 — Phase 16) |
 | `approve_charge` | `p_tx_id uuid` | 충전 승인: PENDING → COMPLETED + 포인트 지급 |
 | `process_withdraw` | `p_tx_id uuid` | 출금 처리: PENDING → COMPLETED + 잔액 차감 (FOR UPDATE) |
-| `register_campaign` | `p_user_id uuid, p_product_url text, p_keyword text, p_daily_target int, p_group_daily_target int, p_group_id uuid, p_start_date date, p_end_date date, p_tags text[], p_sort_orders int[], p_answer_index int, p_seed_keyword text` | 캠페인 등록: 예산 즉시 차감(group_daily_target 기준), 최소 7일, 50P/명/일. 동일 group_id로 서브키워드 묶음 |
+| `register_campaign` | `p_user_id uuid, p_product_url text, p_keyword text, p_daily_target int, p_group_daily_target int, p_group_id uuid, p_start_date date, p_end_date date, p_tags text[], p_sort_orders int[], p_answer_index int, p_seed_keyword text, p_product_name text, p_brand_name text` | 캠페인 등록: 예산 즉시 차감(group_daily_target 기준), 최소 7일, 50P/명/일. 동일 group_id로 서브키워드 묶음 |
 
 ### 광고주 / 대시보드 (migration 0007~0008)
 
@@ -228,19 +229,17 @@ lib/
 
 ## 7. 핵심 비즈니스 로직
 
-### 미션 흐름
+### 미션 흐름 (Phase 16 이후 — WebView 전환)
 ```
 미션 시작 버튼
   → start_mission RPC (서버: 중복체크 → 수량체크 → log INSERT → 태그 랜덤할당)
-  → 키워드 클립보드 복사
-  → 네이버 딥링크 실행: naversearchapp://search?where=nexearch&query={키워드}
-  → 유저가 앱으로 복귀 (AppLifecycleState.resumed 감지)
-  → 타이머 화면 노출 (started_at 기준 남은 시간 계산)
-  → 복귀 후 3초간 [리워드 받기] 버튼 비활성화
+  → /mission/:id/search 화면 이동 (인앱 WebView)
+  → WebView에서 네이버 쇼핑 검색 (https://search.shopping.naver.com/search/all?query={키워드})
+  → AppBar [태그 입력] 버튼 → /mission/:id/active 이동
+  → 즉시 태그 입력 활성화 (타이머/라이프사이클 없음)
   → 정답 입력 → verify_mission RPC
   → 성공: +7원 적립 + 폭죽 애니메이션
   → 실패(오답): 진동 + 오답 토스트
-  → 실패(10분 초과): 실패 처리 + 수량 반환
 ```
 
 ### 포인트 계산
@@ -307,7 +306,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 12 완료** (x축 중복 근본 수정 + DB 정리, 2026-06-09)
+현재 진행 Phase: **Phase 16 완료** (미션 플로우 WebView 전환 + 광고주 상품명/브랜드명 입력, 2026-06-17)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -1091,6 +1090,112 @@ Phase 4 (1~2주): 어드민 + 배포
   - 결과: 169건 → 84건, 중복 그룹 0개 확인
   - 방법: service_role key + PostgREST REST API (Supabase Management API Cloudflare 403 우회)
 
+- ✅ 완료: Phase 13 — 앱 이름 변경 + versionCode 18 프로덕션 배포 (2026-06-11)
+
+  **[앱/웹] 앱 이름 "겟머니" → "퀴즈캐시나우" 전체 변경** (commit: d7bf299)
+  - `android/app/src/main/AndroidManifest.xml` — `android:label="퀴즈캐시나우"`
+  - `lib/main.dart` — `title: '퀴즈캐시나우'`
+  - `lib/features/auth/presentation/splash_screen.dart` — 스플래시 텍스트
+  - `lib/features/auth/presentation/login_screen.dart` — 로고 텍스트
+  - `lib/features/auth/presentation/web_login_screen.dart` — 로고 타이틀 + 하단 안내 문구
+  - `lib/features/auth/presentation/admin_login_screen.dart` — 관리자 페이지 부제목
+  - `lib/features/dashboard/presentation/web_dashboard_screen.dart` — AppBar 타이틀
+
+  **[개인정보처리방침] rankingup-privacy 저장소 업데이트** (commit: 2ddf71a)
+  - 앱 이름: `랭킹업 (RankingUp)` → `퀴즈캐시나우`
+  - 운영자명: `natural tory market` → `주식회사 보스턴블루`
+  - 저작권 표시 / `<title>` 태그 동일하게 변경
+  - 이메일(`naturaltorymarket@gmail.com`) 유지
+
+  **versionCode 18 AAB 빌드** (commit: 9d3d2cd)
+  - `android/app/build.gradle.kts`: versionCode 16 → 17 → 18
+  - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (49MB)
+  - Play Console 프로덕션 트랙 업로드 완료 (2026-06-11)
+
+- ✅ 완료: Phase 14 — 이메일 인증 도입 (2026-06-15)
+
+  **[앱] EmailVerifyScreen 신규 + 라우터 등록**
+  - `lib/features/auth/presentation/email_verify_screen.dart` (신규)
+    - onAuthStateChange USER_UPDATED + emailConfirmedAt != null → 자동 /home 이동
+    - [인증 완료했어요] 버튼: refreshSession() → emailConfirmedAt 체크 → fallback
+    - [인증 메일 재발송] 버튼: supabase.auth.resend(type: OtpType.signup)
+    - dispose() 시 StreamSubscription cancel
+  - `lib/app/router.dart` — `/email_verify` GoRoute 추가 (extra: {'email': email} 수신)
+  - `lib/features/auth/presentation/splash_screen.dart` — 앱 한정 emailConfirmedAt 체크 → null이면 /email_verify
+  - `lib/features/auth/presentation/login_screen.dart` — 로그인 성공 시 emailConfirmedAt 체크, 회원가입 성공 시 항상 /email_verify
+
+  **[웹] web_login_screen.dart — Step 1.5 이메일 인증 대기 단계 추가**
+  - `_signupStep`: `int` → `double` (1.0 / 1.5 / 2.0)
+  - Step 1.5: 이메일 인증 대기 UI + onAuthStateChange 리스너 (USER_UPDATED → Step 2 자동 진행)
+  - [인증 완료했어요] / [인증 메일 재발송] fallback 버튼
+  - initState()에 StreamSubscription 등록, dispose()에 cancel
+
+  ⚠️ Supabase 콘솔: Authentication → Providers → Email → "Confirm email" 활성화 필요
+
+- ✅ 완료: Phase 15 — 미션 보드 참여완료/참여가능 구분 표시 (2026-06-17)
+
+  **[앱] 미션 보드 참여완료 카드 표시**
+  - `lib/features/mission/domain/mission_model.dart`
+    - `CampaignMissionModel.isCompleted: bool` 필드 추가 (기본값 false)
+    - `fromMap()` factory에 `isCompleted` named parameter 추가
+  - `lib/features/mission/data/mission_repository.dart`
+    - `fetchActiveMissions()`: 완료 그룹을 제외하지 않고 `isCompleted=true`로 마킹
+    - 쿼리에서 `.not('id', 'in', ...)` 제거 → 완료 캠페인도 포함
+    - 루프에서 `available` / `completed` 두 리스트로 분류 후 `[...available, ...completed]` 반환
+    - 미완료 캠페인만 일일 목표 도달 시 제외 (`!isCompleted && count >= target`)
+  - `lib/features/mission/presentation/mission_home_screen.dart`
+    - `_MissionCard`: `Opacity(opacity: isCompleted ? 0.5 : 1.0)` 래핑
+    - `onTap`: `isCompleted`일 때 `null` (상세 이동 차단)
+    - 뱃지: `isCompleted` → `_CompletedBadge("참여완료")`, `isFull` → `_SoldOutBadge`, 기본 → `_RewardBadge`
+    - 우측 텍스트: `isCompleted` → `'오늘 참여완료'` (회색)
+    - `_CompletedBadge` 위젯 신규 추가
+
+  **versionCode 19 AAB 빌드 (2026-06-17)**
+  - `android/app/build.gradle.kts`: versionCode 18 → 19
+  - 빌드 결과: `build/app/outputs/bundle/release/app-release.aab` (51.5MB)
+
+- ✅ 완료: Phase 16 — 미션 플로우 WebView 전환 + 광고주 상품명/브랜드명 입력 (2026-06-17)
+
+  **[DB] 3개 마이그레이션 Supabase 적용 완료**
+  - `20260317000032_add_product_brand_name.sql` — campaigns 테이블에 product_name, brand_name TEXT 컬럼 추가
+  - `20260317000033_update_register_campaign_product_info.sql` — register_campaign RPC에 p_product_name, p_brand_name 파라미터 추가
+  - `20260317000034_remove_timeout_from_verify_mission.sql` — verify_mission RPC에서 10분 타임아웃 블록 제거
+
+  **[앱] 미션 플로우 WebView 전환 (네이버 앱 딥링크 → 인앱 브라우저)**
+  - `pubspec.yaml` — `webview_flutter: ^4.10.0` 추가
+  - `lib/features/mission/presentation/mission_search_screen.dart` (신규)
+    - `MissionSearchScreen`: WebViewController로 네이버 쇼핑 검색 (https://search.shopping.naver.com/search/all?query={keyword})
+    - AppBar [태그 입력] FilledButton → /mission/:id/active 이동 (logId, keyword, tagIndex, productUrl, productName, brandName 전달)
+    - 로딩 중 CircularProgressIndicator 오버레이
+  - `lib/app/router.dart`
+    - `/mission/:id/search` GoRoute 추가 (extra에서 log_id 없으면 /home redirect)
+    - `/mission/:id/active` 라우트: startedAt 파라미터 제거, productName/brandName 추가
+  - `lib/features/mission/presentation/mission_detail_screen.dart`
+    - `url_launcher` + `services` import 제거
+    - `_onStartTapped()`: 딥링크 코드 전체 제거 → start_mission RPC 후 /search 이동
+    - 미션 방법 안내 4단계 문구 WebView 기반으로 변경
+  - `lib/features/mission/presentation/mission_active_screen.dart` 전면 재작성
+    - `WidgetsBindingObserver`, `AppLifecycleState`, 타이머, `_isResumed`, `_isButtonLocked`, `_isTimedOut` 전체 제거
+    - `startedAt` 파라미터 제거, `productName`/`brandName` 파라미터 추가
+    - 진입 즉시 태그 입력 활성화 (_WaitingBody 제거)
+    - AppBar [네이버 쇼핑 보기] TextButton.icon → context.pop() (search 화면 복귀)
+    - `_ProductInfoCard` 신규 위젯: 상품명/브랜드명 표시 카드
+
+  **[앱] 미션 모델 + 레포지터리 — productName/brandName 추가**
+  - `lib/features/mission/domain/mission_model.dart` — `CampaignMissionModel.productName`, `brandName` 필드 추가
+  - `lib/features/mission/data/mission_repository.dart` — `fetchCampaignDetail()` SELECT에 product_name, brand_name 추가
+
+  **[웹] 광고주 상품명/브랜드명 입력 + 표시**
+  - `lib/features/campaign/domain/campaign_model.dart` — `productName`, `brandName` 필드 추가
+  - `lib/features/campaign/data/campaign_repository.dart` — `registerCampaign()` p_product_name, p_brand_name 파라미터 추가
+  - `lib/features/campaign/presentation/campaign_new_screen.dart`
+    - Step 1 상품 정보 섹션에 상품명/브랜드명 TextField 추가 (필수 입력)
+    - `_step1Valid` 조건에 productName/brandName 추가
+    - Step 3 요약 화면에 상품명/브랜드명 표시
+    - `_submit()`: productName/brandName → registerCampaign() 전달
+  - `lib/features/campaign/presentation/campaign_detail_screen.dart`
+    - `_buildInfoCard()`: 상품 URL 아래 상품명/브랜드명 조건부 표시
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1162,7 +1267,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-05-25 기준)
+## 13. 배포 현황 (2026-06-17 기준)
 
 ### 서비스 URL
 
@@ -1178,8 +1283,9 @@ flutter pub run flutter_launcher_icons
 |------|-----|
 | 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 16 (2026-06-09 프로덕션 업로드 완료) |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.3MB) |
+| 배포된 versionCode | 18 (2026-06-11 프로덕션 업로드 완료) |
+| 빌드된 versionCode | 20 (2026-06-17 빌드 완료, Play Console 미업로드) |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.6MB) |
 
 ### GitHub 저장소
 
@@ -1188,7 +1294,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-06-09 (Phase 12: scheduler upsert + 차트 KST dedup + DB 중복 정리) |
+| 마지막 push | 2026-06-11 (Phase 13: 앱 이름 퀴즈캐시나우 변경 + versionCode 18) |
 
 ### GitHub Actions
 
