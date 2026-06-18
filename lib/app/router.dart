@@ -39,11 +39,23 @@ final appRouter = GoRouter(
   //   /web/* (/web/login 제외) → 세션 없으면 /web/login
   //   /admin/* (/admin/login 제외) → 세션 없으면 /admin/login
   redirect: (context, state) {
+    final location = state.matchedLocation;
+    final params   = state.uri.queryParameters;
+
+    // Supabase 인증 에러 콜백: /?error=...&error_description=... → 에러 스낵바
+    if (params.containsKey('error')) {
+      final desc = Uri.encodeComponent(params['error_description'] ?? 'unknown');
+      return '/web/login?auth_error=$desc';
+    }
+
     // Supabase 이메일 인증 콜백: /?code=xxxx → /web/login?verified=true
-    // go_router가 알 수 없는 경로(/)로 오는 code 파라미터를 가로채 로그인 화면으로 전달
-    if (state.uri.queryParameters.containsKey('code')) {
+    if (params.containsKey('code')) {
       return '/web/login?verified=true';
     }
+
+    // 루트 경로 직접 접근: GoException 방지용 → 광고주 로그인으로 이동
+    if (location == '/') return '/web/login';
+
     final path = state.uri.path;
     if (path.startsWith('/web/') && path != '/web/login') {
       if (supabase.auth.currentSession == null) return '/web/login';
@@ -54,6 +66,12 @@ final appRouter = GoRouter(
     return null;
   },
   routes: [
+    // ── 루트 경로 폴백 (GoException 방지) ─────────────────────
+    GoRoute(
+      path: '/',
+      redirect: (_, _) => '/web/login',
+    ),
+
     // ── 인증 (비-Shell) ────────────────────────────────────────
     GoRoute(
       path: '/splash',
@@ -154,8 +172,12 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/web/login',
       builder: (context, state) {
-        final verified = state.uri.queryParameters['verified'] == 'true';
-        return WebLoginScreen(showVerifiedBanner: verified);
+        final verified   = state.uri.queryParameters['verified'] == 'true';
+        final authError  = state.uri.queryParameters['auth_error'];
+        return WebLoginScreen(
+          showVerifiedBanner: verified,
+          authError: authError,
+        );
       },
     ),
     GoRoute(

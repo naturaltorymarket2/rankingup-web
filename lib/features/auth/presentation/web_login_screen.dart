@@ -27,7 +27,15 @@ class WebLoginScreen extends StatefulWidget {
   /// Supabase 인증 콜백(/?code=xxxx)에서 리다이렉트될 때 router가 true로 전달.
   final bool showVerifiedBanner;
 
-  const WebLoginScreen({super.key, this.showVerifiedBanner = false});
+  /// null이 아니면 화면 진입 시 빨간 스낵바로 에러 메시지를 표시한다.
+  /// Supabase 인증 에러 콜백(/?error=...&error_description=...)에서 router가 전달.
+  final String? authError;
+
+  const WebLoginScreen({
+    super.key,
+    this.showVerifiedBanner = false,
+    this.authError,
+  });
 
   @override
   State<WebLoginScreen> createState() => _WebLoginScreenState();
@@ -61,7 +69,11 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.showVerifiedBanner) {
+    if (widget.authError != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showError('인증 오류: ${Uri.decodeComponent(widget.authError!)}');
+      });
+    } else if (widget.showVerifiedBanner) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showSuccess('이메일 인증이 완료되었습니다. 로그인해주세요.');
       });
