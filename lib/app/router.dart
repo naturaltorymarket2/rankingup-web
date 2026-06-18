@@ -6,6 +6,7 @@ import '../features/admin/presentation/admin_charge_screen.dart';
 import '../features/admin/presentation/admin_notice_screen.dart';
 import '../features/admin/presentation/admin_withdraw_screen.dart';
 import '../features/auth/presentation/admin_login_screen.dart';
+import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/web_login_screen.dart';
@@ -17,6 +18,7 @@ import '../features/dashboard/presentation/web_dashboard_screen.dart';
 import '../features/mission/presentation/mission_active_screen.dart';
 import '../features/mission/presentation/mission_detail_screen.dart';
 import '../features/mission/presentation/mission_home_screen.dart';
+import '../features/mission/presentation/mission_search_screen.dart';
 import '../features/wallet/presentation/history_screen.dart';
 import '../features/wallet/presentation/mypage_screen.dart';
 import '../features/wallet/presentation/withdraw_screen.dart';
@@ -37,6 +39,11 @@ final appRouter = GoRouter(
   //   /web/* (/web/login 제외) → 세션 없으면 /web/login
   //   /admin/* (/admin/login 제외) → 세션 없으면 /admin/login
   redirect: (context, state) {
+    // Supabase 이메일 인증 콜백: /?code=xxxx → /web/login?verified=true
+    // go_router가 알 수 없는 경로(/)로 오는 code 파라미터를 가로채 로그인 화면으로 전달
+    if (state.uri.queryParameters.containsKey('code')) {
+      return '/web/login?verified=true';
+    }
     final path = state.uri.path;
     if (path.startsWith('/web/') && path != '/web/login') {
       if (supabase.auth.currentSession == null) return '/web/login';
@@ -55,6 +62,13 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/email_verify',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return EmailVerifyScreen(email: extra?['email'] as String?);
+      },
     ),
 
     // ── 하단 탭 Shell (홈 / 참여 내역 / 마이페이지) ───────────
@@ -85,6 +99,27 @@ final appRouter = GoRouter(
       ),
       routes: [
         GoRoute(
+          path: 'search',
+          redirect: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            final logId = extra?['log_id'] as String? ?? '';
+            if (extra == null || logId.isEmpty) return '/home';
+            return null;
+          },
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            return MissionSearchScreen(
+              id:          state.pathParameters['id']!,
+              logId:       extra?['log_id']       as String? ?? '',
+              keyword:     extra?['keyword']      as String? ?? '',
+              tagIndex:    extra?['tag_index']    as int?,
+              productUrl:  extra?['product_url']  as String?,
+              productName: extra?['product_name'] as String?,
+              brandName:   extra?['brand_name']   as String?,
+            );
+          },
+        ),
+        GoRoute(
           path: 'active',
           redirect: (context, state) {
             // extra 없거나 log_id 비어 있으면 잘못된 직접 진입 → 홈으로 이동
@@ -94,17 +129,15 @@ final appRouter = GoRouter(
             return null;
           },
           builder: (context, state) {
-            final extra      = state.extra as Map<String, dynamic>?;
-            final startedRaw = extra?['started_at'] as String?;
+            final extra = state.extra as Map<String, dynamic>?;
             return MissionActiveScreen(
-              id:         state.pathParameters['id']!,
-              logId:      extra?['log_id']  as String? ?? '',
-              keyword:    extra?['keyword'] as String? ?? '',
-              startedAt:  startedRaw != null
-                  ? DateTime.parse(startedRaw).toUtc()
-                  : DateTime.now().toUtc(),
-              tagIndex:   extra?['tag_index'] as int?,
-              productUrl: extra?['product_url'] as String?,
+              id:          state.pathParameters['id']!,
+              logId:       extra?['log_id']       as String? ?? '',
+              keyword:     extra?['keyword']      as String? ?? '',
+              tagIndex:    extra?['tag_index']    as int?,
+              productUrl:  extra?['product_url']  as String?,
+              productName: extra?['product_name'] as String?,
+              brandName:   extra?['brand_name']   as String?,
             );
           },
         ),
@@ -120,7 +153,10 @@ final appRouter = GoRouter(
     // ── 웹 (B2B 광고주) ───────────────────────────────────────
     GoRoute(
       path: '/web/login',
-      builder: (context, state) => const WebLoginScreen(),
+      builder: (context, state) {
+        final verified = state.uri.queryParameters['verified'] == 'true';
+        return WebLoginScreen(showVerifiedBanner: verified);
+      },
     ),
     GoRoute(
       path: '/web/dashboard',

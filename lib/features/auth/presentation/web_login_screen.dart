@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -11,16 +13,21 @@ import '../../../app/supabase_client.dart';
 //
 // 탭 구성:
 //   0: 로그인  — 이메일 + 비밀번호 → /web/dashboard
-//   1: 회원가입 — 2단계
-//      Step 1: 이메일 + 비밀번호 → supabase.auth.signUp()
-//      Step 2: 사업자 정보      → register_advertiser RPC → /web/dashboard
+//   1: 회원가입 — 3단계
+//      Step 1:   이메일 + 비밀번호 → supabase.auth.signUp()
+//      Step 1.5: 이메일 인증 대기  → onAuthStateChange / fallback 버튼
+//      Step 2:   사업자 정보      → register_advertiser RPC → /web/dashboard
 //
-// ⚠ 권장 Supabase 설정:
-//   Authentication → Providers → Email → "Confirm email" 비활성화
-//   → 가입 즉시 세션 발급, 별도 이메일 인증 불필요
+// ⚠ Supabase 설정 필요:
+//   Authentication → Providers → Email → "Confirm email" 활성화
+//   → Phase 12 이메일 인증 도입
 
 class WebLoginScreen extends StatefulWidget {
-  const WebLoginScreen({super.key});
+  /// true이면 화면 진입 시 "이메일 인증이 완료되었습니다" 스낵바를 표시한다.
+  /// Supabase 인증 콜백(/?code=xxxx)에서 리다이렉트될 때 router가 true로 전달.
+  final bool showVerifiedBanner;
+
+  const WebLoginScreen({super.key, this.showVerifiedBanner = false});
 
   @override
   State<WebLoginScreen> createState() => _WebLoginScreenState();
@@ -28,9 +35,14 @@ class WebLoginScreen extends StatefulWidget {
 
 class _WebLoginScreenState extends State<WebLoginScreen> {
   // ── 탭 / 단계 상태 ─────────────────────────────────────────────
-  int  _tabIndex   = 0;  // 0: 로그인, 1: 회원가입
-  int  _signupStep = 1;  // 1: 계정정보, 2: 사업자정보
-  bool _isLoading  = false;
+  int    _tabIndex   = 0;    // 0: 로그인, 1: 회원가입
+  double _signupStep = 1.0;  // 1.0: 계정정보, 1.5: 이메일인증대기, 2.0: 사업자정보
+  bool   _isLoading  = false;
+
+  // ── 이메일 인증 단계 상태 ───────────────────────────────────────
+  bool _isSendingEmail    = false;
+  bool _isCheckingConfirm = false;
+  StreamSubscription<AuthState>? _authSub;
 
   // ── 로그인 폼 ────────────────────────────────────────────────────
   final _loginEmailCtrl    = TextEditingController();
@@ -47,7 +59,26 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   bool  _signupObscure      = true;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.showVerifiedBanner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showSuccess('이메일 인증이 완료되었습니다. 로그인해주세요.');
+      });
+    }
+    _authSub = supabase.auth.onAuthStateChange.listen((data) {
+      if (!mounted || _signupStep != 1.5) return;
+      if (data.event != AuthChangeEvent.userUpdated) return;
+      final confirmedAt = data.session?.user.emailConfirmedAt;
+      if (confirmedAt != null) {
+        setState(() => _signupStep = 2.0);
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _authSub?.cancel();
     _loginEmailCtrl.dispose();
     _loginPasswordCtrl.dispose();
     _signupEmailCtrl.dispose();
@@ -63,7 +94,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   void _switchTab(int index) {
     setState(() {
       _tabIndex   = index;
-      _signupStep = 1;
+      _signupStep = 1.0;
     });
   }
 
@@ -119,18 +150,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         return;
       }
 
-      // 이메일 인증이 필요한 경우 (Supabase "Confirm email" ON)
-      if (res.session == null) {
-        _showSuccess(
-          '가입 확인 이메일을 발송했습니다.\n'
-          '이메일 인증 완료 후 로그인해주세요.',
-        );
-        setState(() => _tabIndex = 0);
-        return;
-      }
-
-      // 세션 확보 완료 → Step 2 (사업자 정보) 로 이동
-      setState(() => _signupStep = 2);
+      // 가입 후 → 항상 이메일 인증 대기 단계(1.5)로 이동
+      setState(() => _signupStep = 1.5);
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
     } catch (_) {
@@ -178,7 +199,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         await supabase.auth.signOut();
         if (mounted) {
           _showError(_mapRpcError(code));
-          setState(() => _signupStep = 1);
+          setState(() => _signupStep = 1.0);
         }
         return;
       }
@@ -188,16 +209,49 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       await supabase.auth.signOut();
       if (mounted) {
         _showError(_mapAuthError(e.message));
-        setState(() => _signupStep = 1);
+        setState(() => _signupStep = 1.0);
       }
     } catch (_) {
       await supabase.auth.signOut();
       if (mounted) {
         _showError('회원가입 중 오류가 발생했습니다. 다시 시도해주세요');
-        setState(() => _signupStep = 1);
+        setState(() => _signupStep = 1.0);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── 이메일 인증 단계: 재발송 / 수동 확인 ──────────────────────────
+  Future<void> _resendVerifyEmail() async {
+    final email = _signupEmailCtrl.text.trim();
+    if (email.isEmpty) return;
+    setState(() => _isSendingEmail = true);
+    try {
+      await supabase.auth.resend(type: OtpType.signup, email: email);
+      _showSuccess('인증 메일을 재발송했습니다.');
+    } catch (_) {
+      _showError('재발송에 실패했습니다. 잠시 후 다시 시도해주세요');
+    } finally {
+      if (mounted) setState(() => _isSendingEmail = false);
+    }
+  }
+
+  Future<void> _checkWebConfirmed() async {
+    setState(() => _isCheckingConfirm = true);
+    try {
+      await supabase.auth.refreshSession();
+      final confirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
+      if (!mounted) return;
+      if (confirmedAt != null) {
+        setState(() => _signupStep = 2.0);
+      } else {
+        _showError('아직 인증이 완료되지 않았습니다');
+      }
+    } catch (_) {
+      if (mounted) _showError('아직 인증이 완료되지 않았습니다');
+    } finally {
+      if (mounted) setState(() => _isCheckingConfirm = false);
     }
   }
 
@@ -298,7 +352,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   /// 현재 탭/단계에 맞는 폼 위젯 반환
   Widget _currentForm() {
     if (_tabIndex == 0) return _buildLoginForm();
-    if (_signupStep == 1) return _buildSignUpStep1();
+    if (_signupStep == 1.0) return _buildSignUpStep1();
+    if (_signupStep == 1.5) return _buildEmailVerifyStep();
     return _buildSignUpStep2();
   }
 
@@ -445,6 +500,97 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         ),
         const SizedBox(height: 28),
         _submitBtn(label: '로그인', onPressed: _isLoading ? null : _onLogin),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // 회원가입 Step 1.5: 이메일 인증 대기
+  // ─────────────────────────────────────────────────────────────────
+
+  Widget _buildEmailVerifyStep() {
+    final isVerifyLoading = _isSendingEmail || _isCheckingConfirm;
+    final email = _signupEmailCtrl.text.trim();
+
+    return Column(
+      key: const ValueKey('signup-step-verify'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildStepIndicator(),
+        const SizedBox(height: 24),
+        const Icon(
+          Icons.mark_email_unread_outlined,
+          color: Colors.indigo,
+          size: 48,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          '이메일 인증',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '가입하신 이메일로 인증 링크를 보냈습니다.\n이메일을 확인해주세요.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade600,
+            height: 1.5,
+          ),
+        ),
+        if (email.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            email,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.indigo.shade700,
+            ),
+          ),
+        ],
+        const SizedBox(height: 28),
+        _submitBtn(
+          label: '인증 완료했어요',
+          onPressed: isVerifyLoading ? null : _checkWebConfirmed,
+          isLoading: _isCheckingConfirm,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 50,
+          child: OutlinedButton(
+            onPressed: isVerifyLoading ? null : _resendVerifyEmail,
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.indigo.shade400),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: _isSendingEmail
+                ? SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.indigo.shade400,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : Text(
+                    '인증 메일 재발송',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade700,
+                    ),
+                  ),
+          ),
+        ),
       ],
     );
   }
@@ -701,7 +847,9 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   Widget _submitBtn({
     required String label,
     VoidCallback? onPressed,
+    bool? isLoading,
   }) {
+    final showSpinner = isLoading ?? _isLoading;
     return SizedBox(
       height: 50,
       child: FilledButton(
@@ -712,7 +860,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        child: _isLoading
+        child: showSpinner
             ? const SizedBox(
                 width: 22,
                 height: 22,
