@@ -10,6 +10,15 @@ MCP로 DB 작업 시 반드시 이 프로젝트에만 접근해야 한다.
 다른 프로젝트(n8n-rag, resume-ats-keyword, SQLclass, n8n-test, chs1989b's Project)는 절대 접근 금지.
 작업 전 project ref가 wfxlihrqjtexuxvoajny인지 반드시 확인할 것.
 
+## ⚠️ Railway 프로젝트 이름 주의사항
+
+Railway 대시보드의 프로젝트/서비스 이름은 자동 생성된 임의 이름(예: agile-amazement)이며
+실제 역할과 무관함. 랭킹 서버(rank_module, GitHub 저장소 naturaltorymarket2/rankingup)에
+연결된 Railway 서비스의 이름이 "web"으로 표시되므로 혼동 주의.
+구분 방법: 각 서비스 Settings → Source 탭에서 Source Repo가
+naturaltorymarket2/rankingup인지 naturaltorymarket2/rankingup-web인지로 확인.
+랭킹 서버 도메인: web-production-e7797.up.railway.app
+
 ---
 
 ## 1. 프로젝트 한 줄 정의
@@ -306,7 +315,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 16 완료** (미션 플로우 WebView 전환 + 광고주 상품명/브랜드명 입력, 2026-06-17)
+현재 진행 Phase: **Phase 17 완료** (랭킹 서버 product_id 매칭 로직 단순화, 2026-06-19)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -1196,6 +1205,33 @@ Phase 4 (1~2주): 어드민 + 배포
   - `lib/features/campaign/presentation/campaign_detail_screen.dart`
     - `_buildInfoCard()`: 상품 URL 아래 상품명/브랜드명 조건부 표시
 
+- ✅ 완료: Phase 17 — 랭킹 서버 product_id 매칭 로직 단순화 (2026-06-19)
+
+  **배경**: rank_module/crawler.py의 매칭 로직(_extract_product_id 정규식 검증 + is_brand 플래그 +
+  _NaverApiClient 클래스의 threading.Lock 기반 키 순환)을 단순 path-split 기반 숫자 ID 추출 방식으로
+  교체. 핵심 매칭 우선순위(productId 직접 비교 → link URL 숫자 ID fallback)는 변경 없음.
+
+  **rank_module/crawler.py 변경 사항** (commit: 9e6459f)
+  - 제거: _SS_PATTERN, _BRAND_PATTERN 정규식, _extract_product_id() 함수
+  - 제거: is_brand 플래그 및 관련 로그 2곳
+  - 제거: _QuotaExceeded 예외 클래스, _NaverApiClient 클래스 (threading.Lock + 싱글톤)
+  - 변경: API 키 순환 → _fetch_items() 단일 함수의 단순 for문 순환으로 대체
+    (요청마다 항상 1번 키부터 순서대로 시도, 이전엔 한도 초과로 전환된 인덱스를 프로세스 생애주기 동안 유지했으나 이제 미유지)
+  - 변경: fetch_naver_rank() target_id 산출 → _extract_numeric_id(product_url) 단일 호출로 단순화
+  - 변경: fetch_related_keywords() 진입 검증 → _extract_numeric_id() 결과 없을 때만 InvalidUrlError
+    (이전: smartstore/brand 패턴 아니면 거부 → 완화됨: 숫자 ID 추출 가능한 모든 URL 통과, 카탈로그 URL 등도 허용)
+  - main.py, scheduler.py는 수정 불필요 (영향 없음 확인됨 — is_brand/_NaverApiClient를 외부에서 import하는 곳 없음)
+
+  ⚠️ 동시성 참고: threading.Lock 제거로 동시 요청 시 각 요청이 독립적으로 키 #1부터 시도.
+  Railway 단일 인스턴스 환경에서 실질적 리스크는 낮음(최악의 경우도 이미 한도 초과된 키 재시도 후
+  즉시 다음 키로 전환되는 약간의 지연 정도이며 요청 실패로는 이어지지 않음).
+
+  **배포 확인 (2026-06-19)**
+  - GitHub push: naturaltorymarket2/rankingup main 브랜치, 839f544 → 9e6459f
+  - Railway 자동 배포(웹훅) 완료 확인: web-production-e7797.up.railway.app, 배포 상태 ACTIVE,
+    Deployment successful
+  - /health, /rank 헬스체크 정상 응답 확인
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1294,7 +1330,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-06-11 (Phase 13: 앱 이름 퀴즈캐시나우 변경 + versionCode 18) |
+| 마지막 push | 2026-06-19 (rank_module: Phase 17 crawler.py 매칭 로직 단순화) — 단, store_traffic_booster(Flutter)는 2026-06-11 기준 유지 |
 
 ### GitHub Actions
 
