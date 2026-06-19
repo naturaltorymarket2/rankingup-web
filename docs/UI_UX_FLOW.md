@@ -1,6 +1,6 @@
 # UI/UX Flow — 겟머니 (스토어 트래픽 부스터)
 
-> 최종 업데이트: 2026-05-14
+> 최종 업데이트: 2026-06-19
 > 실제 구현 코드 기반 (lib/ 전체 검증 완료)
 
 ---
@@ -78,24 +78,24 @@
   │    (네이버 쇼핑앱으로 이동)
   ├─ AppLifecycleState.resumed 감지 → 앱 복귀 확인
   ├─ 복귀 후 3초 카운트다운 → [리워드 받기] 버튼 활성화
-  ├─ 타이머 (10분, started_at 기준 서버 시간)
+  ├─ 타임아웃 없음 — migration 0034로 verify_mission의 10분 타임아웃 체크가 제거된 상태
+  │    (Phase 18에서 딥링크로 되돌렸지만 타임아웃은 의도적으로 재도입하지 않음)
   ├─ 정답 태그 안내 박스 (_TagInputSection)
   │    tag_index 있을 때: "상품 페이지에서 N번째 태그를 입력하세요" 강조 박스 (인디고 배경)
   │    tag_index 없을 때: "상품 페이지에서 찾은 태그를 입력하세요" 안내 텍스트
   ├─ [리워드 받기] → 정답 태그 입력 모달
   │    └─ verify_mission RPC 호출 (p_log_id, p_user_id, p_submitted_tag)
   │         ├─ 성공 → +7원 적립 + 폭죽 애니메이션 → /home
-  │         ├─ 오답 → 진동 + 토스트 "틀렸습니다" (재시도 가능)
-  │         └─ 10분 초과 → 실패 처리 + current_count 반환 → /home
-  └─ 10분 타임아웃 → 자동 실패 처리
+  │         └─ 오답 → 진동 + 토스트 "오답입니다. 다시 확인해주세요" (재시도 가능)
+  └─ 앱 복귀 시 extra(go_router 메모리)가 비어 있으면 SharedPreferences에서 복원
+       (mission_session_storage.dart, campaign_id 기준) — 복원도 실패하면 /home 리다이렉트
 ```
 
 **verify_mission RPC 서버 처리:**
-1. `mission_logs`에서 log_id + user_id 조회
-2. `NOW() - started_at > 10분` → FAILED 처리 + `campaigns.current_count - 1`
-3. `p_submitted_tag = campaign_tags.tag_word` 비교
-4. 성공: `mission_logs.status = COMPLETED` + `wallets.balance += 7` + `transactions` EARN INSERT
-5. 실패: `mission_logs.status = FAILED`
+1. `mission_logs`에서 log_id + user_id + status=IN_PROGRESS 조회 (FOR UPDATE)
+2. `p_submitted_tag = campaign_tags.tag_word` 비교 (대소문자 무시 + 앞뒤 공백 제거)
+3. 성공: `mission_logs.status = SUCCESS` + `wallets.balance += 7` + `transactions` EARN INSERT
+4. 실패(오답): `'WRONG_TAG'` 에러 반환 (mission_logs 상태 변경 없음 — 재시도 가능)
 
 ### 1-5. 참여 내역
 
