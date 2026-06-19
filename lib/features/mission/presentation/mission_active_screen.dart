@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/utils/admob_interstitial.dart';
+import '../data/mission_session_storage.dart';
 import '../domain/mission_model.dart';
 import 'mission_active_provider.dart';
 
@@ -13,7 +15,7 @@ import 'mission_active_provider.dart';
 // 미션 진행 화면 (/mission/:id/active)
 // ─────────────────────────────────────────────────────────────────
 //
-// go_router extra 수신:
+// go_router extra 수신 (정상 진입 시):
 //   - log_id      : start_mission RPC 응답의 log_id (UUID)
 //   - keyword     : 사용자가 검색한 키워드 (안내 표시용)
 //   - tag_index   : 정답 태그 순서 (1-based, 없으면 null)
@@ -21,12 +23,17 @@ import 'mission_active_provider.dart';
 //   - product_name: 상품명 (null이면 미표시)
 //   - brand_name  : 브랜드명 (null이면 미표시)
 //
-// Phase 16: WebView 전환으로 앱 이탈 없음 → 타이머/라이프사이클 제거
-// 진입 즉시 태그 입력 활성화. AppBar에 "네이버 쇼핑 보기" 버튼으로 검색 화면 복귀.
+// extra가 비어 있으면(logId.isEmpty) — 네이버 앱에 가 있는 동안 OS가
+// 백그라운드 Flutter 프로세스를 종료해 go_router의 메모리상 extra가
+// 사라진 경우다. 이때는 widget.id(campaign_id)로 SharedPreferences에서
+// 복원을 시도하고, 그마저 없으면 /home으로 리다이렉트한다.
+//
+// AppLifecycleState.resumed 감지로 네이버 앱 복귀를 확인하며,
+// 데이터 복원(_resolved)이 끝나기 전에는 resumed 콜백을 무시한다.
 
 class MissionActiveScreen extends ConsumerStatefulWidget {
   final String  id;           // campaign_id (path param)
-  final String  logId;        // mission_logs.id (UUID)
+  final String  logId;        // mission_logs.id (UUID) — 비어 있으면 복원 시도
   final String  keyword;      // 안내 표시용 키워드
   final int?    tagIndex;     // 정답 태그 순서 (1-based, null이면 안내 미표시)
   final String? productUrl;   // 캠페인 상품 URL (null이면 미표시)
@@ -50,9 +57,25 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
 }
 
 class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
-    with SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
 
-  bool _isSuccess = false;
+  // ── 실제 사용 데이터 (extra 또는 SharedPreferences 복원 결과) ──
+  String? _logId;
+  String? _keyword;
+  int?    _tagIndex;
+  String? _productUrl;
+  String? _productName;
+  String? _brandName;
+
+  bool _resolved      = false; // 데이터 준비 완료 (extra 정상 또는 복원 성공)
+  bool _resolveFailed = false; // 복원도 실패 — /home 리다이렉트 진행 중
+
+  // ── 네이버 앱 복귀 감지 ────────────────────────────────────
+  bool _isResumed      = false; // 네이버 앱에서 복귀 여부
+  bool _isButtonLocked = false; // 복귀 후 3초 잠금
+  bool _isSuccess      = false;
+  Timer? _lockTimer;
+
   final _tagController = TextEditingController();
 
   // 폭죽 애니메이션
@@ -62,6 +85,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _confettiCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -70,17 +95,97 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
       parent: _confettiCtrl,
       curve: Curves.easeOut,
     );
+
+    _resolveMissionData();
+  }
+
+  // ── extra 정상 사용 또는 SharedPreferences 복원 ────────────
+  Future<void> _resolveMissionData() async {
+    if (widget.logId.isNotEmpty) {
+      setState(() {
+        _logId       = widget.logId;
+        _keyword     = widget.keyword;
+        _tagIndex    = widget.tagIndex;
+        _productUrl  = widget.productUrl;
+        _productName = widget.productName;
+        _brandName   = widget.brandName;
+        _resolved    = true;
+      });
+      return;
+    }
+
+    final restored = await MissionSessionStorage.restore(widget.id);
+    if (!mounted) return;
+
+    if (restored == null) {
+      setState(() => _resolveFailed = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('진행 중인 미션 정보를 찾을 수 없습니다. 다시 시작해주세요.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.go('/home');
+      });
+      return;
+    }
+
+    setState(() {
+      _logId       = restored['log_id']       as String?;
+      _keyword     = restored['keyword']      as String?;
+      _tagIndex    = restored['tag_index']    as int?;
+      _productUrl  = restored['product_url']  as String?;
+      _productName = restored['product_name'] as String?;
+      _brandName   = restored['brand_name']   as String?;
+      _resolved    = true;
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // 화면을 벗어나는 시점(성공 또는 명시적 뒤로가기) 정리.
+    // OS가 프로세스를 강제 종료하는 경우엔 dispose()가 호출되지 않으므로
+    // 백그라운드 강제 종료 시에는 저장값이 그대로 남아 복원에 사용된다.
+    MissionSessionStorage.clear();
+    _lockTimer?.cancel();
     _tagController.dispose();
     _confettiCtrl.dispose();
     super.dispose();
   }
 
+  // ── AppLifecycle 복귀 감지 ────────────────────────────────
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 데이터 복원이 끝나기 전에는 무시 — null 참조 방지
+    if (!_resolved) return;
+    if (state == AppLifecycleState.resumed && !_isResumed) {
+      _onResumedFromNaver();
+    }
+  }
+
+  void _onResumedFromNaver() {
+    setState(() {
+      _isResumed      = true;
+      _isButtonLocked = true;
+    });
+
+    // 복귀 후 3초 버튼 잠금 (오작동/연타 방지)
+    _lockTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _isButtonLocked = false);
+    });
+  }
+
   // ── verify_mission 호출 ───────────────────────────────────
   Future<void> _onRewardTapped() async {
+    final logId = _logId;
+    if (logId == null || logId.isEmpty) {
+      _showSnackBar('미션 정보를 불러오지 못했습니다. 다시 시도해주세요');
+      return;
+    }
+
     final tag = _tagController.text.trim();
     if (tag.isEmpty) {
       _showSnackBar('정답을 입력해주세요');
@@ -88,7 +193,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     }
 
     final result = await ref.read(missionVerifyProvider.notifier).verifyMission(
-      logId:        widget.logId,
+      logId:        logId,
       submittedTag: tag,
     );
 
@@ -133,6 +238,19 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   @override
   Widget build(BuildContext context) {
     final isVerifying = ref.watch(missionVerifyProvider);
+    final canPress = _isResumed && !_isButtonLocked && !isVerifying;
+
+    if (!_resolved) {
+      // 복원 진행 중(또는 실패 후 /home 리다이렉트 대기 중) — 빈 로딩 화면
+      return Scaffold(
+        appBar: AppBar(title: const Text('미션 진행 중')),
+        body: Center(
+          child: _resolveFailed
+              ? const SizedBox.shrink()
+              : const CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return PopScope(
       canPop: !isVerifying && !_isSuccess,
@@ -142,40 +260,32 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
             appBar: AppBar(
               title: const Text('미션 진행 중'),
               automaticallyImplyLeading: !isVerifying && !_isSuccess,
-              actions: [
-                TextButton.icon(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.search_rounded, size: 18),
-                  label: const Text('네이버 쇼핑 보기'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.indigo,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
             ),
             body: SafeArea(
               child: Column(
                 children: [
                   Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: _ActiveBody(
-                        keyword:     widget.keyword,
-                        tagIndex:    widget.tagIndex,
-                        productUrl:  widget.productUrl,
-                        productName: widget.productName,
-                        brandName:   widget.brandName,
-                        tagController: _tagController,
-                      ),
-                    ),
+                    child: _isResumed
+                        ? SingleChildScrollView(
+                            padding: const EdgeInsets.all(24),
+                            child: _ActiveBody(
+                              keyword:     _keyword ?? '',
+                              tagIndex:    _tagIndex,
+                              productUrl:  _productUrl,
+                              productName: _productName,
+                              brandName:   _brandName,
+                              tagController: _tagController,
+                            ),
+                          )
+                        : const _WaitingBody(),
                   ),
 
-                  // 하단 고정: [리워드 받기] 버튼
-                  _RewardButton(
-                    isVerifying: isVerifying,
-                    onPressed:   isVerifying ? null : _onRewardTapped,
-                  ),
+                  // 하단 고정: [리워드 받기] 버튼 (복귀 후만 표시)
+                  if (_isResumed)
+                    _RewardButton(
+                      isVerifying: isVerifying,
+                      onPressed:   canPress ? _onRewardTapped : null,
+                    ),
                 ],
               ),
             ),
@@ -184,6 +294,50 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
           // 성공 폭죽 오버레이
           if (_isSuccess)
             _ConfettiOverlay(animation: _confettiAnim),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 복귀 대기 화면 (네이버 앱 이동 후)
+// ─────────────────────────────────────────────────────────────────
+
+class _WaitingBody extends StatelessWidget {
+  const _WaitingBody();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 72,
+            height: 72,
+            child: CircularProgressIndicator(
+              strokeWidth: 4,
+              color: Colors.indigo.shade400,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            '네이버에서 검색 중...',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.indigo.shade700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '키워드로 검색하고 상품을 찾은 후\n이 앱으로 돌아오세요',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.grey.shade600,
+              height: 1.6,
+            ),
+          ),
         ],
       ),
     );

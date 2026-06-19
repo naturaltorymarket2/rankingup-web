@@ -18,7 +18,6 @@ import '../features/dashboard/presentation/web_dashboard_screen.dart';
 import '../features/mission/presentation/mission_active_screen.dart';
 import '../features/mission/presentation/mission_detail_screen.dart';
 import '../features/mission/presentation/mission_home_screen.dart';
-import '../features/mission/presentation/mission_search_screen.dart';
 import '../features/wallet/presentation/history_screen.dart';
 import '../features/wallet/presentation/mypage_screen.dart';
 import '../features/wallet/presentation/withdraw_screen.dart';
@@ -117,35 +116,10 @@ final appRouter = GoRouter(
       ),
       routes: [
         GoRoute(
-          path: 'search',
-          redirect: (context, state) {
-            final extra = state.extra as Map<String, dynamic>?;
-            final logId = extra?['log_id'] as String? ?? '';
-            if (extra == null || logId.isEmpty) return '/home';
-            return null;
-          },
-          builder: (context, state) {
-            final extra = state.extra as Map<String, dynamic>?;
-            return MissionSearchScreen(
-              id:          state.pathParameters['id']!,
-              logId:       extra?['log_id']       as String? ?? '',
-              keyword:     extra?['keyword']      as String? ?? '',
-              tagIndex:    extra?['tag_index']    as int?,
-              productUrl:  extra?['product_url']  as String?,
-              productName: extra?['product_name'] as String?,
-              brandName:   extra?['brand_name']   as String?,
-            );
-          },
-        ),
-        GoRoute(
           path: 'active',
-          redirect: (context, state) {
-            // extra 없거나 log_id 비어 있으면 잘못된 직접 진입 → 홈으로 이동
-            final extra = state.extra as Map<String, dynamic>?;
-            final logId = extra?['log_id'] as String? ?? '';
-            if (extra == null || logId.isEmpty) return '/home';
-            return null;
-          },
+          // redirect 없음 — extra가 비어 있어도(딥링크 후 프로세스 재시작 등)
+          // MissionActiveScreen이 campaign_id로 SharedPreferences 복원을 직접 시도한다.
+          // 복원도 실패하면 화면 내부에서 /home으로 리다이렉트한다.
           builder: (context, state) {
             final extra = state.extra as Map<String, dynamic>?;
             return MissionActiveScreen(

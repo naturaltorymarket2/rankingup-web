@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/device_util.dart';
+import '../data/mission_session_storage.dart';
 import '../domain/mission_model.dart';
 import 'mission_detail_provider.dart';
 
@@ -81,10 +84,74 @@ class MissionDetailScreen extends ConsumerWidget {
       return;
     }
 
-    // 2. 인앱 WebView 검색 화면으로 이동
+    // 2. 키워드 클립보드 복사 — 실패해도 딥링크 실행은 계속 진행 (유저가 직접 입력 가능)
+    try {
+      await Clipboard.setData(ClipboardData(text: result.keyword));
+    } catch (_) {
+      if (context.mounted) {
+        _showSnackBar(context, '키워드를 직접 입력하세요: ${result.keyword}');
+      }
+    }
+
+    // 3. 네이버 딥링크 실행
+    final encoded  = Uri.encodeComponent(result.keyword);
+    final naverUri = Uri.parse(
+      'naversearchapp://search?where=nexearch&query=$encoded',
+    );
+
+    // canLaunchUrl 사전 체크 (Android 11+ 패키지 가시성 대비)
+    // AndroidManifest.xml <queries>에 scheme + com.naver.search 패키지 선언 필요
+    bool canLaunch = false;
+    try {
+      canLaunch = await canLaunchUrl(naverUri);
+    } catch (_) {
+      canLaunch = false;
+    }
+
+    if (!canLaunch) {
+      if (context.mounted) {
+        _showSnackBar(
+          context,
+          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
+        );
+      }
+      return;
+    }
+
+    bool launched = false;
+    try {
+      launched = await launchUrl(naverUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      launched = false;
+    }
+
+    if (!launched) {
+      if (context.mounted) {
+        _showSnackBar(
+          context,
+          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
+        );
+      }
+      return;
+    }
+
+    // 4. 딥링크 성공 직후 세션 영속화
+    //    네이버 앱에 가 있는 동안 OS가 백그라운드 프로세스를 종료해도
+    //    /active 화면에서 campaignId로 복원할 수 있도록 SharedPreferences에 저장
+    await MissionSessionStorage.save(
+      campaignId:  campaignId,
+      logId:       result.logId,
+      keyword:     result.keyword,
+      tagIndex:    result.tagIndex,
+      productUrl:  campaign.productUrl,
+      productName: campaign.productName,
+      brandName:   campaign.brandName,
+    );
+
+    // 5. 미션 진행 화면으로 이동
     if (context.mounted) {
       context.push(
-        '/mission/$campaignId/search',
+        '/mission/$campaignId/active',
         extra: {
           'log_id':       result.logId,
           'keyword':      result.keyword,
@@ -289,10 +356,10 @@ class _InstructionSection extends StatelessWidget {
   const _InstructionSection();
 
   static const _steps = [
-    '아래 [미션 시작] 버튼을 누르세요.',
-    '앱 내 브라우저에서 키워드로 검색하세요.',
+    '아래 [미션 시작] 버튼을 누르면 키워드가 자동 복사됩니다.',
+    '네이버 앱이 열리면 복사된 키워드로 검색하세요.',
     '검색 결과에서 상품을 찾아 클릭하세요.',
-    '[태그 입력] 버튼을 눌러 정답을 입력하면 리워드가 지급됩니다.',
+    '이 앱으로 돌아와 정답을 입력하면 리워드가 지급됩니다.',
   ];
 
   @override
