@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/device_util.dart';
@@ -46,14 +44,12 @@ class MissionDetailScreen extends ConsumerWidget {
     );
   }
 
-  // ── 미션 시작 버튼 액션 (순서 엄수) ─────────────────────────
+  // ── 미션 시작 버튼 액션 ─────────────────────────────────────
   Future<void> _onStartTapped(
     BuildContext context,
     WidgetRef ref,
     CampaignMissionModel campaign,
   ) async {
-    // ── 케이스 A: userId null 체크 (세션 만료 방어) ───────────
-    // ?? '' 대신 명시적 null 체크 — 빈 문자열 UUID로 RPC 호출 방지
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) {
       if (context.mounted) {
@@ -65,7 +61,7 @@ class MissionDetailScreen extends ConsumerWidget {
     final deviceId = await getDeviceId();
     if (!context.mounted) return;
 
-    // ── 1. start_mission RPC 호출 ─────────────────────────────
+    // 1. start_mission RPC 호출
     StartMissionResult result;
     try {
       result = await ref.read(missionStartProvider.notifier).startMission(
@@ -79,77 +75,23 @@ class MissionDetailScreen extends ConsumerWidget {
       }
       return;
     } catch (e) {
-      // 케이스 C: 에러 무음 처리 방지 — 실제 오류 내용을 SnackBar로 표시
       if (context.mounted) {
         _showSnackBar(context, '오류가 발생했습니다: ${e.toString()}');
       }
       return;
     }
 
-    // ── 2. 키워드 클립보드 복사 ───────────────────────────────
-    //    실패해도 딥링크 실행은 계속 진행 (유저가 직접 키워드 입력 가능)
-    try {
-      await Clipboard.setData(ClipboardData(text: result.keyword));
-    } catch (_) {
-      if (context.mounted) {
-        _showSnackBar(context, '키워드를 직접 입력하세요: ${result.keyword}');
-      }
-    }
-
-    // ── 3. 네이버 딥링크 실행 ─────────────────────────────────
-    final encoded  = Uri.encodeComponent(result.keyword);
-    final naverUri = Uri.parse(
-      'naversearchapp://search?where=nexearch&query=$encoded',
-    );
-
-    // 케이스 D: canLaunchUrl 사전 체크 (Android 11+ 패키지 가시성 대비)
-    // AndroidManifest.xml <queries> 에 naversearchapp scheme 선언 필수
-    bool canLaunch = false;
-    try {
-      canLaunch = await canLaunchUrl(naverUri);
-    } catch (_) {
-      canLaunch = false;
-    }
-
-    if (!canLaunch) {
-      if (context.mounted) {
-        _showSnackBar(
-          context,
-          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
-        );
-      }
-      return;
-    }
-
-    bool launched = false;
-    try {
-      launched = await launchUrl(naverUri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      launched = false;
-    }
-
-    if (!launched) {
-      if (context.mounted) {
-        _showSnackBar(
-          context,
-          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
-        );
-      }
-      return;
-    }
-
-    // ── 4. 미션 진행 화면으로 이동 ────────────────────────────
-    //      started_at: 서버 시각 기준 타이머 계산용 (UTC ISO 8601)
-    //      tag_index: 정답 태그 순서 안내용 (null이면 미표시)
+    // 2. 인앱 WebView 검색 화면으로 이동
     if (context.mounted) {
       context.push(
-        '/mission/$campaignId/active',
+        '/mission/$campaignId/search',
         extra: {
-          'log_id':      result.logId,
-          'keyword':     result.keyword,
-          'started_at':  result.startedAt.toIso8601String(),
-          'tag_index':   result.tagIndex,
-          'product_url': campaign.productUrl,
+          'log_id':       result.logId,
+          'keyword':      result.keyword,
+          'tag_index':    result.tagIndex,
+          'product_url':  campaign.productUrl,
+          'product_name': campaign.productName,
+          'brand_name':   campaign.brandName,
         },
       );
     }
@@ -347,10 +289,10 @@ class _InstructionSection extends StatelessWidget {
   const _InstructionSection();
 
   static const _steps = [
-    '아래 [미션 시작] 버튼을 누르면 키워드가 자동 복사됩니다.',
-    '네이버 앱이 열리면 복사된 키워드로 검색하세요.',
+    '아래 [미션 시작] 버튼을 누르세요.',
+    '앱 내 브라우저에서 키워드로 검색하세요.',
     '검색 결과에서 상품을 찾아 클릭하세요.',
-    '이 앱으로 돌아와 정답을 입력하면 리워드가 지급됩니다.',
+    '[태그 입력] 버튼을 눌러 정답을 입력하면 리워드가 지급됩니다.',
   ];
 
   @override

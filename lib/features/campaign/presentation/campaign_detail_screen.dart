@@ -221,6 +221,14 @@ class CampaignDetailScreen extends ConsumerWidget {
             isLink: true,
             onTap: () => _launchUrl(campaign.productUrl),
           ),
+          if (campaign.productName != null) ...[
+            const SizedBox(height: 12),
+            _InfoRow(label: '상품명', value: campaign.productName!),
+          ],
+          if (campaign.brandName != null) ...[
+            const SizedBox(height: 12),
+            _InfoRow(label: '브랜드명', value: campaign.brandName!),
+          ],
         ],
       ),
     );

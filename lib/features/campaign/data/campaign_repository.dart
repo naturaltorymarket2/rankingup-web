@@ -61,6 +61,8 @@ class CampaignRepository {
     required List<int>    sortOrders,  // 각 태그의 실제 네이버 상품 페이지 순서값
     required int          answerIndex, // 정답 태그의 실제 순서값 (sortOrders 배열 내 값 중 하나)
     String?               seedKeyword,
+    String?               productName,
+    String?               brandName,
   }) async {
     final res = await supabase.rpc('register_campaign', params: {
       'p_user_id':            userId,
@@ -75,6 +77,8 @@ class CampaignRepository {
       'p_sort_orders':        sortOrders,
       'p_answer_index':       answerIndex,
       'p_seed_keyword':       seedKeyword,
+      'p_product_name':       productName,
+      'p_brand_name':         brandName,
     }) as Map<String, dynamic>;
 
     if (res['success'] != true) {

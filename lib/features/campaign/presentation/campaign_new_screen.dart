@@ -27,8 +27,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   int _step = 1;
 
   // ── Step 1 ────────────────────────────────────────────────────
-  final _urlCtrl  = TextEditingController();
-  final _seedCtrl = TextEditingController(); // 순위 추적 키워드
+  final _urlCtrl         = TextEditingController();
+  final _productNameCtrl = TextEditingController(); // 상품명
+  final _brandNameCtrl   = TextEditingController(); // 브랜드명
+  final _seedCtrl        = TextEditingController(); // 순위 추적 키워드
   bool _seedTouched        = false;           // 포커스 해제 or [다음] 시도 후 에러 표시
   bool _isFetchingKeywords = false;
   List<KeywordRankResult> _selectedKeywords = [];
@@ -85,9 +87,11 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   /// 그룹 일일목표 × 기간 × 50P (키워드 수 무관, 그룹 1회 과금)
   int get _totalCost => _dailyTarget * _durationDays * 50;
 
-  /// URL + 시드 키워드 입력 + 키워드 1개 이상 선택
+  /// URL + 상품명 + 브랜드명 + 시드 키워드 입력 + 키워드 1개 이상 선택
   bool get _step1Valid =>
       _urlCtrl.text.trim().isNotEmpty &&
+      _productNameCtrl.text.trim().isNotEmpty &&
+      _brandNameCtrl.text.trim().isNotEmpty &&
       _seedCtrl.text.trim().isNotEmpty &&
       _selectedKeywords.isNotEmpty;
 
@@ -104,6 +108,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   @override
   void dispose() {
     _urlCtrl.dispose();
+    _productNameCtrl.dispose();
+    _brandNameCtrl.dispose();
     _seedCtrl.dispose();
     _newTagCtrl.dispose();
     _newOrderCtrl.dispose();
@@ -219,7 +225,34 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 controller: _urlCtrl,
                 onChanged: (_) => setState(() => _selectedKeywords = []),
                 decoration: const InputDecoration(
+                  labelText: '상품 URL',
                   hintText: 'https://smartstore.naver.com/...',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _productNameCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '상품명 *',
+                  hintText: '예) 남성 레깅스 헬스 기능성 스판',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _brandNameCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '브랜드명 *',
+                  hintText: '예) 나이키',
                   border: OutlineInputBorder(),
                   isDense: true,
                   contentPadding:
@@ -694,6 +727,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 value: _urlCtrl.text,
                 maxLines: 2,
               ),
+              if (_productNameCtrl.text.trim().isNotEmpty)
+                _SummaryRow(label: '상품명', value: _productNameCtrl.text.trim()),
+              if (_brandNameCtrl.text.trim().isNotEmpty)
+                _SummaryRow(label: '브랜드명', value: _brandNameCtrl.text.trim()),
               _SummaryRow(label: '일일 유입', value: '$_dailyTarget명'),
               if (_dateRange != null)
                 _SummaryRow(
@@ -1033,6 +1070,23 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       initialDateRange: _dateRange,
       helpText: '광고 기간 선택 (최소 7일)',
       saveText: '확인',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF1976D2),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF212121),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF1976D2),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked == null) return;
 
@@ -1093,6 +1147,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           sortOrders:       _validSortOrders,
           answerIndex:      _tags[_answerIndex]['order'] as int,
           seedKeyword:      _seedCtrl.text.trim().isEmpty ? null : _seedCtrl.text.trim(),
+          productName:      _productNameCtrl.text.trim().isEmpty ? null : _productNameCtrl.text.trim(),
+          brandName:        _brandNameCtrl.text.trim().isEmpty ? null : _brandNameCtrl.text.trim(),
         );
         successCount++;
       } catch (e) {

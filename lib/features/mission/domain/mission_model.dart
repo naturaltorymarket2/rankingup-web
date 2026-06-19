@@ -33,6 +33,15 @@ class CampaignMissionModel {
   /// 기존 캠페인(마이그레이션 전)은 null 가능
   final String? groupId;
 
+  /// 오늘 이미 참여 완료한 캠페인 여부 — 홈 보드에서 시각적 구분 표시용
+  final bool isCompleted;
+
+  /// 상품명 — 미션 진행 화면 안내용 (nullable, 구버전 캠페인은 null)
+  final String? productName;
+
+  /// 브랜드명 — 미션 진행 화면 안내용 (nullable, 구버전 캠페인은 null)
+  final String? brandName;
+
   const CampaignMissionModel({
     required this.campaignId,
     required this.keyword,
@@ -42,6 +51,9 @@ class CampaignMissionModel {
     required this.status,
     this.productUrl,
     this.groupId,
+    this.isCompleted = false,
+    this.productName,
+    this.brandName,
   });
 
   /// 오늘 달성률 0.0 ~ 1.0
@@ -62,15 +74,19 @@ class CampaignMissionModel {
   factory CampaignMissionModel.fromMap(
     Map<String, dynamic> map, {
     required int todaySuccessCount,
+    bool isCompleted = false,
   }) {
     return CampaignMissionModel(
-      campaignId:       map['id']           as String,
-      keyword:          map['keyword']      as String,
-      dailyTarget:      map['daily_target'] as int,
+      campaignId:        map['id']           as String,
+      keyword:           map['keyword']      as String,
+      dailyTarget:       map['daily_target'] as int,
       todaySuccessCount: todaySuccessCount,
-      status:           map['status']       as String,
-      productUrl:       map['product_url']  as String?,
-      groupId:          map['group_id']     as String?,
+      status:            map['status']       as String,
+      productUrl:        map['product_url']  as String?,
+      groupId:           map['group_id']     as String?,
+      isCompleted:       isCompleted,
+      productName:       map['product_name'] as String?,
+      brandName:         map['brand_name']   as String?,
     );
   }
 }

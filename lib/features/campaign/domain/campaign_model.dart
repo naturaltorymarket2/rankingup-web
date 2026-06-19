@@ -19,6 +19,10 @@ class CampaignModel {
   final String?       seedKeyword;      // 순위 추적 대표 키워드
   final List<String>  subKeywords;      // 그룹 내 전체 서브키워드 목록
 
+  // 상품 정보 필드 (migration 0032 이후)
+  final String? productName;
+  final String? brandName;
+
   const CampaignModel({
     required this.id,
     required this.productUrl,
@@ -33,6 +37,8 @@ class CampaignModel {
     this.groupDailyTarget = 0,
     this.seedKeyword,
     this.subKeywords = const [],
+    this.productName,
+    this.brandName,
   });
 
   factory CampaignModel.fromMap(
@@ -50,6 +56,8 @@ class CampaignModel {
         groupDailyTarget: (map['group_daily_target'] as num?)?.toInt() ?? 0,
         seedKeyword:      map['seed_keyword']  as String?,
         subKeywords:      subKeywords,
+        productName:      map['product_name']  as String?,
+        brandName:        map['brand_name']    as String?,
         startDate: map['start_date'] != null
             ? DateTime.parse(map['start_date'] as String)
             : null,

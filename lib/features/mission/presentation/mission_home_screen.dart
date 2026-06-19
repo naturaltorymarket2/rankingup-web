@@ -203,87 +203,131 @@ class _MissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isFull = mission.todayRemaining == 0; // A-010
-    final isAlmostFull = !isFull && mission.todayProgressRatio > 0.8;
-    final progressColor = isFull
+    final theme       = Theme.of(context);
+    final isCompleted = mission.isCompleted;
+    final isFull      = !isCompleted && mission.todayRemaining == 0; // A-010
+    final isAlmostFull = !isFull && !isCompleted && mission.todayProgressRatio > 0.8;
+    final progressColor = (isFull || isCompleted)
         ? Colors.grey.shade400
         : (isAlmostFull ? Colors.red.shade400 : Colors.indigo);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: isFull ? null : () => context.push('/mission/${mission.campaignId}'), // A-010
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── 키워드 + 리워드/마감 뱃지 ──────────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      mission.keyword,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: isFull ? Colors.grey.shade400 : null, // A-010
+    return Opacity(
+      opacity: isCompleted ? 0.5 : 1.0,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        elevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: (isFull || isCompleted)
+              ? null
+              : () => context.push('/mission/${mission.campaignId}'),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── 키워드 + 뱃지 ──────────────────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        mission.keyword,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: (isFull || isCompleted)
+                              ? Colors.grey.shade400
+                              : null,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  isFull ? const _SoldOutBadge() : const _RewardBadge(), // A-010
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // ── 달성 현황 텍스트 ──────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '오늘 ${mission.todaySuccessCount}/${mission.dailyTarget}명 참여',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  Text(
-                    isFull ? '오늘 마감' : '${mission.todayRemaining}명 남음', // A-010
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: isFull
-                          ? Colors.grey.shade500
-                          : (isAlmostFull
-                              ? Colors.red.shade600
-                              : Colors.green.shade700),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 6),
-
-              // ── 달성률 게이지 바 ──────────────────────────────
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: mission.todayProgressRatio,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-                  minHeight: 7,
+                    const SizedBox(width: 8),
+                    if (isCompleted)
+                      const _CompletedBadge()
+                    else if (isFull)
+                      const _SoldOutBadge()
+                    else
+                      const _RewardBadge(),
+                  ],
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 12),
+
+                // ── 달성 현황 텍스트 ──────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '오늘 ${mission.todaySuccessCount}/${mission.dailyTarget}명 참여',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    Text(
+                      isCompleted
+                          ? '오늘 참여완료'
+                          : (isFull
+                              ? '오늘 마감'
+                              : '${mission.todayRemaining}명 남음'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: isCompleted
+                            ? Colors.grey.shade500
+                            : (isFull
+                                ? Colors.grey.shade500
+                                : (isAlmostFull
+                                    ? Colors.red.shade600
+                                    : Colors.green.shade700)),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 6),
+
+                // ── 달성률 게이지 바 ──────────────────────────────
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: mission.todayProgressRatio,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+                    minHeight: 7,
+                  ),
+                ),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// 참여완료 뱃지
+class _CompletedBadge extends StatelessWidget {
+  const _CompletedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Text(
+        '참여완료',
+        style: TextStyle(
+          color: Colors.grey.shade500,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
         ),
       ),
     );
