@@ -315,7 +315,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 17 완료** (랭킹 서버 product_id 매칭 로직 단순화, 2026-06-19)
+현재 진행 Phase: **Phase 18 완료** (미션 진행 방식 WebView → 네이버 앱 딥링크 복원 + 백화면 버그 수정, 2026-06-19)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -1232,6 +1232,40 @@ Phase 4 (1~2주): 어드민 + 배포
     Deployment successful
   - /health, /rank 헬스체크 정상 응답 확인
 
+- ✅ 완료: Phase 18 — 미션 진행 방식 WebView → 네이버 앱 딥링크 복원 + 백화면 버그 수정 (2026-06-19)
+
+  **배경**: Phase 16에서 미션 진행 방식을 네이버 앱 딥링크(`naversearchapp://`)에서 인앱 WebView
+  (`mission_search_screen.dart`)로 전환했으나, 다시 딥링크 방식으로 되돌리기로 결정.
+  과거 딥링크 방식의 "네이버 앱 복귀 후 백화면" 미해결 버그(go_router extra가 메모리에만 있어
+  백그라운드 중 프로세스 종료 시 복원 불가)를 이번에 함께 수정.
+
+  **store_traffic_booster/lib 변경 사항** (commit: 5bd948f)
+  - 제거: `lib/features/mission/presentation/mission_search_screen.dart` (WebView 화면)
+  - 제거: router.dart의 `/mission/:id/search` 라우트
+  - 변경: `mission_detail_screen.dart` — 미션 시작 로직을 딥링크 방식으로 복원
+    (클립보드 복사 → `canLaunchUrl` 체크 → `launchUrl(mode: LaunchMode.externalApplication)`)
+  - 신규: `lib/features/mission/data/mission_session_storage.dart` — SharedPreferences 기반
+    미션 세션 저장/복원/삭제. 단일 키 `pending_mission` 사용(하루 1회 참여 제한 구조상 사용자당
+    진행 중인 미션은 항상 최대 1개)
+    - 저장: 딥링크 `launchUrl()` 성공 직후 (campaign_id, log_id, keyword, tag_index, product_url,
+      product_name, brand_name) — `started_at`은 현재 active 화면이 사용하지 않아 제외
+    - 복원: `mission_active_screen.dart` 진입 시 extra의 log_id가 비어 있으면 campaign_id로 조회,
+      불일치/없음이면 `/home` 리다이렉트 + 안내 스낵바
+    - 삭제: `dispose()`에서 일괄 처리 (성공/명시적 뒤로가기 등 Flutter 내비게이션으로 화면을
+      벗어날 때만 호출되고, OS 강제 종료 시에는 호출되지 않아 복원 케이스를 보존)
+  - 변경: `mission_active_screen.dart` — `WidgetsBindingObserver` 재추가
+    (`AppLifecycleState.resumed` 감지 → `_isResumed` 전환 + 복귀 후 3초 버튼 잠금),
+    데이터 복원(`_resolved`) 완료 전에는 resumed 콜백 무시(null 참조 방지),
+    `_WaitingBody`("네이버에서 검색 중...") 복원, WebView 전용 "네이버 쇼핑 보기" 버튼 제거
+  - ⚠️ 10분 타임아웃(verify_mission)은 의도적으로 복원하지 않음 — migration 0034로 서버에서
+    이미 제거된 상태 유지 (별도 분석 결과, 그대로 둬도 즉시 위험하지 않다고 판단)
+
+  **배포**
+  - commit: 5bd948f(기능), 7b7c909(versionCode 21)
+  - versionCode 21 AAB(`app-release.aab`, 51.5MB) + 테스트 APK(`app-release.apk`, 60.7MB) 빌드 완료
+  - GitHub push 완료: naturaltorymarket2/rankingup-web main, 985bbb8 → 7b7c909
+  - Play Console 프로덕션 트랙 업로드 완료 (2026-06-19, 사용자 직접 진행)
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1319,9 +1353,9 @@ flutter pub run flutter_launcher_icons
 |------|-----|
 | 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 18 (2026-06-11 프로덕션 업로드 완료) |
-| 빌드된 versionCode | 20 (2026-06-17 빌드 완료, Play Console 미업로드) |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.6MB) |
+| 배포된 versionCode | 21 (2026-06-19 프로덕션 업로드 완료 — 딥링크 복원 + 백화면 버그 수정) |
+| 빌드된 versionCode | 21 (2026-06-19 빌드 완료) — ※ versionCode 20(Phase 16 WebView 빌드)은 Play Console 미업로드 상태로 폐기됨 |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.5MB), build/app/outputs/flutter-apk/app-release.apk (60.7MB) |
 
 ### GitHub 저장소
 
@@ -1330,7 +1364,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-06-19 (rank_module: Phase 17 crawler.py 매칭 로직 단순화) — 단, store_traffic_booster(Flutter)는 2026-06-11 기준 유지 |
+| 마지막 push | 2026-06-19 — rank_module: Phase 17 crawler.py 매칭 로직 단순화 (839f544→9e6459f) / store_traffic_booster: Phase 18 딥링크 복원 + versionCode 21 (985bbb8→7b7c909) |
 
 ### GitHub Actions
 
@@ -1412,6 +1446,9 @@ curl -X POST http://localhost:8000/run-scheduler \
 | 13 | `20260317000029_update_start_mission_group.sql` | start_mission RPC: 일일 참여 체크를 `group_id` 기준으로 변경 (`mission_logs.group_id` 기반). `mission_logs.group_id` INSERT 처리 | ✅ 적용 완료 (2026-05-25) |
 | 14 | `20260317000030_update_dashboard_group.sql` | get_dashboard_data RPC: `group_id`, `seed_keyword`, `group_daily_target`, `sub_keywords(text[])`, `representative_campaign_id` 반환 필드 추가. group_id별 DISTINCT ON 처리 | ✅ 적용 완료 (2026-05-25) |
 | 15 | `20260317000031_fix_budget_check_constraint.sql` | campaigns.budget CHECK 완화: `CHECK (budget > 0)` → `CHECK (budget >= 0)`. 두 번째 이후 서브키워드 budget=0 INSERT 허용 | ✅ 적용 완료 (2026-05-25) |
+| 16 | `20260317000032_add_product_brand_name.sql` | campaigns 테이블에 product_name, brand_name TEXT 컬럼 추가 | ✅ 적용 완료 (2026-06-17) |
+| 17 | `20260317000033_update_register_campaign_product_info.sql` | register_campaign RPC에 p_product_name, p_brand_name 파라미터 추가 | ✅ 적용 완료 (2026-06-17) |
+| 18 | `20260317000034_remove_timeout_from_verify_mission.sql` | verify_mission RPC의 10분 타임아웃 체크 제거 (WebView 전환으로 무의미해져 제거 — Phase 18에서 딥링크로 되돌렸지만 타임아웃은 의도적으로 미복원) | ✅ 적용 완료 (2026-06-17) |
 
 **적용 명령 (Supabase SQL Editor):**
 ```sql
