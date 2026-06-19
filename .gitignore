@@ -1,5 +1,12 @@
+# MCP 설정 (토큰 노출 방지)
+.mcp.json
+
+
 # Android 서명 키 (절대 커밋 금지)
 android/key.properties
+
+# Supabase CLI 로컬 캐시 (로컬 CLI 버전 문자열, 환경마다 다름)
+supabase/.temp/
 
 # Miscellaneous
 *.class
