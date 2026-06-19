@@ -40,7 +40,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final session = supabase.auth.currentSession;
     if (session != null) {
-      context.go(kIsWeb ? '/web/dashboard' : '/home');
+      if (kIsWeb) {
+        context.go('/web/dashboard');
+      } else {
+        final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
+        context.go(emailConfirmedAt != null ? '/home' : '/email_verify');
+      }
     } else {
       context.go(kIsWeb ? '/web/login' : '/login');
     }

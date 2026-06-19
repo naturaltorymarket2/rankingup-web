@@ -65,7 +65,10 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
       await _saveDeviceId();
-      if (mounted) context.go('/home');
+      if (mounted) {
+        final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
+        context.go(emailConfirmedAt != null ? '/home' : '/email_verify');
+      }
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
     } catch (_) {
@@ -104,39 +107,33 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // 이메일 인증 필요한 경우 (Supabase 설정에 따라)
-      if (res.session == null) {
-        _showError(
-          '가입 확인 이메일을 발송했습니다.\n'
-          '이메일 인증 완료 후 로그인해주세요.',
-        );
-        setState(() => _tabIndex = 0);
-        return;
-      }
+      final signupEmail = res.user?.email ?? email;
 
-      // 2. handle_new_user 트리거 결과 확인 (public.users row 존재 여부)
-      //    트리거 실패 시 orphaned account 방지: signOut + 오류 안내
-      final userId = res.user!.id;
-      final row = await supabase
-          .from('users')
-          .select('id')
-          .eq('id', userId)
-          .maybeSingle();
+      // session 있을 때만 trigger 결과 확인 및 Device ID 저장
+      if (res.session != null) {
+        // handle_new_user 트리거 결과 확인 (public.users row 존재 여부)
+        //    트리거 실패 시 orphaned account 방지: signOut + 오류 안내
+        final userId = res.user!.id;
+        final row = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', userId)
+            .maybeSingle();
 
-      if (row == null) {
-        await supabase.auth.signOut();
-        if (mounted) {
-          _showError(
-            '계정 초기화 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
-          );
+        if (row == null) {
+          await supabase.auth.signOut();
+          if (mounted) {
+            _showError('계정 초기화 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+          }
+          return;
         }
-        return;
+        await _saveDeviceId();
       }
 
-      // 3. Device ID 기록
-      await _saveDeviceId();
-
-      if (mounted) context.go('/home');
+      // 가입 직후는 항상 이메일 인증 화면으로 이동
+      if (mounted) {
+        context.go('/email_verify', extra: {'email': signupEmail});
+      }
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
     } catch (_) {
