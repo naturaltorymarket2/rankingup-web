@@ -14,10 +14,9 @@ import '../../../shared/utils/account_type.dart';
 //
 // 탭 구성:
 //   0: 로그인  — 이메일 + 비밀번호 → /web/dashboard
-//   1: 회원가입 — 3단계
-//      Step 1:   이메일 + 비밀번호 → supabase.auth.signUp()
-//      Step 1.5: 이메일 인증 대기  → onAuthStateChange / fallback 버튼
-//      Step 2:   사업자 정보      → register_advertiser RPC → /web/dashboard
+//   1: 회원가입 — 2단계
+//      Step 1:   이메일 + 비밀번호 → supabase.auth.signUp() → role=ADVERTISER 설정
+//      Step 1.5: 이메일 인증 대기  → onAuthStateChange / fallback 버튼 → /web/dashboard
 //
 // ⚠ Supabase 설정 필요:
 //   Authentication → Providers → Email → "Confirm email" 활성화
@@ -32,15 +31,10 @@ class WebLoginScreen extends StatefulWidget {
   /// Supabase 인증 에러 콜백(/?error=...&error_description=...)에서 router가 전달.
   final String? authError;
 
-  /// true이면 화면 진입 시 곧장 회원가입 Step2(사업자정보)로 전환한다.
-  /// 이메일 인증 콜백 처리 중 business_info가 없는 것으로 확인된 경우 router가 전달.
-  final bool showStep2;
-
   const WebLoginScreen({
     super.key,
     this.showVerifiedBanner = false,
     this.authError,
-    this.showStep2 = false,
   });
 
   @override
@@ -49,9 +43,9 @@ class WebLoginScreen extends StatefulWidget {
 
 class _WebLoginScreenState extends State<WebLoginScreen> {
   // ── 탭 / 단계 상태 ─────────────────────────────────────────────
-  int    _tabIndex   = 0;    // 0: 로그인, 1: 회원가입
-  double _signupStep = 1.0;  // 1.0: 계정정보, 1.5: 이메일인증대기, 2.0: 사업자정보
-  bool   _isLoading  = false;
+  int  _tabIndex         = 0;     // 0: 로그인, 1: 회원가입
+  bool _isEmailVerifyStep = false; // false: 계정정보 입력, true: 이메일 인증 대기
+  bool _isLoading        = false;
 
   // ── 이메일 인증 단계 상태 ───────────────────────────────────────
   bool _isSendingEmail    = false;
@@ -66,8 +60,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   // ── 회원가입 폼 ──────────────────────────────────────────────────
   final _signupEmailCtrl    = TextEditingController();
   final _signupPwCtrl       = TextEditingController();
-  final _signupPhoneCtrl    = TextEditingController();
-  final _signupCompanyCtrl  = TextEditingController();
   final _signupBizNumCtrl   = TextEditingController();
   final _signupTaxEmailCtrl = TextEditingController();
   bool  _signupObscure      = true;
@@ -75,15 +67,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.showStep2) {
-      // 이메일 인증은 완료됐지만 사업자 정보를 아직 등록하지 않은 계정 —
-      // 로그인 탭 대신 회원가입 Step2로 곧장 진입시킨다.
-      _tabIndex   = 1;
-      _signupStep = 2.0;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showInfo('이메일 인증이 완료되었습니다. 사업자 정보를 입력해주세요.');
-      });
-    } else if (widget.authError != null) {
+    if (widget.authError != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showError('인증 오류: ${Uri.decodeComponent(widget.authError!)}');
       });
@@ -93,11 +77,11 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       });
     }
     _authSub = supabase.auth.onAuthStateChange.listen((data) {
-      if (!mounted || _signupStep != 1.5) return;
+      if (!mounted || !_isEmailVerifyStep) return;
       if (data.event != AuthChangeEvent.userUpdated) return;
       final confirmedAt = data.session?.user.emailConfirmedAt;
-      if (confirmedAt != null) {
-        setState(() => _signupStep = 2.0);
+      if (confirmedAt != null && mounted) {
+        context.go('/web/dashboard');
       }
     });
   }
@@ -109,18 +93,14 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
     _loginPasswordCtrl.dispose();
     _signupEmailCtrl.dispose();
     _signupPwCtrl.dispose();
-    _signupPhoneCtrl.dispose();
-    _signupCompanyCtrl.dispose();
-    _signupBizNumCtrl.dispose();
-    _signupTaxEmailCtrl.dispose();
     super.dispose();
   }
 
   // ── 탭 전환 (step 리셋 포함) ──────────────────────────────────
   void _switchTab(int index) {
     setState(() {
-      _tabIndex   = index;
-      _signupStep = 1.0;
+      _tabIndex          = index;
+      _isEmailVerifyStep = false;
     });
   }
 
@@ -202,73 +182,18 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         return;
       }
 
-      // 가입 후 → 항상 이메일 인증 대기 단계(1.5)로 이동
-      setState(() => _signupStep = 1.5);
+      // 웹 가입 = 광고주 계정 — role을 ADVERTISER로 즉시 설정
+      await supabase
+          .from('users')
+          .update({'role': 'ADVERTISER'})
+          .eq('id', supabase.auth.currentUser!.id);
+
+      // 가입 후 → 이메일 인증 대기 단계로 이동
+      setState(() => _isEmailVerifyStep = true);
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
     } catch (_) {
       _showError('오류가 발생했습니다. 다시 시도해주세요');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ── 회원가입 Step 2: 사업자 정보 등록 ───────────────────────────
-  Future<void> _onSignUpStep2() async {
-    final phone    = _signupPhoneCtrl.text.trim();
-    final company  = _signupCompanyCtrl.text.trim();
-    final bizNum   = _signupBizNumCtrl.text.trim();
-    final taxEmail = _signupTaxEmailCtrl.text.trim();
-
-    if (phone.isEmpty || company.isEmpty || bizNum.isEmpty) {
-      _showError('필수 항목을 모두 입력해주세요 (*)');
-      return;
-    }
-    if (phone.length < 10 || phone.length > 11) {
-      _showError('전화번호는 10~11자리 숫자로 입력해주세요');
-      return;
-    }
-    // B-006: 사업자등록번호 10자리 검증
-    if (bizNum.length != 10) {
-      _showError('사업자등록번호는 10자리 숫자로 입력해주세요');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final rpcRes = await supabase.rpc(
-        'register_advertiser',
-        params: {
-          'p_company_name':    company,
-          'p_business_number': bizNum,
-          'p_phone':           phone,
-          'p_tax_email':       taxEmail.isEmpty ? null : taxEmail,
-        },
-      ) as Map<String, dynamic>;
-
-      if (rpcRes['success'] != true) {
-        final code = rpcRes['error'] as String? ?? 'UNKNOWN_ERROR';
-        await supabase.auth.signOut();
-        if (mounted) {
-          _showError(_mapRpcError(code));
-          setState(() => _signupStep = 1.0);
-        }
-        return;
-      }
-
-      if (mounted) context.go('/web/dashboard');
-    } on AuthException catch (e) {
-      await supabase.auth.signOut();
-      if (mounted) {
-        _showError(_mapAuthError(e.message));
-        setState(() => _signupStep = 1.0);
-      }
-    } catch (_) {
-      await supabase.auth.signOut();
-      if (mounted) {
-        _showError('회원가입 중 오류가 발생했습니다. 다시 시도해주세요');
-        setState(() => _signupStep = 1.0);
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -296,7 +221,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       final confirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
       if (!mounted) return;
       if (confirmedAt != null) {
-        setState(() => _signupStep = 2.0);
+        context.go('/web/dashboard');
       } else {
         _showError('아직 인증이 완료되지 않았습니다');
       }
@@ -328,15 +253,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       return '비밀번호는 6자 이상이어야 합니다';
     }
     return '오류가 발생했습니다: $msg';
-  }
-
-  String _mapRpcError(String code) {
-    return switch (code) {
-      'ALREADY_REGISTERED' => '이미 등록된 사업자 정보입니다',
-      'NOT_AUTHENTICATED'  => '인증 오류가 발생했습니다. 다시 시도해주세요',
-      'INVALID_PARAMS'     => '입력값을 확인해주세요',
-      _                    => '오류가 발생했습니다. 다시 시도해주세요',
-    };
   }
 
   void _showError(String msg) {
@@ -414,9 +330,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   /// 현재 탭/단계에 맞는 폼 위젯 반환
   Widget _currentForm() {
     if (_tabIndex == 0) return _buildLoginForm();
-    if (_signupStep == 1.0) return _buildSignUpStep1();
-    if (_signupStep == 1.5) return _buildEmailVerifyStep();
-    return _buildSignUpStep2();
+    if (!_isEmailVerifyStep) return _buildSignUpStep1();
+    return _buildEmailVerifyStep();
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -579,8 +494,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildStepIndicator(),
-        const SizedBox(height: 24),
         const Icon(
           Icons.mark_email_unread_outlined,
           color: Colors.indigo,
@@ -667,8 +580,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildStepIndicator(),
-        const SizedBox(height: 24),
         _fieldLabel('이메일 *'),
         _inputField(
           controller: _signupEmailCtrl,
@@ -696,123 +607,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   // ─────────────────────────────────────────────────────────────────
   // 회원가입 Step 2: 사업자 정보
   // ─────────────────────────────────────────────────────────────────
-
-  Widget _buildSignUpStep2() {
-    return Column(
-      key: const ValueKey('signup-step2'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildStepIndicator(),
-        const SizedBox(height: 24),
-        _fieldLabel('전화번호 *'),
-        _inputField(
-          controller: _signupPhoneCtrl,
-          hint: '숫자만 입력 (10~11자리)',
-          keyboardType: TextInputType.phone,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(11),
-          ],
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _fieldLabel('상호명 *'),
-        _inputField(
-          controller: _signupCompanyCtrl,
-          hint: '사업자 상호명 입력',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _fieldLabel('사업자등록번호 * (10자리)'),
-        _inputField(
-          controller: _signupBizNumCtrl,
-          hint: '숫자만 입력 (10자리)',
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(10),
-          ],
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _fieldLabel('세금계산서 이메일 (선택)'),
-        _inputField(
-          controller: _signupTaxEmailCtrl,
-          hint: 'tax@company.com',
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 28),
-        _submitBtn(
-          label: '가입 완료',
-          onPressed: _isLoading || !_step2Valid ? null : _onSignUpStep2,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '* 표시는 필수 입력 항목입니다',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────
-  // Step 인디케이터 (1 ── 2)
-  // ─────────────────────────────────────────────────────────────────
-
-  Widget _buildStepIndicator() {
-    return Row(
-      children: [
-        _stepDot(1, '계정 정보'),
-        Expanded(
-          child: Container(
-            height: 2,
-            color: _signupStep >= 2 ? Colors.indigo : Colors.grey.shade300,
-          ),
-        ),
-        _stepDot(2, '사업자 정보'),
-      ],
-    );
-  }
-
-  Widget _stepDot(int step, String label) {
-    final isActive = _signupStep == step;
-    final isDone   = _signupStep > step;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: isDone || isActive ? Colors.indigo : Colors.grey.shade300,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: isDone
-                ? const Icon(Icons.check, color: Colors.white, size: 14)
-                : Text(
-                    '$step',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: isActive || isDone ? Colors.indigo : Colors.grey.shade400,
-          ),
-        ),
-      ],
-    );
-  }
 
   // ─────────────────────────────────────────────────────────────────
   // 하단 안내
@@ -842,15 +636,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         ),
       ),
     );
-  }
-
-  bool get _step2Valid {
-    final phone   = _signupPhoneCtrl.text.trim();
-    final company = _signupCompanyCtrl.text.trim();
-    final bizNum  = _signupBizNumCtrl.text.trim();
-    return RegExp(r'^\d{10,11}$').hasMatch(phone) &&
-        company.isNotEmpty &&
-        bizNum.length == 10;
   }
 
   Widget _inputField({

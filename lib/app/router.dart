@@ -56,10 +56,7 @@ final appRouter = GoRouter(
     // 아직 Step2(사업자정보)를 거치지 않은 정상 가입 중 계정은 role이 USER이므로
     // Step2로 보내는 것이 맞다 — 차단 대상이 아니라 가입 완료 경로임.
     if (params.containsKey('code')) {
-      final userId = supabase.auth.currentUser?.id;
-      if (userId == null) return '/web/login?verified=true';
-      final isAdvertiser = await isRegisteredAdvertiser(userId);
-      return isAdvertiser ? '/web/dashboard' : '/web/login?step2=true';
+      return '/web/dashboard';
     }
 
     // 루트 경로 직접 접근: GoException 방지용 → 광고주 로그인으로 이동
@@ -168,11 +165,9 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final verified  = state.uri.queryParameters['verified'] == 'true';
         final authError = state.uri.queryParameters['auth_error'];
-        final showStep2 = state.uri.queryParameters['step2'] == 'true';
         return WebLoginScreen(
           showVerifiedBanner: verified,
           authError: authError,
-          showStep2: showStep2,
         );
       },
     ),
