@@ -59,7 +59,7 @@ lib/
 │   │   └── presentation/
 │   │       ├── splash_screen.dart        # 자동로그인 체크, 웹/앱 분기
 │   │       ├── login_screen.dart         # 앱 로그인/회원가입
-│   │       └── web_login_screen.dart     # 광고주 로그인/회원가입 (2-step)
+│   │       └── web_login_screen.dart     # 광고주 로그인/회원가입 (Step1: 가입 → role=ADVERTISER 즉시 설정 → 이메일 인증 대기)
 │   ├── mission/
 │   │   ├── data/mission_repository.dart
 │   │   ├── domain/mission_model.dart
@@ -315,7 +315,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 18 완료** (미션 진행 방식 WebView → 네이버 앱 딥링크 복원 + 백화면 버그 수정, 2026-06-19)
+현재 진행 Phase: **Phase 20 완료** (광고주 회원가입 Step2 제거 + role 즉시 설정, 2026-07-02)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -1266,6 +1266,87 @@ Phase 4 (1~2주): 어드민 + 배포
   - GitHub push 완료: naturaltorymarket2/rankingup-web main, 985bbb8 → 7b7c909
   - Play Console 프로덕션 트랙 업로드 완료 (2026-06-19, 사용자 직접 진행)
 
+- ✅ 완료: Phase 19 — 딥링크 안정성 개선 + 미션 진행 화면 상품 URL 변경 (2026-06-26)
+
+  **배경**: Phase 18에서 딥링크 방식으로 복원 후 실기기(Galaxy Tab S6 Lite, SM-P610, Android 10)
+  테스트 중 간헐적 딥링크 미작동 및 `DEVICE_ALREADY_REGISTERED` 운영 이슈 발견.
+  `canLaunchUrl` 사전 체크 제거, URL 파라미터 정리, 콜드 스타트 딜레이 추가,
+  미션 진행 화면 상품 URL을 네이버 쇼핑 검색 URL로 변경.
+
+  **[앱] mission_detail_screen.dart — 딥링크 안정성 개선**
+  - 제거: `canLaunchUrl()` 사전 체크 — Android OEM 기기에서 custom scheme에 대해 신뢰 불가 확인
+  - 변경: 2단계(canLaunchUrl → launchUrl) → 단일 `launchUrl` + `try-catch` 방식으로 단순화
+  - 변경: 딥링크 URL `naversearchapp://search?where=nexearch&query=` → `naversearchapp://search?query=`
+    (`where=nexearch` 파라미터 제거 — 일부 기기에서 파라미터 무시로 검색 미동작 문제 대응)
+  - 추가: `await Future.delayed(const Duration(milliseconds: 1500))` — `context.push()` 직전
+    (콜드 스타트 시 Flutter UI 업데이트가 네이버 앱 전환을 방해하는 레이스 컨디션 방지 목적)
+
+  **[앱] mission_active_screen.dart — 상품 URL → 네이버 쇼핑 검색 URL 변경**
+  - `_ActiveBody.build()` — `_TagInputSection`에 전달하는 `productUrl` 변경:
+    keyword가 있으면 `https://search.shopping.naver.com/search/all?query=${Uri.encodeQueryComponent(keyword)}` 사용,
+    keyword가 없으면 기존 `productUrl` fallback
+  - 효과: 딥링크가 열리지 않는 경우에도 사용자가 URL 복사 → 브라우저에서 직접 네이버 쇼핑 검색 가능
+
+  **[DB] device_id 중복 충돌 수동 해소 (운영 이슈)**
+  - 현상: test-user@test.com 계정으로 미션 시작 시 `DEVICE_ALREADY_REGISTERED` 오류
+  - 원인: chs1989b@gmail.com 계정에 동일 device_id(`"QP1A.190711.020"`)가 등록되어 있어
+    `start_mission` RPC step 2 UNIQUE 체크에서 차단
+  - 해소: `UPDATE public.users SET device_id = NULL WHERE email = 'chs1989b@gmail.com';`
+
+  **versionCode 22** → AAB 빌드 완료 (51.5MB) — Play Console 업로드 대기 중
+  ⚠️ GitHub push 미완료 (mission_detail_screen.dart, mission_active_screen.dart, build.gradle.kts 미커밋 상태)
+
+  ⚠️ 미해결 — 다음 버전에서 대응 필요:
+  - 네이버 앱 콜드 스타트: `launchUrl()`이 `true`를 반환해도 네이버 앱이 열리지 않는 경우 있음
+    (Galaxy Tab S6 Lite, Android 10 — 배터리 최적화 해제 후에도 재현, 근본 원인 미파악)
+  - 딥링크 URL: 네이버 앱이 열려도 검색 결과가 아닌 메인 페이지로 이동
+    (`naversearchapp://` 스킴이 `onNewIntent`가 아닌 새 Intent로 처리되는 네이버 앱 내부 제한으로 추정)
+
+- ✅ 완료: Phase 20 — 광고주 회원가입 Step2 제거 + role 즉시 설정 (2026-07-02)
+
+  **배경**: 이메일 인증 완료 후 사업자 정보를 입력하는 Step2 화면을 완전히 제거.
+  Railway 빌드 실패(Phase 14 파일 미커밋) 수정 포함.
+
+  **Railway 빌드 실패 수정 (commit 7ba107f)**
+  - 원인: commit `a0b7d7d`(Phase 14)이 `account_type.dart` import + `showStep2` 파라미터를
+    사용하는 코드를 커밋했으나, 해당 파일들은 로컬에만 있어 git에 미포함된 상태.
+    이전 Railway 빌드는 Docker 레이어 캐시로 성공했으나, 새 커밋이 캐시를 무효화하면서 3개 컴파일 에러 노출.
+  - 수정: `account_type.dart`(신규), `web_login_screen.dart`, `login_screen.dart`, `splash_screen.dart` 커밋
+  - 빈 커밋(commit 91da047)으로 Railway 재배포 강제 트리거
+
+  **Step2 제거 (commit dbfca47) — web_login_screen.dart**
+  - 제거: `showStep2` 생성자 파라미터, `double _signupStep` 상태 변수
+  - 제거: Step2 컨트롤러 4개 (`_signupPhoneCtrl`, `_signupCompanyCtrl`, `_signupBizNumCtrl`, `_signupTaxEmailCtrl`)
+  - 제거: `_onSignUpStep2()`, `_buildSignUpStep2()`, `_buildStepIndicator()`, `_stepDot()`
+  - 제거: `_step2Valid` getter, `_mapRpcError()` 메서드
+  - 추가: `bool _isEmailVerifyStep = false` (기존 `_signupStep double` 대체)
+  - 추가: `_onSignUpStep1()` 내 signUp() 성공 직후 `users.role = 'ADVERTISER'` 즉시 UPDATE
+    ```dart
+    await supabase.from('users').update({'role': 'ADVERTISER'}).eq('id', supabase.auth.currentUser!.id);
+    ```
+  - 변경: `_checkWebConfirmed()` — `setState(() => _signupStep = 2.0)` → `context.go('/web/dashboard')`
+  - 변경: `onAuthStateChange` 리스너 — `emailConfirmedAt` 확인 후 `/web/dashboard` 직행
+  - 변경: `_currentForm()` — `_signupStep` 분기 → `_isEmailVerifyStep` bool 분기
+
+  **Step2 제거 (commit dbfca47) — router.dart**
+  - 변경: `/?code=xxxx` 이메일 인증 콜백 — `isRegisteredAdvertiser()` 체크 제거, `return '/web/dashboard'` 단일 라인
+  - 제거: `/web/login` 빌더의 `showStep2` 쿼리 파라미터 읽기 및 `WebLoginScreen` 전달
+
+  **새 웹 가입 플로우**
+  ```
+  Step1 이메일+비밀번호 입력
+    → signUp() 성공
+    → users.role = 'ADVERTISER' 즉시 UPDATE (DB 직접 호출)
+    → _isEmailVerifyStep = true (이메일 인증 대기 화면)
+    → 이메일 링크 클릭 (또는 "인증 완료했어요" 버튼)
+    → /web/dashboard 직행 (Step2 없음)
+  ```
+
+  **배포**
+  - commit 7ba107f (Railway 빌드 수정), 91da047 (빈 커밋), dbfca47 (Step2 제거)
+  - GitHub push 완료: naturaltorymarket2/rankingup-web main → dbfca47
+  - Railway 자동 재배포 트리거됨
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1337,7 +1418,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-06-17 기준)
+## 13. 배포 현황 (2026-07-02 기준)
 
 ### 서비스 URL
 
@@ -1354,8 +1435,8 @@ flutter pub run flutter_launcher_icons
 | 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
 | 배포된 versionCode | 21 (2026-06-19 프로덕션 업로드 완료 — 딥링크 복원 + 백화면 버그 수정) |
-| 빌드된 versionCode | 21 (2026-06-19 빌드 완료) — ※ versionCode 20(Phase 16 WebView 빌드)은 Play Console 미업로드 상태로 폐기됨 |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.5MB), build/app/outputs/flutter-apk/app-release.apk (60.7MB) |
+| 빌드된 versionCode | 22 (2026-06-26 빌드 완료 — 딥링크 안정성 개선 + 미션 진행 화면 상품 URL 변경, Play Console 업로드 대기) / 로컬 build.gradle.kts는 23 (미커밋) |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.5MB) |
 
 ### GitHub 저장소
 
@@ -1364,7 +1445,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-06-19 — rank_module: Phase 17 crawler.py 매칭 로직 단순화 (839f544→9e6459f) / store_traffic_booster: Phase 18 딥링크 복원 + versionCode 21 (985bbb8→7b7c909) |
+| 마지막 push | 2026-07-02 — store_traffic_booster: Phase 20 Step2 제거 (7ba107f → 91da047 → dbfca47) / rank_module: Phase 17 (839f544→9e6459f, 2026-06-19) |
 
 ### GitHub Actions
 
@@ -1449,6 +1530,9 @@ curl -X POST http://localhost:8000/run-scheduler \
 | 16 | `20260317000032_add_product_brand_name.sql` | campaigns 테이블에 product_name, brand_name TEXT 컬럼 추가 | ✅ 적용 완료 (2026-06-17) |
 | 17 | `20260317000033_update_register_campaign_product_info.sql` | register_campaign RPC에 p_product_name, p_brand_name 파라미터 추가 | ✅ 적용 완료 (2026-06-17) |
 | 18 | `20260317000034_remove_timeout_from_verify_mission.sql` | verify_mission RPC의 10분 타임아웃 체크 제거 (WebView 전환으로 무의미해져 제거 — Phase 18에서 딥링크로 되돌렸지만 타임아웃은 의도적으로 미복원) | ✅ 적용 완료 (2026-06-17) |
+| 19 | `20260317000035_add_advertiser_role.sql` | `users.role` CHECK 제약에 `ADVERTISER` 추가 (`USER`/`ADMIN`/`ADVERTISER`) | ✅ 적용 완료 (2026-06-20) |
+| 20 | `20260317000036_update_register_advertiser_role.sql` | `register_advertiser` RPC에 `business_info` INSERT 직후 `UPDATE users SET role='ADVERTISER'` 추가 (같은 트랜잭션, 원자성 보장) | ✅ 적용 완료 (2026-06-20) |
+| 21 | `20260317000037_add_check_email_exists.sql` | `check_email_exists(p_email)` SECURITY DEFINER RPC 신규 — 이메일 존재 여부(인증 무관) 확인용, 앱/웹 가입 분리 차단에 사용 | ✅ 적용 완료 (2026-06-20) |
 
 **적용 명령 (Supabase SQL Editor):**
 ```sql
@@ -1478,7 +1562,89 @@ ORDER BY ordinal_position;
 
 ---
 
-## 14. 추후 개선 사항
+## 14. 앱/광고주 계정 분리 작업 현황 (2026-06-20 설계, 2026-07-02 커밋 완료)
+
+### 배경
+
+기존에는 앱 유저와 광고주를 구분하는 계정 타입이 시스템에 없었음.
+`business_info` 테이블 존재 여부로만 "추정"했고, 로그인 시점 검증도
+없어서 앱 가입 계정이 광고주 웹 대시보드에 검증 없이 진입 가능했음
+(역방향도 동일). 이번 작업으로 `users.role`을 단일 진실 공급원으로
+삼아 가입 단계부터 구조적으로 분리함.
+
+### 확정 설계
+
+- 계정 타입은 `users.role`에 명시 (`USER` / `ADMIN` / `ADVERTISER`)
+- 광고주는 웹에서만 가입 가능, 유저는 앱에서만 가입 가능
+- 같은 이메일로 반대쪽 가입 시도는 이메일 인증 여부와 무관하게 차단
+  (`check_email_exists` RPC로 가입 직전 사전 체크)
+- 웹 signUp() 성공 직후 `users.role = 'ADVERTISER'`를 DB에 즉시 UPDATE
+  (Phase 20에서 Step2 제거 후 변경: 기존엔 `register_advertiser` RPC에서 설정)
+- 로그인 가드뿐 아니라 세션 유지 상태(`splash_screen.dart`, `router.dart`
+  `/web/*` 가드)에서도 동일하게 `role` 기준 체크 적용 — 이전엔 세션이
+  살아있으면 가드를 우회할 수 있었던 갭을 같이 닫음
+
+### 완료된 작업
+
+| 파일 | 내용 |
+|------|------|
+| `lib/shared/utils/account_type.dart` | `isRegisteredAdvertiser()` 내부를 `business_info` 존재 확인 → `role == 'ADVERTISER'` 확인으로 교체, `checkEmailExists()` 추가. **commit 7ba107f** |
+| `lib/features/auth/presentation/login_screen.dart` | 가입 전 `check_email_exists` 호출, 광고주 role 로그인 시 차단. **commit 7ba107f** |
+| `lib/features/auth/presentation/web_login_screen.dart` | Phase 14: 가입 전 `check_email_exists` 호출, 로그인 탭 `role != ADVERTISER` 차단. Phase 20: Step2 전체 제거, signUp() 직후 role=ADVERTISER 즉시 UPDATE. **commit 7ba107f + dbfca47** |
+| `lib/app/router.dart` | Phase 14: `/web/*` 가드에 `role == ADVERTISER` 체크 추가. Phase 20: `/?code=xxxx` 콜백 → `isRegisteredAdvertiser()` 제거 후 `/web/dashboard` 직행. **commit 7ba107f + dbfca47** |
+| `lib/features/auth/presentation/splash_screen.dart` | 세션 복원 후 `kIsWeb` + `role` 조합 4가지 케이스 분기, 불일치 시 signOut 후 해당 플랫폼 로그인 화면으로. **commit 7ba107f** |
+| `supabase/migrations/20260317000035~37` | 위 Migration 테이블 19~21번 참조 — 전부 적용 완료. git 커밋은 미완료(untracked 상태) |
+
+### 기존 데이터 정리
+
+`business_info`는 있지만(사업자 등록 완료) `role`이 아직 `USER`로 남아있던
+테스트 계정 1건(`test-ad@test.com`) 발견 → 수동으로 `role='ADVERTISER'`로
+UPDATE 완료. 확인 쿼리 결과 0건으로 정리됨:
+
+```sql
+SELECT u.id, u.email, u.role, bi.company_name
+FROM public.business_info bi
+JOIN public.users u ON u.id = bi.user_id
+WHERE u.role != 'ADVERTISER';
+-- 결과: 0건 (2026-06-20 확인)
+```
+
+### ⚠️ 동작 검증 테스트 — 아직 미완료
+
+코드/DB 변경 + git 커밋(7ba107f, dbfca47) 완료. Railway 배포 완료.
+실제 동작 검증이 아직 안 된 상태. BACKLOG.md "계정 분리 동작 검증" 섹션 참조.
+
+1. **정상 플로우**
+   - 앱에서 새 이메일 가입 → `role=USER` 생성되는지 SQL 확인
+   - 웹에서 새 이메일 가입 → Step1 → 이메일 인증 클릭 → `/web/dashboard` 직행 확인
+     및 DB에서 `role=ADVERTISER`로 설정됐는지 SQL 확인 (Step2 없음)
+
+2. **차단 케이스 (가장 중요, 미검증)**
+   - 앱에서 가입한 이메일로 웹 가입(Step1) 시도 → 즉시 차단되는지
+   - 앱에서 가입만 하고 이메일 인증을 하지 않은 상태로 그 이메일을
+     웹에서 가입 시도 → `check_email_exists`가 막아주는지 (GoTrue가
+     미인증 재가입 시도 시 에러 없이 조용히 처리할 가능성이 있다고
+     추정만 했고 실측 안 됨 — 반드시 직접 재현 필요)
+
+3. **세션 우회 케이스**
+   - 광고주 role 계정으로 앱 로그인 시도 → 차단되는지
+   - 광고주로 로그인된 세션 상태에서 앱 재시작 → splash 단계에서
+     차단되는지
+
+### MCP 관련 참고
+
+`.mcp.json`의 Supabase 연결 설정이 잘못되어 있어 이번 세션 내내 Supabase
+MCP 직접 접근 불가 (모든 DB 작업을 SQL Editor 수동 실행으로 대체함).
+원인: `transport` 필드명 오류(`type`이어야 함), `mcpServers` 바깥에
+잘못된 위치의 블록 존재, 근본적으로 REST URL + service_role_key 방식
+자체가 공식 Supabase MCP 서버 구조와 불일치. 공식 방식은 stdio
+(`npx @supabase/mcp-server-supabase`) + Personal Access Token. 보안상
+service_role_key를 MCP 헤더에 그대로 노출하는 현재 방식도 권장되지
+않음. 수정은 보류 중 — 추후 별도로 진행 예정.
+
+---
+
+## 15. 추후 개선 사항
 
 개선사항, 버그, 신규 기능 요청은 모두 **`BACKLOG.md`** 파일에서 관리한다.
 

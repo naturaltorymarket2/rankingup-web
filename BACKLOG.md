@@ -5,6 +5,26 @@
 
 ---
 
+## 🔴 긴급 — 앱/광고주 계정 분리 동작 검증 (테스트 필요) (2026-06-20)
+
+> 코드/DB(migration 0035~37) 변경 완료. git 커밋 완료 (7ba107f, 2026-07-02).
+> 실제 동작 검증이 아직 안 된 상태. 상세 배경은 CLAUDE.md 섹션 14 참조.
+> ⚠️ Phase 20(2026-07-02)에서 Step2(사업자정보 입력) 완전 제거됨.
+>    웹 가입 시 signUp() 직후 `role=ADVERTISER` 즉시 설정 → 이메일 인증 완료 시 `/web/dashboard` 직행.
+
+- [ ] [앱] 새 이메일 가입 → `role=USER` 생성되는지 SQL로 확인
+- [N/A] [광고주 웹] Step2(사업자정보) 화면 — Phase 20에서 Step2 완전 제거됨
+- [ ] [광고주 웹] 새 이메일 가입 → Step1 → 이메일 인증 클릭 → `/web/dashboard` 직행 확인
+      및 DB에서 `role=ADVERTISER`로 설정됐는지 SQL로 확인
+- [ ] [최우선] 앱에서 가입한 이메일로 웹 가입(Step1) 시도 → `check_email_exists`로
+      즉시 차단되는지
+- [ ] [최우선] 앱에서 가입만 하고 이메일 인증을 하지 않은 상태로 그 이메일을 웹에서
+      가입 시도 → 차단되는지. GoTrue가 미인증 재가입 시도 시 에러 없이 조용히
+      처리할 가능성이 있다고 추정만 했고 실측 안 됨 — 반드시 직접 재현 필요
+- [ ] [앱] 광고주 role 계정으로 앱 로그인 시도 → 차단되는지
+- [ ] [앱] 광고주로 로그인된 세션 상태에서 앱 재시작 → splash 단계에서 차단되는지
+- [ ] [광고주 웹] 유저 role 세션 상태에서 `/web/*` URL 직접 진입 시도 → 차단되는지
+
 ## 🔴 긴급 — 버그 (최우선)
 
 - [x] [광고주 웹] 순위 대시보드 동일 날짜 중복 노출 (2026-05-13)
@@ -101,11 +121,29 @@
       원인 C: `catch (_)` 에러 무음 처리 — 실제 오류 내용이 사용자에게 미표시
       원인 D: `canLaunchUrl()` 사전 체크 없이 `launchUrl()` 직접 호출 — false 반환 시 /active 미이동
       수정: mission_detail_screen.dart (케이스 A/C/D), AndroidManifest.xml (<package com.naver.search> 추가)
-- [ ] 네이버 앱이 열린 후 앱 복귀 시 MissionActiveScreen 백화면 현상
+- [x] 네이버 앱이 열린 후 앱 복귀 시 MissionActiveScreen 백화면 현상 (Phase 18, 2026-06-19)
+      원인: go_router extra가 메모리에만 존재 → 네이버 앱 이동 중 OS가 Flutter 프로세스 종료 시 복원 불가
+      수정: MissionSessionStorage (SharedPreferences) 도입 — launchUrl 성공 직후 세션 저장,
+            mission_active_screen 진입 시 extra 없으면 campaign_id로 복원, 불일치 시 /home 리다이렉트
 - [x] Railway rankingup-web 배포 중단 (2026-05-18)
       원인: Dockerfile 21번째 줄 nginx.conf 경로 오류 (/app/build/web/nginx.conf → /app/web/nginx.conf)
             Flutter build output에 nginx.conf가 포함되지 않으므로 복사 실패 → nginx 시작 불가
       수정: Dockerfile 경로를 소스 파일 위치(/app/web/nginx.conf)로 수정 후 GitHub push → Railway 자동 재배포 성공
+
+## 🟠 버그 수정 권장 — 네이버 딥링크 미완성 이슈 (다음 버전)
+
+- [ ] [앱] 네이버 앱 콜드 스타트 미작동 — launchUrl()이 true를 반환해도 네이버 앱이 열리지 않음
+      재현 환경: Galaxy Tab S6 Lite (SM-P610), Android 10, 배터리 최적화 해제 후에도 재현
+      증상: launchUrl 직후 아무 반응 없음. 1.5초 딜레이 추가 후에도 동일. 네이버 백그라운드 상태에서는 작동함.
+      시도한 대응: canLaunchUrl 제거(Phase 19), 1.5초 delay 추가(Phase 19) — 근본 해결 안 됨
+      추정 원인: Android 10 패키지 가시성 + 배터리 최적화 + 삼성 OEM 인텐트 처리 조합 문제
+      다음 시도 방안: Intent.ACTION_VIEW를 platform channel로 직접 호출, 또는 네이버 스토어 링크(https://) 폴백
+
+- [ ] [앱] 네이버 딥링크 URL — 앱 열려도 메인 페이지로 이동 (검색 결과 아님)
+      재현 환경: 네이버 앱 백그라운드 상태에서 launchUrl 작동 시
+      증상: naversearchapp://search?query=키워드 실행 시 네이버 메인 화면으로 이동. 검색 결과 미표시.
+      추정 원인: 네이버 앱이 이 스킴을 onNewIntent가 아닌 새 Activity로 처리하거나 파라미터를 무시
+      완화책: 미션 진행 화면에 https://search.shopping.naver.com/search/all?query=키워드 URL 표시 + 복사 (Phase 19 적용)
 
 ## 🟠 버그 수정 권장
 
@@ -212,9 +250,14 @@
 
 - [x] [어드민 웹] 공지사항 등록 섹션 추가 (2026-05-14) → 위 공지사항 항목 참조
 - [x] [광고주 웹] 공지사항 확인 섹션 추가 (2026-05-14) → 위 공지사항 항목 참조
-- [ ] [광고주 웹] 회원가입 Step 2 미완료 시 대시보드 접근 차단
-      세션 있음 + business_info 없음 → /web/login Step 2 상태로 강제 리다이렉트
-      router.dart 가드 또는 web_login_screen.dart 초기화 시 business_info 존재 여부 체크
+- [x] [광고주 웹] 회원가입 Step 2 미완료 시 대시보드 접근 차단 (2026-06-20)
+      당초 계획(business_info 없음 → Step2로 강제 리다이렉트)에서 설계가 더 발전됨:
+      앱/광고주 계정을 가입 단계부터 분리하고 users.role(USER/ADMIN/ADVERTISER)을
+      단일 진실 공급원으로 삼는 구조로 확장 적용 — CLAUDE.md 섹션 14 참조.
+      router.dart 가드 + web_login_screen.dart + splash_screen.dart 전부 role 기준으로 체크.
+      ↓ Phase 20(2026-07-02): Step2 자체를 제거하는 방향으로 변경됨.
+        signUp() 직후 role=ADVERTISER 즉시 설정 → 이메일 인증 완료 시 /web/dashboard 직행.
+        BACKLOG Phase 20 섹션 및 CLAUDE.md Phase 20 섹션 참조.
 
 ## 🔵 알려진 이슈 (기존 CLAUDE.md 14섹션에서 이전)
 
@@ -360,6 +403,7 @@
       버튼: `_isLoading || !_step2Valid ? null : _onSignUpStep2`
       레이블: '휴대폰 번호 *' → '전화번호 *', hintText → '숫자만 입력 (10~11자리)'
       commit: 030a37f
+      ↓ Phase 20(2026-07-02): Step2 완전 제거 — _step2Valid, _onSignUpStep2 모두 삭제됨.
 
 - [x] [랭킹 서버] crawler.py 브랜드스토어 URL 감지 로그 개선 (2026-06-09)
       _extract_product_id(): 스마트스토어(_SS_PATTERN) 우선 → 브랜드스토어(_BRAND_PATTERN) fallback
@@ -473,3 +517,86 @@
 - [x] [웹] campaign_new_screen.dart: Step 1에 상품명/브랜드명 입력 필드 추가
       _step1Valid 조건 업데이트, Step 3 요약에 표시
 - [x] [웹] campaign_detail_screen.dart: 상품명/브랜드명 조건부 표시
+
+---
+
+## ✅ Phase 18 — 미션 진행 방식 WebView → 딥링크 복원 + 백화면 버그 수정 (2026-06-19)
+
+- [x] [앱] mission_search_screen.dart 제거 (WebView 화면)
+- [x] [앱] router.dart: /mission/:id/search 라우트 제거
+- [x] [앱] mission_detail_screen.dart: 딥링크 방식 복원 (canLaunchUrl + launchUrl)
+- [x] [앱] mission_session_storage.dart 신규: SharedPreferences 기반 미션 세션 저장/복원/삭제
+      launchUrl 성공 직후 저장 → active 화면 진입 시 복원 → dispose()에서 삭제
+- [x] [앱] mission_active_screen.dart: WidgetsBindingObserver 재추가, _WaitingBody 복원
+      _isResumed 전환 + 복귀 후 3초 버튼 잠금, _resolved 완료 전 resumed 콜백 무시
+
+### 🚀 배포 완료 (2026-06-19)
+- [x] versionCode 21 AAB (51.5MB) + APK (60.7MB) 빌드 완료
+- [x] GitHub push 완료 (rankingup-web: 985bbb8 → 7b7c909)
+- [x] Play Console 프로덕션 트랙 업로드 완료
+
+---
+
+## ✅ Phase 19 — 딥링크 안정성 개선 + 미션 진행 화면 상품 URL 변경 (2026-06-26)
+
+- [x] [DB] device_id 중복 충돌 수동 해소 — chs1989b@gmail.com device_id NULL 처리
+      `UPDATE public.users SET device_id = NULL WHERE email = 'chs1989b@gmail.com';`
+      test-user@test.com 계정의 DEVICE_ALREADY_REGISTERED 오류 해소 확인
+
+- [x] [앱] mission_detail_screen.dart — canLaunchUrl 사전 체크 제거
+      변경 전: canLaunchUrl() → 실패 시 스낵바, 성공 시 launchUrl()
+      변경 후: launchUrl() 단독 + try-catch (Android OEM custom scheme 신뢰 불가 문제 대응)
+
+- [x] [앱] mission_detail_screen.dart — 딥링크 URL 파라미터 정리
+      `naversearchapp://search?where=nexearch&query=` → `naversearchapp://search?query=`
+      (where=nexearch 파라미터 제거 — 일부 기기에서 파라미터 무시로 검색 미동작)
+
+- [x] [앱] mission_detail_screen.dart — context.push() 직전 1.5초 딜레이 추가
+      `await Future.delayed(const Duration(milliseconds: 1500))`
+      (콜드 스타트 시 Flutter UI가 네이버 앱 전환을 방해하는 레이스 컨디션 방지)
+
+- [x] [앱] mission_active_screen.dart — 상품 URL → 네이버 쇼핑 검색 URL 변경
+      keyword가 있으면 `https://search.shopping.naver.com/search/all?query=${Uri.encodeQueryComponent(keyword)}`
+      keyword 없으면 기존 productUrl fallback
+      효과: 딥링크 미작동 시 사용자가 URL 복사 → 브라우저에서 직접 검색 가능
+
+### 🚀 빌드 완료 (2026-06-26)
+- [x] versionCode 22 AAB (51.5MB) 빌드 완료
+- [ ] GitHub push 대기 (mission_detail_screen.dart, mission_active_screen.dart, build.gradle.kts(versionCode 22→23) 미커밋 상태)
+- [ ] Play Console 프로덕션 트랙 업로드 대기 (versionCode 22 또는 23)
+
+---
+
+## ✅ Phase 20 — 광고주 회원가입 Step2 제거 + role 즉시 설정 (2026-07-02)
+
+> 광고주 회원가입에서 사업자 정보 입력(Step2) 프로세스를 완전히 제거.
+> signUp() 직후 role=ADVERTISER 즉시 설정 → 이메일 인증 완료 시 /web/dashboard 직행.
+> (이전: signUp → 이메일 인증 → Step2 사업자정보 입력 → register_advertiser RPC → 대시보드)
+> (이후: signUp → role=ADVERTISER 즉시 UPDATE → 이메일 인증 → /web/dashboard)
+
+- [x] Railway 빌드 실패 수정 — Phase 14 미커밋 파일 커밋 (2026-07-02)
+      commit 7ba107f: account_type.dart(신규), web_login_screen.dart, login_screen.dart, splash_screen.dart
+      원인: router.dart(a0b7d7d)가 account_type.dart를 import하나 해당 파일이 git에 없어 Railway 빌드 실패
+
+- [x] Railway 재배포 트리거 — 빈 커밋 (2026-07-02)
+      commit 91da047: "chore: trigger Railway redeploy"
+      Railway 이미지 push가 10분 이상 멈춘 상태를 해소하기 위해 빈 커밋으로 새 빌드 강제 트리거
+
+- [x] [광고주 웹] web_login_screen.dart — Step2 관련 코드 전체 제거 (2026-07-02)
+      제거: showStep2 생성자 파라미터, _signupStep 상태변수
+      제거: _signupPhoneCtrl, _signupCompanyCtrl, _signupBizNumCtrl, _signupTaxEmailCtrl (TextEditingController 4개)
+      제거: _onSignUpStep2(), _buildSignUpStep2(), _buildStepIndicator(), _stepDot()
+      제거: _step2Valid getter, _mapRpcError() 메서드
+      추가: bool _isEmailVerifyStep = false (기존 _signupStep double 대체)
+      추가: signUp() 직후 `supabase.from('users').update({'role': 'ADVERTISER'}).eq('id', currentUser.id)` 호출
+      변경: _checkWebConfirmed() — setState(() => _signupStep = 2.0) → context.go('/web/dashboard')
+      변경: onAuthStateChange 리스너 — emailConfirmedAt 확인 후 /web/dashboard 직행
+      변경: _currentForm() — _signupStep 분기 → _isEmailVerifyStep bool 분기 단순화
+
+- [x] [광고주 웹] router.dart — step2 파라미터 처리 제거 (2026-07-02)
+      변경: /?code= 이메일 인증 콜백 — isRegisteredAdvertiser 체크 제거, return '/web/dashboard' 단일 라인
+      제거: /web/login 빌더의 showStep2 쿼리 파라미터 읽기 및 WebLoginScreen showStep2 전달
+
+### 🚀 커밋 완료 (2026-07-02)
+- [x] commit dbfca47 — "feat: remove step2 signup flow, set ADVERTISER role on web signup"
+- [x] GitHub push 완료 (rankingup-web: 91da047 → dbfca47) → Railway 자동 재배포 트리거
