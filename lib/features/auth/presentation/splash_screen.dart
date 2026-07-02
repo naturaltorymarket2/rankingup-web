@@ -3,13 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/supabase_client.dart';
+import '../../../shared/utils/account_type.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // 스플래시 화면 — Supabase 세션 복원 후 자동 이동
 // ─────────────────────────────────────────────────────────────────
 //
-// 웹:  세션 있음 → /web/dashboard   세션 없음 → /web/login
-// 앱:  세션 있음 → /home            세션 없음 → /login
+// 웹:  세션 있음 + role=ADVERTISER → /web/dashboard   그 외 → 로그아웃 후 /web/login
+// 앱:  세션 있음 + role!=ADVERTISER → /home            그 외 → 로그아웃 후 /login
+//      세션 없음 → 각 플랫폼 로그인 화면
 // ─────────────────────────────────────────────────────────────────
 
 class SplashScreen extends StatefulWidget {
@@ -40,11 +42,27 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final session = supabase.auth.currentSession;
     if (session != null) {
+      final userId      = supabase.auth.currentUser!.id;
+      final isAdvertiser = await isRegisteredAdvertiser(userId);
+      if (!mounted) return;
+
       if (kIsWeb) {
-        context.go('/web/dashboard');
+        if (isAdvertiser) {
+          context.go('/web/dashboard');
+        } else {
+          // 세션은 있지만 광고주가 아닌 계정 — 웹 접근 차단 (방어 코드)
+          await supabase.auth.signOut();
+          if (mounted) context.go('/web/login');
+        }
       } else {
-        final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
-        context.go(emailConfirmedAt != null ? '/home' : '/email_verify');
+        if (isAdvertiser) {
+          // 세션은 있지만 광고주 계정 — 앱 접근 차단 (방어 코드)
+          await supabase.auth.signOut();
+          if (mounted) context.go('/login');
+        } else {
+          final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
+          context.go(emailConfirmedAt != null ? '/home' : '/email_verify');
+        }
       }
     } else {
       context.go(kIsWeb ? '/web/login' : '/login');

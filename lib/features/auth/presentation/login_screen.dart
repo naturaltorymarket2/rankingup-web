@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/supabase_client.dart';
+import '../../../shared/utils/account_type.dart';
 import '../../../shared/utils/device_util.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -64,6 +65,22 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        _showError('오류가 발생했습니다. 다시 시도해주세요.');
+        return;
+      }
+
+      // 광고주(business_info 등록 완료) 계정은 앱 로그인 차단
+      if (await isRegisteredAdvertiser(userId)) {
+        await supabase.auth.signOut();
+        if (mounted) {
+          _showError('광고주 계정으로는 앱에 로그인할 수 없습니다. 웹에서 이용해주세요.');
+        }
+        return;
+      }
+
       await _saveDeviceId();
       if (mounted) {
         final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
@@ -95,6 +112,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // 0. 이메일 중복 가입 사전 차단 (인증 여부 무관 — 광고주 웹 가입과 분리)
+      if (await checkEmailExists(email)) {
+        _showError('이미 가입된 이메일입니다. 광고주 계정이라면 앱에서는 가입할 수 없습니다.');
+        return;
+      }
+
       // 1. Supabase Auth 회원가입
       //    → handle_new_user 트리거: users + wallets 자동 생성
       final res = await supabase.auth.signUp(
@@ -136,7 +159,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
-    } catch (_) {
+    } catch (e, stackTrace) {
+      debugPrint('회원가입 오류: $e');
+      debugPrint('스택트레이스: $stackTrace');
       _showError('오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isLoading = false);

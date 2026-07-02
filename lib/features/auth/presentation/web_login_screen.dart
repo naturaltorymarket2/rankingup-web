@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/supabase_client.dart';
+import '../../../shared/utils/account_type.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // 광고주 로그인 / 회원가입 웹 화면 (/web/login)
@@ -31,10 +32,15 @@ class WebLoginScreen extends StatefulWidget {
   /// Supabase 인증 에러 콜백(/?error=...&error_description=...)에서 router가 전달.
   final String? authError;
 
+  /// true이면 화면 진입 시 곧장 회원가입 Step2(사업자정보)로 전환한다.
+  /// 이메일 인증 콜백 처리 중 business_info가 없는 것으로 확인된 경우 router가 전달.
+  final bool showStep2;
+
   const WebLoginScreen({
     super.key,
     this.showVerifiedBanner = false,
     this.authError,
+    this.showStep2 = false,
   });
 
   @override
@@ -69,7 +75,15 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.authError != null) {
+    if (widget.showStep2) {
+      // 이메일 인증은 완료됐지만 사업자 정보를 아직 등록하지 않은 계정 —
+      // 로그인 탭 대신 회원가입 Step2로 곧장 진입시킨다.
+      _tabIndex   = 1;
+      _signupStep = 2.0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showInfo('이메일 인증이 완료되었습니다. 사업자 정보를 입력해주세요.');
+      });
+    } else if (widget.authError != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showError('인증 오류: ${Uri.decodeComponent(widget.authError!)}');
       });
@@ -126,7 +140,27 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         email: email,
         password: password,
       );
-      if (mounted) context.go('/web/dashboard');
+
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) {
+        _showError('오류가 발생했습니다. 다시 시도해주세요');
+        return;
+      }
+
+      // role == ADVERTISER 여부로 사업자 등록 완료 여부 판단 (단일 진실 공급원)
+      final isAdvertiser = await isRegisteredAdvertiser(userId);
+      if (!mounted) return;
+
+      if (isAdvertiser) {
+        context.go('/web/dashboard');
+      } else {
+        // 가입 자체가 앱/웹으로 분리된 이후로는 정상적으로는 발생하지 않아야
+        // 하는 케이스(이메일 중복 가입 차단으로 막힘) — 방어 코드로 차단.
+        await supabase.auth.signOut();
+        if (mounted) {
+          _showError('사업자 정보 등록이 완료되지 않은 계정입니다. 회원가입을 다시 진행해주세요.');
+        }
+      }
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
     } catch (_) {
@@ -152,6 +186,12 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // 이메일 중복 가입 사전 차단 (인증 여부 무관 — 앱 가입과 분리)
+      if (await checkEmailExists(email)) {
+        _showError('이미 가입된 이메일입니다. 일반 유저 계정이라면 웹에서는 가입할 수 없습니다.');
+        return;
+      }
+
       final res = await supabase.auth.signUp(
         email: email,
         password: password,
@@ -314,6 +354,16 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       backgroundColor: Colors.green.shade700,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 6),
+    ));
+  }
+
+  void _showInfo(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: Colors.indigo.shade700,
       behavior: SnackBarBehavior.floating,
       duration: const Duration(seconds: 6),
     ));
