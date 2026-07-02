@@ -6,6 +6,7 @@ import '../features/admin/presentation/admin_charge_screen.dart';
 import '../features/admin/presentation/admin_notice_screen.dart';
 import '../features/admin/presentation/admin_withdraw_screen.dart';
 import '../features/auth/presentation/admin_login_screen.dart';
+import '../features/auth/presentation/email_confirm_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
@@ -21,6 +22,7 @@ import '../features/mission/presentation/mission_home_screen.dart';
 import '../features/wallet/presentation/history_screen.dart';
 import '../features/wallet/presentation/mypage_screen.dart';
 import '../features/wallet/presentation/withdraw_screen.dart';
+import '../shared/utils/account_type.dart';
 import '../shared/widgets/bottom_nav_bar.dart';
 
 /// 앱 전체 라우터 (go_router)
@@ -35,9 +37,9 @@ import '../shared/widgets/bottom_nav_bar.dart';
 final appRouter = GoRouter(
   initialLocation: '/splash',
   // 인증 가드:
-  //   /web/* (/web/login 제외) → 세션 없으면 /web/login
+  //   /web/* (/web/login 제외) → 세션 없으면 /web/login, role != ADVERTISER면 차단
   //   /admin/* (/admin/login 제외) → 세션 없으면 /admin/login
-  redirect: (context, state) {
+  redirect: (context, state) async {
     final location = state.matchedLocation;
     final params   = state.uri.queryParameters;
 
@@ -47,9 +49,17 @@ final appRouter = GoRouter(
       return '/web/login?auth_error=$desc';
     }
 
-    // Supabase 이메일 인증 콜백: /?code=xxxx → /web/login?verified=true
+    // Supabase 이메일 인증 콜백: /?code=xxxx
+    // 새 페이지 로드이므로 가입 중이던 _signupStep 같은 메모리 상태는 보존되지 않는다.
+    // "이메일 인증 완료 = 로그인된 상태"로 보고, users.role(서버 상태)로
+    // 곧장 분기한다 — 작업 1(웹 로그인 가드)과 동일한 단일 진실 공급원(role) 사용.
+    // 아직 Step2(사업자정보)를 거치지 않은 정상 가입 중 계정은 role이 USER이므로
+    // Step2로 보내는 것이 맞다 — 차단 대상이 아니라 가입 완료 경로임.
     if (params.containsKey('code')) {
-      return '/web/login?verified=true';
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return '/web/login?verified=true';
+      final isAdvertiser = await isRegisteredAdvertiser(userId);
+      return isAdvertiser ? '/web/dashboard' : '/web/login?step2=true';
     }
 
     // 루트 경로 직접 접근: GoException 방지용 → 광고주 로그인으로 이동
@@ -58,6 +68,12 @@ final appRouter = GoRouter(
     final path = state.uri.path;
     if (path.startsWith('/web/') && path != '/web/login') {
       if (supabase.auth.currentSession == null) return '/web/login';
+      // 세션은 있지만 광고주(role=ADVERTISER)가 아닌 계정의 /web/* 직접 진입 차단
+      // (로그인 가드를 거치지 않고 세션이 유지된 채 URL로 직접 들어오는 경로 방지)
+      final userId = supabase.auth.currentUser!.id;
+      if (!await isRegisteredAdvertiser(userId)) {
+        return '/web/login?auth_error=${Uri.encodeComponent('유저 계정으로는 광고주 웹에 접근할 수 없습니다')}';
+      }
     }
     if (path.startsWith('/admin/') && path != '/admin/login') {
       if (supabase.auth.currentSession == null) return '/admin/login';
@@ -86,6 +102,10 @@ final appRouter = GoRouter(
         final extra = state.extra as Map<String, dynamic>?;
         return EmailVerifyScreen(email: extra?['email'] as String?);
       },
+    ),
+    GoRoute(
+      path: '/auth/confirm',
+      builder: (context, state) => const EmailConfirmScreen(),
     ),
 
     // ── 하단 탭 Shell (홈 / 참여 내역 / 마이페이지) ───────────
@@ -146,11 +166,13 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/web/login',
       builder: (context, state) {
-        final verified   = state.uri.queryParameters['verified'] == 'true';
-        final authError  = state.uri.queryParameters['auth_error'];
+        final verified  = state.uri.queryParameters['verified'] == 'true';
+        final authError = state.uri.queryParameters['auth_error'];
+        final showStep2 = state.uri.queryParameters['step2'] == 'true';
         return WebLoginScreen(
           showVerifiedBanner: verified,
           authError: authError,
+          showStep2: showStep2,
         );
       },
     ),
