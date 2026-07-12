@@ -76,12 +76,13 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         _showSuccess('이메일 인증이 완료되었습니다. 로그인해주세요.');
       });
     }
-    _authSub = supabase.auth.onAuthStateChange.listen((data) {
+    _authSub = supabase.auth.onAuthStateChange.listen((data) async {
       if (!mounted || !_isEmailVerifyStep) return;
       if (data.event != AuthChangeEvent.userUpdated) return;
       final confirmedAt = data.session?.user.emailConfirmedAt;
       if (confirmedAt != null && mounted) {
-        context.go('/web/dashboard');
+        await _finalizeAdvertiserRole();
+        if (mounted) context.go('/web/dashboard');
       }
     });
   }
@@ -182,11 +183,11 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         return;
       }
 
-      // 웹 가입 = 광고주 계정 — role을 ADVERTISER로 즉시 설정
-      await supabase
-          .from('users')
-          .update({'role': 'ADVERTISER'})
-          .eq('id', supabase.auth.currentUser!.id);
+      // 주의: 이메일 인증 필수(mailer_autoconfirm=false) 설정에서는 signUp()
+      // 직후 세션이 없어 auth.uid()가 NULL이다 — RLS(users_self_update:
+      // auth.uid() = id)를 통과할 수 없으므로 role=ADVERTISER 설정은 여기서
+      // 하지 않는다. 세션이 생기는 이메일 인증 완료 시점(_checkWebConfirmed,
+      // onAuthStateChange)에서 설정한다.
 
       // 가입 후 → 이메일 인증 대기 단계로 이동
       setState(() => _isEmailVerifyStep = true);
@@ -221,7 +222,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       final confirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
       if (!mounted) return;
       if (confirmedAt != null) {
-        context.go('/web/dashboard');
+        await _finalizeAdvertiserRole();
+        if (mounted) context.go('/web/dashboard');
       } else {
         _showError('아직 인증이 완료되지 않았습니다');
       }
@@ -229,6 +231,20 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       if (mounted) _showError('아직 인증이 완료되지 않았습니다');
     } finally {
       if (mounted) setState(() => _isCheckingConfirm = false);
+    }
+  }
+
+  /// 이메일 인증 완료 후(세션이 생긴 시점) role을 ADVERTISER로 확정한다.
+  /// 세션이 있어야 RLS(users_self_update: auth.uid() = id)를 통과할 수 있다.
+  Future<void> _finalizeAdvertiserRole() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await supabase.from('users').update({'role': 'ADVERTISER'}).eq('id', userId);
+    } catch (_) {
+      if (mounted) {
+        _showError('계정 유형 설정에 실패했습니다. 잠시 후 다시 로그인해주세요');
+      }
     }
   }
 

@@ -94,29 +94,12 @@ class MissionDetailScreen extends ConsumerWidget {
     }
 
     // 3. 네이버 딥링크 실행
+    //    - naversearchapp://: 네이버 앱 전용 scheme
+    //    - where=nexearch 제거 후 query만 전달 (일부 기기에서 파라미터 무시 문제 대응)
     final encoded  = Uri.encodeComponent(result.keyword);
     final naverUri = Uri.parse(
-      'naversearchapp://search?where=nexearch&query=$encoded',
+      'naversearchapp://search?query=$encoded',
     );
-
-    // canLaunchUrl 사전 체크 (Android 11+ 패키지 가시성 대비)
-    // AndroidManifest.xml <queries>에 scheme + com.naver.search 패키지 선언 필요
-    bool canLaunch = false;
-    try {
-      canLaunch = await canLaunchUrl(naverUri);
-    } catch (_) {
-      canLaunch = false;
-    }
-
-    if (!canLaunch) {
-      if (context.mounted) {
-        _showSnackBar(
-          context,
-          '네이버 앱을 실행할 수 없습니다. 네이버 앱이 설치되어 있는지 확인해주세요.',
-        );
-      }
-      return;
-    }
 
     bool launched = false;
     try {
@@ -149,6 +132,10 @@ class MissionDetailScreen extends ConsumerWidget {
     );
 
     // 5. 미션 진행 화면으로 이동
+    //    콜드 스타트 시 Flutter의 즉각적인 UI 업데이트가 Naver 전환을 방해하는
+    //    레이스 컨디션 방지를 위해 딜레이 추가
+    await Future.delayed(const Duration(milliseconds: 1500));
+
     if (context.mounted) {
       context.push(
         '/mission/$campaignId/active',

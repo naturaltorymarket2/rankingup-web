@@ -384,7 +384,9 @@ class _ActiveBody extends StatelessWidget {
         _TagInputSection(
           controller: tagController,
           tagIndex:   tagIndex,
-          productUrl: productUrl,
+          productUrl: keyword.isNotEmpty
+              ? 'https://search.shopping.naver.com/search/all?query=${Uri.encodeQueryComponent(keyword)}'
+              : productUrl,
         ),
       ],
     );
