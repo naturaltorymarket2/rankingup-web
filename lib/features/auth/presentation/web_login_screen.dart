@@ -52,7 +52,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
 
   // ── 이메일 인증 단계 상태 ───────────────────────────────────────
   bool _isSendingEmail    = false;
-  bool _isCheckingConfirm = false;
   StreamSubscription<AuthState>? _authSub;
 
   // ── 로그인 폼 ────────────────────────────────────────────────────
@@ -209,24 +208,10 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
     }
   }
 
-  Future<void> _checkWebConfirmed() async {
-    setState(() => _isCheckingConfirm = true);
-    try {
-      await supabase.auth.refreshSession();
-      final confirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
-      if (!mounted) return;
-      if (confirmedAt != null) {
-        final userId = supabase.auth.currentUser?.id;
-        if (userId != null) await finalizeAdvertiserRole(userId);
-        if (mounted) context.go('/web/dashboard');
-      } else {
-        _showError('아직 인증이 완료되지 않았습니다');
-      }
-    } catch (_) {
-      if (mounted) _showError('아직 인증이 완료되지 않았습니다');
-    } finally {
-      if (mounted) setState(() => _isCheckingConfirm = false);
-    }
+  // 인증 여부를 확인하지 않고 바로 로그인 탭으로 이동한다.
+  // (실제 인증 여부/role 확정은 로그인 시도 시 _onLogin()에서 처리됨)
+  void _checkWebConfirmed() {
+    _switchTab(0);
   }
 
   // ── 에러/성공 메시지 매핑 ─────────────────────────────────────────
@@ -483,7 +468,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   // ─────────────────────────────────────────────────────────────────
 
   Widget _buildEmailVerifyStep() {
-    final isVerifyLoading = _isSendingEmail || _isCheckingConfirm;
+    final isVerifyLoading = _isSendingEmail;
     final email = _signupEmailCtrl.text.trim();
 
     return Column(
@@ -532,7 +517,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         _submitBtn(
           label: '인증 완료했어요',
           onPressed: isVerifyLoading ? null : _checkWebConfirmed,
-          isLoading: _isCheckingConfirm,
+          isLoading: false,
         ),
         const SizedBox(height: 12),
         SizedBox(
