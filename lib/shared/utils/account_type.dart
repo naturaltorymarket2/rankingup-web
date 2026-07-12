@@ -17,6 +17,19 @@ Future<bool> isRegisteredAdvertiser(String userId) async {
   return row?['role'] == 'ADVERTISER';
 }
 
+/// 웹(/web/login)으로 로그인/이메일 인증한 계정의 role을 ADVERTISER로 확정한다.
+///
+/// /web/login은 광고주 전용 화면이므로(앱 유저는 /login 사용), 여기를 통해
+/// 세션이 확보된 계정은 곧 광고주 계정이다. 사업자 정보(business_info) 등록은
+/// 더 이상 필요 없다 — role만이 단일 진실 공급원이다.
+///
+/// 반드시 세션이 존재하는 시점(로그인 직후/이메일 인증 완료 직후)에 호출해야
+/// 한다 — RLS(users_self_update: auth.uid() = id)가 auth.uid()를 요구하기
+/// 때문에, 세션 없이 호출하면 0건 업데이트로 조용히 실패한다.
+Future<void> finalizeAdvertiserRole(String userId) async {
+  await supabase.from('users').update({'role': 'ADVERTISER'}).eq('id', userId);
+}
+
 /// 해당 이메일로 이미 가입된 계정이 있는지(인증 여부 무관) 확인한다.
 ///
 /// 가입 전(미인증) 상태에서 호출하므로 public.users를 직접 조회할 수 없다

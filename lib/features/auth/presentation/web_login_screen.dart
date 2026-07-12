@@ -13,10 +13,13 @@ import '../../../shared/utils/account_type.dart';
 // ─────────────────────────────────────────────────────────────────
 //
 // 탭 구성:
-//   0: 로그인  — 이메일 + 비밀번호 → /web/dashboard
-//   1: 회원가입 — 2단계
-//      Step 1:   이메일 + 비밀번호 → supabase.auth.signUp() → role=ADVERTISER 설정
-//      Step 1.5: 이메일 인증 대기  → onAuthStateChange / fallback 버튼 → /web/dashboard
+//   0: 로그인  — 이메일 + 비밀번호 → role=ADVERTISER 확정 → /web/dashboard
+//   1: 회원가입
+//      Step 1: 이메일 + 비밀번호 → supabase.auth.signUp() (역할 설정은 아직 안 함 —
+//              세션이 없어 RLS 통과 불가)
+//      Step 2: 이메일 인증 대기  → onAuthStateChange / fallback 버튼 →
+//              role=ADVERTISER 확정 → /web/dashboard
+// 사업자 정보(business_info) 등록은 요구하지 않는다 — role만이 단일 진실 공급원.
 //
 // ⚠ Supabase 설정 필요:
 //   Authentication → Providers → Email → "Confirm email" 활성화
@@ -60,8 +63,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   // ── 회원가입 폼 ──────────────────────────────────────────────────
   final _signupEmailCtrl    = TextEditingController();
   final _signupPwCtrl       = TextEditingController();
-  final _signupBizNumCtrl   = TextEditingController();
-  final _signupTaxEmailCtrl = TextEditingController();
   bool  _signupObscure      = true;
 
   @override
@@ -81,7 +82,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       if (data.event != AuthChangeEvent.userUpdated) return;
       final confirmedAt = data.session?.user.emailConfirmedAt;
       if (confirmedAt != null && mounted) {
-        await _finalizeAdvertiserRole();
+        final userId = data.session?.user.id;
+        if (userId != null) await finalizeAdvertiserRole(userId);
         if (mounted) context.go('/web/dashboard');
       }
     });
@@ -128,20 +130,11 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         return;
       }
 
-      // role == ADVERTISER 여부로 사업자 등록 완료 여부 판단 (단일 진실 공급원)
-      final isAdvertiser = await isRegisteredAdvertiser(userId);
+      // /web/login은 광고주 전용 화면 — 사업자 정보 등록 없이 로그인 성공 = 광고주.
+      // role이 아직 ADVERTISER가 아니면(이메일 인증 직후 등) 여기서 확정한다.
+      await finalizeAdvertiserRole(userId);
       if (!mounted) return;
-
-      if (isAdvertiser) {
-        context.go('/web/dashboard');
-      } else {
-        // 가입 자체가 앱/웹으로 분리된 이후로는 정상적으로는 발생하지 않아야
-        // 하는 케이스(이메일 중복 가입 차단으로 막힘) — 방어 코드로 차단.
-        await supabase.auth.signOut();
-        if (mounted) {
-          _showError('사업자 정보 등록이 완료되지 않은 계정입니다. 회원가입을 다시 진행해주세요.');
-        }
-      }
+      context.go('/web/dashboard');
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));
     } catch (_) {
@@ -222,7 +215,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       final confirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
       if (!mounted) return;
       if (confirmedAt != null) {
-        await _finalizeAdvertiserRole();
+        final userId = supabase.auth.currentUser?.id;
+        if (userId != null) await finalizeAdvertiserRole(userId);
         if (mounted) context.go('/web/dashboard');
       } else {
         _showError('아직 인증이 완료되지 않았습니다');
@@ -231,20 +225,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       if (mounted) _showError('아직 인증이 완료되지 않았습니다');
     } finally {
       if (mounted) setState(() => _isCheckingConfirm = false);
-    }
-  }
-
-  /// 이메일 인증 완료 후(세션이 생긴 시점) role을 ADVERTISER로 확정한다.
-  /// 세션이 있어야 RLS(users_self_update: auth.uid() = id)를 통과할 수 있다.
-  Future<void> _finalizeAdvertiserRole() async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-    try {
-      await supabase.from('users').update({'role': 'ADVERTISER'}).eq('id', userId);
-    } catch (_) {
-      if (mounted) {
-        _showError('계정 유형 설정에 실패했습니다. 잠시 후 다시 로그인해주세요');
-      }
     }
   }
 

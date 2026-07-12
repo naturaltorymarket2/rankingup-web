@@ -50,12 +50,18 @@ final appRouter = GoRouter(
     }
 
     // Supabase 이메일 인증 콜백: /?code=xxxx
-    // 새 페이지 로드이므로 가입 중이던 _signupStep 같은 메모리 상태는 보존되지 않는다.
-    // "이메일 인증 완료 = 로그인된 상태"로 보고, users.role(서버 상태)로
-    // 곧장 분기한다 — 작업 1(웹 로그인 가드)과 동일한 단일 진실 공급원(role) 사용.
-    // 아직 Step2(사업자정보)를 거치지 않은 정상 가입 중 계정은 role이 USER이므로
-    // Step2로 보내는 것이 맞다 — 차단 대상이 아니라 가입 완료 경로임.
+    // 새 페이지 로드이므로 가입 중이던 위젯 상태(_isEmailVerifyStep 등)는 보존되지
+    // 않는다. 이메일 인증 완료 = 곧 로그인된 세션이 생겼다는 뜻이므로, 여기서
+    // role을 ADVERTISER로 확정하고 바로 대시보드로 보낸다(사업자 정보 등록 불필요).
     if (params.containsKey('code')) {
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        try {
+          await finalizeAdvertiserRole(userId);
+        } catch (_) {
+          // 대시보드 진입 자체는 막지 않음 — 실패 시 role은 다음 로그인에서 재확정됨
+        }
+      }
       return '/web/dashboard';
     }
 
