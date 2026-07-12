@@ -31,7 +31,6 @@ class EmailVerifyScreen extends StatefulWidget {
 
 class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
   bool _isSending  = false;
-  bool _isChecking = false;
   StreamSubscription<AuthState>? _authSub;
 
   String get _effectiveEmail =>
@@ -70,22 +69,10 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
     }
   }
 
-  Future<void> _checkConfirmed() async {
-    setState(() => _isChecking = true);
-    try {
-      await supabase.auth.refreshSession();
-      final confirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
-      if (!mounted) return;
-      if (confirmedAt != null) {
-        context.go('/home');
-      } else {
-        _showError('아직 인증이 완료되지 않았습니다.');
-      }
-    } catch (_) {
-      if (mounted) _showError('아직 인증이 완료되지 않았습니다.');
-    } finally {
-      if (mounted) setState(() => _isChecking = false);
-    }
+  // 인증 여부를 확인하지 않고 바로 로그인 화면으로 이동한다.
+  // (실제 인증 여부는 로그인 시도 시 서버에서 판단됨)
+  void _checkConfirmed() {
+    context.go('/login');
   }
 
   void _showError(String msg) {
@@ -110,7 +97,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLoading = _isSending || _isChecking;
+    final isLoading = _isSending;
     final email     = _effectiveEmail;
 
     return Scaffold(
@@ -174,22 +161,13 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: _isChecking
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          )
-                        : const Text(
-                            '인증 완료했어요',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    child: const Text(
+                      '인증 완료했어요',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),

@@ -123,6 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final res = await supabase.auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo: 'https://rankingup-web-production.up.railway.app/auth/confirm',
       );
 
       if (res.user == null) {
