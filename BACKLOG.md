@@ -562,8 +562,8 @@
 
 ### 🚀 빌드 완료 (2026-06-26)
 - [x] versionCode 22 AAB (51.5MB) 빌드 완료
-- [ ] GitHub push 대기 (mission_detail_screen.dart, mission_active_screen.dart, build.gradle.kts(versionCode 22→23) 미커밋 상태)
-- [ ] Play Console 프로덕션 트랙 업로드 대기 (versionCode 22 또는 23)
+- [x] GitHub push 완료 — mission_detail_screen.dart, mission_active_screen.dart, build.gradle.kts는 이후 commit 65a8b6b(versionCode 23), f045548(versionCode 24)에서 커밋됨
+- [x] Play Console 프로덕션 트랙 업로드 완료 (versionCode 24)
 
 ---
 
@@ -600,3 +600,31 @@
 ### 🚀 커밋 완료 (2026-07-02)
 - [x] commit dbfca47 — "feat: remove step2 signup flow, set ADVERTISER role on web signup"
 - [x] GitHub push 완료 (rankingup-web: 91da047 → dbfca47) → Railway 자동 재배포 트리거
+
+---
+
+## ✅ Phase 21 — 미션 진행 화면 UX 개선 (2026-07-20)
+
+- [x] [앱] mission_active_screen.dart — `_ProductInfoCard` 상품명/업체명 라벨 추가
+      기존: productName/brandName 텍스트만 접두사 없이 출력
+      변경: `Text.rich(TextSpan)`로 "상품명: " / "업체명: " 라벨(16px bold)을 값 앞에 추가
+            값 텍스트 크기는 기존 그대로 유지 (상품명 14px bold, 업체명 13px)
+
+- [x] [앱] mission_active_screen.dart — 정답 태그 입력 하단 URL 구조 변경
+      기존: `https://search.shopping.naver.com/search/all?query={keyword}` (네이버 쇼핑 검색)
+      변경: `https://search.naver.com/search.naver?query={keyword}` (네이버 통합 검색)
+      `Uri.encodeQueryComponent(keyword)`는 그대로 사용 (공백 → `+` 인코딩 동일)
+
+- [x] [앱] 스플래시 화면 — 로딩 중 배너 이미지 표시 (2026-07-20)
+      배경: Supabase 세션 체크(최대 3초 대기 + 네트워크 요청) 동안 텍스트+스피너만 표시되던 것을
+            디자인된 배너 이미지로 교체
+      `assets/images/KakaoTalk_Photo_2026-07-20-09-28-12.png` 추가, pubspec.yaml assets 등록
+      splash_screen.dart: `Center(child: Column(Text+CircularProgressIndicator))` →
+            `SizedBox.expand(child: Image.asset(..., fit: BoxFit.cover))` 로 교체
+      `_checkAuth()` 라우팅 로직은 변경 없음
+      빌드 중 발견: `const Scaffold` 유지 시 `Image.asset`이 const 생성자가 아니라 컴파일 에러 발생
+            → `const Scaffold` → `Scaffold` + `backgroundColor: const Color(...)`로 수정
+
+### 🚀 빌드 완료 (2026-07-20)
+- [x] versionCode 25 AAB 빌드 완료 (51.4MB) — 상품명/업체명 라벨 + URL 구조 변경 포함
+- [x] versionCode 26 AAB 빌드 완료 (52.3MB) — 스플래시 배너 이미지 추가 포함

@@ -315,7 +315,7 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 20 완료** (광고주 회원가입 Step2 제거 + role 즉시 설정, 2026-07-02)
+현재 진행 Phase: **Phase 21 완료** (미션 진행 화면 UX 개선 — 상품명/업체명 라벨, URL 구조 변경, 스플래시 배너 이미지, 2026-07-20)
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -1347,6 +1347,38 @@ Phase 4 (1~2주): 어드민 + 배포
   - GitHub push 완료: naturaltorymarket2/rankingup-web main → dbfca47
   - Railway 자동 재배포 트리거됨
 
+- ✅ 완료: Phase 21 — 미션 진행 화면 UX 개선 (2026-07-20)
+
+  **[앱] mission_active_screen.dart — 상품명/업체명 라벨 추가**
+  - `_ProductInfoCard`: productName/brandName 텍스트 앞에 "상품명: " / "업체명: " 라벨 추가
+    ```dart
+    Text.rich(TextSpan(children: [
+      TextSpan(text: '상품명: ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, ...)),
+      TextSpan(text: productName!, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, ...)),
+    ]))
+    ```
+  - 라벨은 16px bold, 값 텍스트는 기존 크기 그대로(상품명 14px bold / 업체명 13px) 유지
+  - 배경: 상품명/업체명이 접두사 없이 나열되어 가독성이 떨어진다는 피드백
+
+  **[앱] mission_active_screen.dart — 정답 태그 입력 하단 URL 구조 변경**
+  - `_ActiveBody.build()`: 표시되는 URL을 네이버 쇼핑 검색 → 네이버 통합 검색으로 변경
+    - 기존: `https://search.shopping.naver.com/search/all?query={keyword}`
+    - 변경: `https://search.naver.com/search.naver?query={keyword}`
+  - `Uri.encodeQueryComponent(keyword)` 그대로 유지 (공백 → `+` 인코딩은 기존과 동일하게 동작)
+
+  **[앱] 스플래시 화면 — 로딩 중 배너 이미지 표시**
+  - 배경: Supabase 세션 체크(최대 3초 대기 + 네트워크 요청) 동안 텍스트+스피너만 보여 로딩이 길게 느껴진다는 피드백
+  - `assets/images/KakaoTalk_Photo_2026-07-20-09-28-12.png` 추가, `pubspec.yaml` assets 섹션 등록
+  - `splash_screen.dart`: `Center(child: Column(Text + CircularProgressIndicator))` →
+    `SizedBox.expand(child: Image.asset(..., fit: BoxFit.cover))` 로 교체 (이미지 자체에 로딩 안내 문구 포함)
+  - `_checkAuth()` 세션 체크/라우팅 로직은 변경 없음
+  - 빌드 중 발견: `const Scaffold` 유지 시 `Image.asset`이 const 생성자가 아니라 컴파일 에러
+    → `const Scaffold` → `Scaffold` + `backgroundColor: const Color(0xFF1E3A8A)`로 수정
+
+  **versionCode 25 AAB 빌드** (51.4MB) — 상품명/업체명 라벨 + URL 구조 변경 포함
+  **versionCode 26 AAB 빌드** (52.3MB) — 스플래시 배너 이미지 추가 포함
+  - Play Console 프로덕션 트랙 업로드는 사용자 수동 진행 예정
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1418,7 +1450,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-07-02 기준)
+## 13. 배포 현황 (2026-07-20 기준)
 
 ### 서비스 URL
 
@@ -1434,9 +1466,9 @@ flutter pub run flutter_launcher_icons
 |------|-----|
 | 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 21 (2026-06-19 프로덕션 업로드 완료 — 딥링크 복원 + 백화면 버그 수정) |
-| 빌드된 versionCode | 22 (2026-06-26 빌드 완료 — 딥링크 안정성 개선 + 미션 진행 화면 상품 URL 변경, Play Console 업로드 대기) / 로컬 build.gradle.kts는 23 (미커밋) |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (51.5MB) |
+| 배포된 versionCode | 24 (Play Console 프로덕션 트랙 업로드 완료 — 이메일 인증 스킵 체크 수정 포함) |
+| 빌드된 versionCode | 26 (2026-07-20 빌드 완료 — 상품명/업체명 라벨 + URL 구조 변경(search.naver.com) + 스플래시 배너 이미지, Play Console 업로드 대기) |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (52.3MB) |
 
 ### GitHub 저장소
 
@@ -1445,7 +1477,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-07-02 — store_traffic_booster: Phase 20 Step2 제거 (7ba107f → 91da047 → dbfca47) / rank_module: Phase 17 (839f544→9e6459f, 2026-06-19) |
+| 마지막 push | 2026-07-20 — store_traffic_booster: Phase 21 상품명/업체명 라벨 + URL 구조 변경 + 스플래시 배너 이미지 (versionCode 26) / rank_module: Phase 17 (839f544→9e6459f, 2026-06-19) |
 
 ### GitHub Actions
 

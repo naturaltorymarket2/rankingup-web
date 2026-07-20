@@ -71,27 +71,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF1E3A8A),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '퀴즈캐시나우',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            ),
-            SizedBox(height: 32),
-            CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2.5,
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: const Color(0xFF1E3A8A),
+      body: SizedBox.expand(
+        child: Image.asset(
+          'assets/images/KakaoTalk_Photo_2026-07-20-09-28-12.png',
+          fit: BoxFit.cover,
         ),
       ),
     );

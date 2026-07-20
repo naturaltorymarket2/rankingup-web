@@ -385,7 +385,7 @@ class _ActiveBody extends StatelessWidget {
           controller: tagController,
           tagIndex:   tagIndex,
           productUrl: keyword.isNotEmpty
-              ? 'https://search.shopping.naver.com/search/all?query=${Uri.encodeQueryComponent(keyword)}'
+              ? 'https://search.naver.com/search.naver?query=${Uri.encodeQueryComponent(keyword)}'
               : productUrl,
         ),
       ],
@@ -465,22 +465,50 @@ class _ProductInfoCard extends StatelessWidget {
           ),
           if (productName != null) ...[
             const SizedBox(height: 6),
-            Text(
-              productName!,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.indigo.shade900,
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '상품명: ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade900,
+                    ),
+                  ),
+                  TextSpan(
+                    text: productName!,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade900,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
           if (brandName != null) ...[
             const SizedBox(height: 2),
-            Text(
-              brandName!,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.indigo.shade700,
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '업체명: ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade700,
+                    ),
+                  ),
+                  TextSpan(
+                    text: brandName!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.indigo.shade700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
