@@ -35,7 +35,7 @@ class DashboardData {
 class DashboardCampaign {
   final String       groupId;
   final String       seedKeyword;           // 순위 추적 대표 키워드
-  final String       status;               // ACTIVE / ENDED
+  final String       status;               // PENDING / ACTIVE / REJECTED / ENDED
   final int          groupDailyTarget;      // 그룹 전체 일일 목표 (과금 기준)
   final List<String> subKeywords;           // 그룹 내 서브키워드 배열
   final int          todayCount;            // 오늘 KST 기준 그룹 합산 SUCCESS 건수
@@ -90,6 +90,8 @@ class DashboardCampaign {
 
   String get statusLabel => switch (displayStatus) {
         'ACTIVE'   => '진행 중',
+        'PENDING'  => '승인 대기',
+        'REJECTED' => '승인 거절',
         'ENDED'    => '종료',
         'RANK_OUT' => '순위 이탈',
         _          => displayStatus,
@@ -97,6 +99,8 @@ class DashboardCampaign {
 
   Color get statusColor => switch (displayStatus) {
         'ACTIVE'   => const Color(0xFF2E7D32),
+        'PENDING'  => const Color(0xFFE65100),
+        'REJECTED' => const Color(0xFFB71C1C),
         'ENDED'    => const Color(0xFF757575),
         'RANK_OUT' => const Color(0xFFB71C1C),
         _          => const Color(0xFF757575),

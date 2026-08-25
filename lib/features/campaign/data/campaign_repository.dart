@@ -41,12 +41,17 @@ class CampaignRepository {
     // 은 호출자(screen)로 전파
   }
 
-  /// 캠페인 등록 RPC 호출 (그룹 과금 구조)
+  /// 캠페인 등록 RPC 호출 (그룹 과금 구조 + 승인 대기)
   ///
   /// register_campaign(p_user_id, p_product_url, p_keyword,
   ///                   p_daily_target, p_group_daily_target, p_group_id,
-  ///                   p_start_date, p_end_date,
-  ///                   p_tags, p_sort_orders, p_answer_index, p_seed_keyword)
+  ///                   p_start_date, p_end_date, p_seed_keyword,
+  ///                   p_product_name, p_brand_name)
+  ///
+  /// 등록 결과는 approval_status='PENDING' (운영자 승인 대기) 상태이며,
+  /// 포인트 차감과 앱 노출은 어드민 승인(approve_campaign) 시점에 이루어진다.
+  /// 태그는 광고주가 입력하지 않는다 — 어드민이 승인 단계에서 직접 등록.
+  ///
   /// 성공 시 campaign_id(String) 반환, 실패 시 Exception throw
   Future<String> registerCampaign({
     required String       userId,
@@ -57,9 +62,6 @@ class CampaignRepository {
     required String       groupId,          // 그룹 식별자 UUID (클라이언트 생성)
     required DateTime     startDate,
     required DateTime     endDate,
-    required List<String> tags,
-    required List<int>    sortOrders,  // 각 태그의 실제 네이버 상품 페이지 순서값
-    required int          answerIndex, // 정답 태그의 실제 순서값 (sortOrders 배열 내 값 중 하나)
     String?               seedKeyword,
     String?               productName,
     String?               brandName,
@@ -73,9 +75,6 @@ class CampaignRepository {
       'p_group_id':           groupId,
       'p_start_date':         _toDateStr(startDate),
       'p_end_date':           _toDateStr(endDate),
-      'p_tags':               tags,
-      'p_sort_orders':        sortOrders,
-      'p_answer_index':       answerIndex,
       'p_seed_keyword':       seedKeyword,
       'p_product_name':       productName,
       'p_brand_name':         brandName,

@@ -165,6 +165,7 @@ lib/
 |------|------|
 | `/admin/login` | 어드민 로그인 |
 | `/admin/charge` | 충전 승인 |
+| `/admin/campaign` | 광고 승인 (태그 등록 + 승인/거절) |
 | `/admin/withdraw` | 출금 처리 |
 | `/admin/notice` | 공지 등록 |
 
@@ -180,8 +181,8 @@ lib/
 | `business_info` | 광고주 사업자 정보 (users와 1:1) |
 | `wallets` | 포인트 잔액 (users와 1:1) |
 | `transactions` | 포인트 원장 (CHARGE/SPEND/EARN/WITHDRAW) |
-| `campaigns` | 광고 캠페인 |
-| `campaign_tags` | 정답 태그 풀 (campaigns와 1:N) |
+| `campaigns` | 광고 캠페인 (approval_status: PENDING/APPROVED/REJECTED — Phase 22) |
+| `campaign_tags` | 정답 태그 풀 (campaigns와 1:N, 어드민이 승인 시 등록) |
 | `mission_logs` | 미션 수행 이력 |
 
 ---
@@ -1379,6 +1380,67 @@ Phase 4 (1~2주): 어드민 + 배포
   **versionCode 26 AAB 빌드** (52.3MB) — 스플래시 배너 이미지 추가 포함
   - Play Console 프로덕션 트랙 업로드는 사용자 수동 진행 예정
 
+- ✅ 완료: Phase 22 — 광고 승인(어드민 검수) 도입 + 랜덤 태그 출제 (2026-08-25)
+
+  **배경**: 광고주가 광고를 등록하면 즉시 ACTIVE로 앱에 노출되고 포인트도 즉시 차감되던 구조를,
+  운영자가 상품 페이지의 실제 #태그를 직접 확인·등록하고 승인해야 광고가 시작되는 구조로 변경.
+  태그를 운영자가 등록하는 이유는 앱에서 "N번째 태그"를 랜덤 출제해 정답을 대조하기 위함.
+
+  **[DB] migration 0038~0042 신규 (⚠️ Supabase 수동 적용 필요)**
+  - `20260317000038_add_campaign_approval.sql`
+    - campaigns: `approval_status`(PENDING/APPROVED/REJECTED), `approved_at`, `approved_by`, `reject_reason` 추가
+    - 기존 캠페인은 전부 APPROVED로 소급 처리(1회성 UPDATE) — 구 구조에서 이미 과금 완료된 건
+    - `normalize_tag(TEXT)` 함수: 선행 '#' 제거 + 공백 제거 + 소문자 (어드민 등록/유저 입력 공통 규칙)
+    - campaigns RLS `campaigns_read` 재정의: 앱 유저는 `ACTIVE + APPROVED`만 조회 가능
+  - `20260317000039_update_register_campaign_pending.sql`
+    - 기존 register_campaign 오버로드 전부 DROP 후 재정의
+    - 태그 파라미터(p_tags/p_sort_orders/p_answer_index) 제거
+    - 포인트 차감 제거 → 등록 시엔 잔액 "확인"만, 캠페인은 `status='PAUSED'` + `approval_status='PENDING'`
+  - `20260317000040_rpc_admin_campaign.sql`
+    - `is_admin()` 공용 헬퍼
+    - `get_pending_campaigns()` / `get_processed_campaigns()` — group_id 단위 집계 목록
+    - `approve_campaign(p_group_id, p_tags)` — 태그 검증/정규화(최대 10개, 중복 거부) → 그룹 잠금 →
+      광고주 지갑 FOR UPDATE + 잔액 확인 + 차감 + SPEND 트랜잭션 → campaign_tags 전면 교체
+      (sort_order 1..N, is_answer=true) → status ACTIVE + APPROVED 전환
+    - `reject_campaign(p_group_id, p_reason)` — 차감 전이므로 환불 불필요
+  - `20260317000041_random_tag_and_approval_guard.sql`
+    - start_mission: 캠페인 조건에 `approval_status='APPROVED'` 추가,
+      정답 태그 선택을 `is_answer=true` 고정 → `ORDER BY RANDOM()` 랜덤 출제로 변경
+    - verify_mission: 제출 태그 비교를 `normalize_tag()` 기준으로 통일 ('#'/공백/대소문자 무시)
+  - `20260317000042_update_dashboard_approval.sql`
+    - get_dashboard_data: 그룹 상태에 PENDING/REJECTED 추가, active_count에서 승인 대기 제외
+
+  **[어드민 웹] 광고 승인 화면 신규 (/admin/campaign)**
+  - `admin/domain/admin_campaign_model.dart` — AdminCampaignRecord + `parsePastedTags()`
+    ("#AAA#BBB" → ['AAA','BBB'], '#' 없으면 공백/쉼표 분리, 중복 제거, 순서 보존)
+  - `admin/data/admin_campaign_repository.dart` — fetchPending/Processed + approve/rejectCampaign
+  - `admin/presentation/admin_campaign_provider.dart` — pendingCampaignsProvider / processedCampaignsProvider
+  - `admin/presentation/admin_campaign_screen.dart`
+    - 카드별: 상품명/업체명/광고주/키워드/기간/일일목표/차감 예정 포인트 표시
+    - [상품 페이지 열기](url_launcher) / [URL 복사] / [클립보드에서 붙여넣기]
+    - 태그 붙여넣기 TextField → 실시간 파싱 미리보기 ("1번째 · xxx"), 10개 초과 시 승인 버튼 비활성
+    - 승인 확인 다이얼로그(태그 순서 + 차감 포인트 최종 확인) → approve_campaign
+    - 거절 다이얼로그(사유 선택 입력) → reject_campaign
+    - 처리 완료 내역(최근 20건): 등록된 태그 순서 + 거절 사유 표시
+  - `app/router.dart` — `/admin/campaign` 라우트 추가
+  - 기존 어드민 3개 화면(충전/출금/공지) AppBar에 [광고 승인] 이동 버튼 추가
+
+  **[광고주 웹] 태그 입력 제거 + 승인 안내**
+  - `campaign_new_screen.dart` — Step 2의 태그 입력 UI/상태/메서드 전체 제거
+    (`_tags`, `_answerIndex`, `_addTag()`, `_removeTag()`, `_buildTagRow()`, tag_guide 이미지)
+    → "광고 승인 절차 안내" 카드로 교체, 등록 버튼 '광고 등록 (운영자 승인 후 1회 차감)'
+  - `campaign_repository.dart` — registerCampaign()에서 tags/sortOrders/answerIndex 파라미터 제거
+  - `campaign_model.dart` / `campaign_detail_screen.dart` — approvalStatus + displayStatus 반영
+    (승인 대기 / 승인 거절 배지)
+  - `dashboard_model.dart` — 상태 라벨에 '승인 대기'/'승인 거절' 추가
+
+  **[앱] 미션 보드**
+  - `mission_repository.dart` — `fetchActiveMissions()`에 `.eq('approval_status','APPROVED')` 추가
+    (RLS로도 차단되지만 명시적 이중 방어)
+
+  ⚠️ 앱 코드 변경 없음 — "N번째 태그 입력" 안내는 기존 tag_index 구조를 그대로 사용하며,
+     랜덤 출제는 start_mission RPC에서만 처리된다.
+
 ---
 
 ## 11. 작업 요청 방식 (Claude Code에게)
@@ -1565,6 +1627,12 @@ curl -X POST http://localhost:8000/run-scheduler \
 | 19 | `20260317000035_add_advertiser_role.sql` | `users.role` CHECK 제약에 `ADVERTISER` 추가 (`USER`/`ADMIN`/`ADVERTISER`) | ✅ 적용 완료 (2026-06-20) |
 | 20 | `20260317000036_update_register_advertiser_role.sql` | `register_advertiser` RPC에 `business_info` INSERT 직후 `UPDATE users SET role='ADVERTISER'` 추가 (같은 트랜잭션, 원자성 보장) | ✅ 적용 완료 (2026-06-20) |
 | 21 | `20260317000037_add_check_email_exists.sql` | `check_email_exists(p_email)` SECURITY DEFINER RPC 신규 — 이메일 존재 여부(인증 무관) 확인용, 앱/웹 가입 분리 차단에 사용 | ✅ 적용 완료 (2026-06-20) |
+
+| 22 | `20260317000038_add_campaign_approval.sql` | campaigns approval_status/approved_at/approved_by/reject_reason + normalize_tag() + RLS 재정의 (앱은 ACTIVE+APPROVED만 조회) | ❌ 신규 — 즉시 적용 필요 |
+| 23 | `20260317000039_update_register_campaign_pending.sql` | register_campaign: 태그 파라미터 제거 + 차감 제거(잔액 확인만) + PAUSED/PENDING 등록 | ❌ 신규 — 즉시 적용 필요 |
+| 24 | `20260317000040_rpc_admin_campaign.sql` | is_admin / get_pending_campaigns / get_processed_campaigns / approve_campaign / reject_campaign | ❌ 신규 — 즉시 적용 필요 |
+| 25 | `20260317000041_random_tag_and_approval_guard.sql` | start_mission: APPROVED 가드 + 랜덤 태그 출제 / verify_mission: normalize_tag 비교 | ❌ 신규 — 즉시 적용 필요 |
+| 26 | `20260317000042_update_dashboard_approval.sql` | get_dashboard_data: PENDING/REJECTED 상태 집계 + active_count 보정 | ❌ 신규 — 즉시 적용 필요 |
 
 **적용 명령 (Supabase SQL Editor):**
 ```sql

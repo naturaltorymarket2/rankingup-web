@@ -103,6 +103,12 @@ class _AdminWithdrawScreenState
           },
         ),
         TextButton.icon(
+          onPressed: () => context.go('/admin/campaign'),
+          icon: const Icon(Icons.fact_check_outlined, size: 18),
+          label: const Text('광고 승인'),
+          style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
+        TextButton.icon(
           onPressed: () => context.go('/admin/charge'),
           icon: const Icon(Icons.verified_outlined, size: 18),
           label: const Text('충전 승인'),

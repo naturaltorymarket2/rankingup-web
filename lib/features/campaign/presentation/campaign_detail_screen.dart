@@ -121,14 +121,18 @@ class CampaignDetailScreen extends ConsumerWidget {
   // ── 상태 바 (상태 배지 + 기간 + 잔여 일수) ───────────────────────
 
   Widget _buildStatusBar(CampaignModel campaign) {
-    final statusLabel = switch (campaign.status) {
+    final statusLabel = switch (campaign.displayStatus) {
       'ACTIVE'    => '진행 중',
+      'PENDING'   => '승인 대기',
+      'REJECTED'  => '승인 거절',
       'PAUSED'    => '일시 중지',
       'COMPLETED' => '종료',
-      _           => campaign.status,
+      _           => campaign.displayStatus,
     };
-    final statusColor = switch (campaign.status) {
+    final statusColor = switch (campaign.displayStatus) {
       'ACTIVE'    => const Color(0xFF2E7D32),
+      'PENDING'   => const Color(0xFFE65100),
+      'REJECTED'  => const Color(0xFFB71C1C),
       'PAUSED'    => const Color(0xFFE65100),
       'COMPLETED' => const Color(0xFF757575),
       _           => const Color(0xFF757575),

@@ -27,7 +27,7 @@ class MissionRepository {
 
   /// 활성 캠페인 목록 (무한 스크롤 페이지 단위, group_id별 DISTINCT)
   ///
-  /// - status = 'ACTIVE' + expires_at >= 지금
+  /// - status = 'ACTIVE' + approval_status = 'APPROVED' + expires_at >= 지금
   /// - 오늘 SUCCESS 한 그룹은 isCompleted=true로 표시 (제외하지 않음)
   /// - 그룹 내 남은 슬롯이 없는 서브키워드 제외 (미완료 캠페인만)
   /// - group_id별 1개 카드 (DISTINCT — 클라이언트 처리)
@@ -68,6 +68,7 @@ class MissionRepository {
         .from('campaigns')
         .select('id, keyword, daily_target, group_id, status')
         .eq('status', 'ACTIVE')
+        .eq('approval_status', 'APPROVED')   // 어드민 승인 완료 광고만 노출
         .gte('expires_at', now.toIso8601String())
         .range(start, end) as List<dynamic>;
 

@@ -100,6 +100,12 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
           },
         ),
         TextButton.icon(
+          onPressed: () => context.go('/admin/campaign'),
+          icon: const Icon(Icons.fact_check_outlined, size: 18),
+          label: const Text('광고 승인'),
+          style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
+        TextButton.icon(
           onPressed: () => context.go('/admin/withdraw'),
           icon: const Icon(Icons.payments_outlined, size: 18),
           label: const Text('출금 처리'),

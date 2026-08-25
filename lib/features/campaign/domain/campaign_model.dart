@@ -10,6 +10,8 @@ class CampaignModel {
   final int      durationDays;
   final int      budget;
   final String   status;
+  /// 어드민 승인 상태 (migration 0038 이후): PENDING / APPROVED / REJECTED
+  final String   approvalStatus;
   final DateTime? startDate;
   final DateTime? endDate;
 
@@ -31,6 +33,7 @@ class CampaignModel {
     required this.durationDays,
     required this.budget,
     required this.status,
+    this.approvalStatus = 'APPROVED',
     this.startDate,
     this.endDate,
     this.groupId,
@@ -52,6 +55,7 @@ class CampaignModel {
         durationDays:     (map['duration_days']  as num).toInt(),
         budget:           (map['budget']         as num).toInt(),
         status:           map['status']        as String,
+        approvalStatus:   map['approval_status'] as String? ?? 'APPROVED',
         groupId:          map['group_id']      as String?,
         groupDailyTarget: (map['group_daily_target'] as num?)?.toInt() ?? 0,
         seedKeyword:      map['seed_keyword']  as String?,
@@ -65,6 +69,13 @@ class CampaignModel {
             ? DateTime.parse(map['end_date'] as String)
             : null,
       );
+
+  /// 표시용 상태: 승인 대기/거절이면 승인 상태를 우선 표시
+  String get displayStatus => switch (approvalStatus) {
+        'PENDING'  => 'PENDING',
+        'REJECTED' => 'REJECTED',
+        _          => status,
+      };
 
   /// 표시용 일일 목표: group_daily_target > 0이면 그룹 기준, 아니면 per-keyword
   int get displayDailyTarget =>

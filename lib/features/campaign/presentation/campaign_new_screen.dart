@@ -32,15 +32,14 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   final _brandNameCtrl   = TextEditingController(); // 브랜드명
   final _seedCtrl        = TextEditingController(); // 순위 추적 키워드
   bool _seedTouched        = false;           // 포커스 해제 or [다음] 시도 후 에러 표시
+  bool _step1Touched       = false;           // [다음 단계] 시도 후 필수값 에러 표시
   bool _isFetchingKeywords = false;
   List<KeywordRankResult> _selectedKeywords = [];
 
   // ── Step 2 ────────────────────────────────────────────────────
-  final _tags            = <Map<String, dynamic>>[]; // {'name': String, 'order': int}
-  final _newTagCtrl      = TextEditingController();  // 태그 이름 입력 필드
-  final _newOrderCtrl    = TextEditingController();  // 태그 순서 입력 필드
+  // 태그는 광고주가 입력하지 않는다 (Phase 22).
+  // 어드민이 승인 단계에서 상품 페이지의 실제 #태그를 직접 등록한다.
   final _dailyTargetCtrl = TextEditingController(text: '100'); // 일일 유입 수량
-  int _answerIndex  = -1;                         // 정답 태그 인덱스 (0-based, -1=미선택)
   DateTimeRange? _dateRange;
 
   // ── Step 3 ────────────────────────────────────────────────────
@@ -60,12 +59,6 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   int get _durationDays => _dateRange != null
       ? _dateRange!.end.difference(_dateRange!.start).inDays + 1
       : 0;
-
-  List<String> get _validTags =>
-      List.unmodifiable(_tags.map((t) => t['name'] as String).toList());
-
-  List<int> get _validSortOrders =>
-      List.unmodifiable(_tags.map((t) => t['order'] as int).toList());
 
   /// 컨트롤러에서 파싱한 일일 목표 수 (파싱 실패 시 0)
   int get _dailyTarget => int.tryParse(_dailyTargetCtrl.text.trim()) ?? 0;
@@ -95,10 +88,16 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       _seedCtrl.text.trim().isNotEmpty &&
       _selectedKeywords.isNotEmpty;
 
+  /// Step 1에서 비어 있는 필수 항목 목록 (없으면 빈 리스트)
+  List<String> get _step1Missing => [
+        if (_urlCtrl.text.trim().isEmpty)         '상품 URL',
+        if (_productNameCtrl.text.trim().isEmpty) '상품명',
+        if (_brandNameCtrl.text.trim().isEmpty)   '브랜드명',
+        if (_seedCtrl.text.trim().isEmpty)        '순위 추적 키워드',
+        if (_selectedKeywords.isEmpty)            '미션 키워드(1개 이상)',
+      ];
+
   bool get _step2Valid =>
-      _tags.isNotEmpty &&
-      _answerIndex >= 0 &&
-      _answerIndex < _tags.length &&
       _isDailyTargetValid &&
       _dateRange != null &&
       _durationDays >= 7;
@@ -111,8 +110,6 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     _productNameCtrl.dispose();
     _brandNameCtrl.dispose();
     _seedCtrl.dispose();
-    _newTagCtrl.dispose();
-    _newOrderCtrl.dispose();
     _dailyTargetCtrl.dispose();
     super.dispose();
   }
@@ -205,6 +202,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   // ─────────────────────────────────────────────────────────────
 
   Widget _buildStep1() {
+    // [다음 단계]를 눌렀는데 비어 있던 항목은 빨간 에러로 표시
+    String? requiredError(String value) =>
+        (_step1Touched && value.trim().isEmpty) ? '필수 입력 항목입니다' : null;
+
     final seedEmpty  = _seedCtrl.text.trim().isEmpty;
     final showSeedError = _seedTouched && seedEmpty;
     final canFetch = _urlCtrl.text.trim().isNotEmpty &&
@@ -224,39 +225,42 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               TextField(
                 controller: _urlCtrl,
                 onChanged: (_) => setState(() => _selectedKeywords = []),
-                decoration: const InputDecoration(
-                  labelText: '상품 URL',
+                decoration: InputDecoration(
+                  labelText: '상품 URL *',
                   hintText: 'https://smartstore.naver.com/...',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  errorText: requiredError(_urlCtrl.text),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _productNameCtrl,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '상품명 *',
                   hintText: '예) 남성 레깅스 헬스 기능성 스판',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  errorText: requiredError(_productNameCtrl.text),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _brandNameCtrl,
                 onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '브랜드명 *',
                   hintText: '예) 나이키',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                   isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                  errorText: requiredError(_brandNameCtrl.text),
                 ),
               ),
             ],
@@ -338,7 +342,14 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               if (_selectedKeywords.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 ..._selectedKeywords.map(_buildKeywordChip),
-              ],
+              ] else if (_step1Touched)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    '미션 키워드를 1개 이상 선택해주세요.',
+                    style: TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ),
             ],
           ),
         ),
@@ -408,7 +419,8 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── 태그 입력 방법 안내 카드 ──────────────────────────
+        // ── 승인 절차 안내 카드 ──────────────────────────────
+        //    태그 입력은 Phase 22부터 운영자(어드민)가 담당한다.
         Container(
           decoration: BoxDecoration(
             color: Colors.amber.shade50,
@@ -421,13 +433,14 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.amber.shade700, size: 18),
+                  Icon(Icons.verified_outlined,
+                      color: Colors.amber.shade800, size: 18),
                   const SizedBox(width: 8),
                   Text(
-                    '태그 입력 방법',
+                    '광고 승인 절차 안내',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.amber.shade700,
+                      color: Colors.amber.shade800,
                       fontSize: 14,
                     ),
                   ),
@@ -435,124 +448,23 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                '① 네이버 스마트스토어 상품 페이지에서 상품명 아래 #태그를 확인하세요.\n'
-                '② 태그 이름과 상품 페이지에서의 순서(몇 번째인지)를 함께 입력하세요.\n'
-                '③ 정답 태그를 라디오 버튼으로 1개 선택하세요.',
-                style: TextStyle(fontSize: 13, height: 1.6),
+                '① 광고를 등록하면 운영자 검수(승인 대기) 상태로 접수됩니다.
+'
+                '② 운영자가 상품 페이지의 #태그를 직접 확인해 등록합니다.
+'
+                '③ 승인이 완료되면 광고가 시작되고, 그때 포인트가 차감됩니다.
+'
+                '④ 승인 상태는 대시보드에서 확인할 수 있습니다.',
+                style: TextStyle(fontSize: 13, height: 1.7),
               ),
               const Divider(height: 20),
               Text(
-                '입력 예시  |  태그명: #티비거치대   순서: 3',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                '태그는 광고주가 입력하지 않습니다. 상품 페이지의 태그를 임의로 '
+                '변경하면 미션 정답이 맞지 않을 수 있으니 광고 기간 중에는 태그를 '
+                '수정하지 말아 주세요.',
+                style: TextStyle(
+                    fontSize: 12, color: Colors.grey[700], height: 1.5),
               ),
-              const SizedBox(height: 4),
-              Text(
-                "→ 앱 유저에게 '3번째 태그를 입력하세요'로 안내됩니다",
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.asset(
-            'assets/images/tag_guide.png',
-            width: double.infinity,
-            fit: BoxFit.contain,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── 태그 ──────────────────────────────────────────────
-        _WebCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('정답 태그', style: _kLabel),
-              const SizedBox(height: 4),
-              Text(
-                '태그 이름과 네이버 상품 페이지에서의 실제 순서(몇 번째인지)를 함께 입력하세요. (최소 1개, 최대 10개)',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '★ 라디오 버튼으로 정답 태그를 선택하면 앱 유저에게 해당 순서가 안내됩니다.',
-                style: const TextStyle(fontSize: 12, color: Colors.orange),
-              ),
-              const SizedBox(height: 12),
-
-              // 태그 추가 입력 행 (태그 이름 + 순서 + [추가] 버튼)
-              if (_tags.length < 10)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _newTagCtrl,
-                        decoration: const InputDecoration(
-                          hintText: '예) #티비거치대',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 100,
-                      child: TextField(
-                        controller: _newOrderCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          hintText: '예) 3',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                        ),
-                        onSubmitted: (_) => _addTag(),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _addTag,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _kBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
-                      child: const Text('추가'),
-                    ),
-                  ],
-                ),
-
-              // 태그 목록 (라디오 + 텍스트 + 삭제 버튼)
-              if (_tags.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                ...List.generate(_tags.length, _buildTagRow),
-              ],
-
-              // 안내 메시지
-              if (_tags.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    '태그를 1개 이상 입력해주세요.',
-                    style: TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                )
-              else if (_answerIndex < 0)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    '정답 태그를 선택해주세요.',
-                    style: TextStyle(color: Colors.red, fontSize: 12),
-                  ),
-                ),
             ],
           ),
         ),
@@ -739,9 +651,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                       '${_fmtDate(_dateRange!.start)} ~ ${_fmtDate(_dateRange!.end)} ($_durationDays일)',
                 ),
               _SummaryRow(
-                label: '태그',
-                value: _tags.map((t) => '${t['order']}번째: ${t['name']}').join(' / '),
-                maxLines: 4,
+                label: '정답 태그',
+                value: '운영자가 상품 페이지에서 직접 등록합니다.',
+                maxLines: 2,
               ),
             ],
           ),
@@ -880,7 +792,13 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                   if (_step1Valid) {
                     setState(() => _step = 2);
                   } else {
-                    setState(() => _seedTouched = true);
+                    // 어떤 항목이 비었는지 즉시 알려준다
+                    final missing = _step1Missing;
+                    setState(() {
+                      _seedTouched  = true;
+                      _step1Touched = true;
+                    });
+                    _showSnack('${missing.join(', ')}을(를) 입력해주세요.');
                   }
                 },
                 style: _step1Valid ? _primaryStyle : _disabledStyle,
@@ -905,7 +823,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('광고 등록 (포인트 1회 차감)'),
+                    : const Text('광고 등록 (운영자 승인 후 1회 차감)'),
               ),
         },
       ),
@@ -980,87 +898,6 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     }
   }
 
-  /// 태그 추가 (최대 10개, 이름 중복 불가, 순서 중복 불가)
-  void _addTag() {
-    final name = _newTagCtrl.text.trim();
-    final orderStr = _newOrderCtrl.text.trim();
-
-    if (name.isEmpty) {
-      _showSnack('태그 이름을 입력해주세요.');
-      return;
-    }
-    if (orderStr.isEmpty) {
-      _showSnack('태그 순서(몇 번째인지)를 입력해주세요.');
-      return;
-    }
-    final order = int.tryParse(orderStr);
-    if (order == null || order < 1) {
-      _showSnack('순서는 1 이상의 숫자를 입력해주세요.');
-      return;
-    }
-    if (_tags.length >= 10) {
-      _showSnack('태그는 최대 10개까지 추가할 수 있습니다.');
-      return;
-    }
-    if (_tags.any((t) => t['name'] == name)) {
-      _showSnack('이미 추가된 태그입니다.');
-      return;
-    }
-    if (_tags.any((t) => t['order'] == order)) {
-      _showSnack('$order번째 순서에 태그가 이미 등록되어 있습니다.');
-      return;
-    }
-    setState(() {
-      _tags.add({'name': name, 'order': order});
-      _newTagCtrl.clear();
-      _newOrderCtrl.clear();
-    });
-  }
-
-  /// 태그 삭제 — 정답 인덱스 자동 조정
-  void _removeTag(int index) {
-    setState(() {
-      _tags.removeAt(index);
-      if (_answerIndex == index) {
-        _answerIndex = -1; // 정답 태그 삭제 시 초기화
-      } else if (_answerIndex > index) {
-        _answerIndex--; // 삭제된 항목 앞에 정답이 있으면 인덱스 조정
-      }
-    });
-  }
-
-  /// 태그 행 위젯 (라디오 버튼 + 순서/이름 + 삭제 버튼)
-  Widget _buildTagRow(int index) {
-    final tag = _tags[index];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Radio<int>(
-            value: index,
-            groupValue: _answerIndex,
-            onChanged: (v) => setState(() => _answerIndex = v!),
-            activeColor: _kBlue,
-            visualDensity: VisualDensity.compact,
-          ),
-          Expanded(
-            child: Text(
-              '${tag['order']}번째 | ${tag['name']}',
-              style: const TextStyle(fontSize: 14),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-            onPressed: () => _removeTag(index),
-            constraints:
-                const BoxConstraints(minWidth: 32, minHeight: 32),
-            padding: EdgeInsets.zero,
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
@@ -1069,7 +906,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       lastDate: now.add(const Duration(days: 365)),
       initialDateRange: _dateRange,
       helpText: '광고 기간 선택 (최소 7일)',
-      saveText: '확인',
+      saveText: '선택 완료',
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -1078,9 +915,22 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               onPrimary: Colors.white,
               onSurface: Color(0xFF212121),
             ),
+            // 우측 상단 [선택 완료] 버튼이 눈에 띄지 않는다는 피드백 반영:
+            // 파란 배경 + 큰 글씨의 채워진 버튼 형태로 강조한다.
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF1976D2),
+                foregroundColor: Colors.white,
+                backgroundColor: const Color(0xFF1976D2),
+                textStyle: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
+                minimumSize: const Size(110, 46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -1143,9 +993,6 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           groupId:          groupId,
           startDate:        _dateRange!.start,
           endDate:          _dateRange!.end,
-          tags:             _validTags,
-          sortOrders:       _validSortOrders,
-          answerIndex:      _tags[_answerIndex]['order'] as int,
           seedKeyword:      _seedCtrl.text.trim().isEmpty ? null : _seedCtrl.text.trim(),
           productName:      _productNameCtrl.text.trim().isEmpty ? null : _productNameCtrl.text.trim(),
           brandName:        _brandNameCtrl.text.trim().isEmpty ? null : _brandNameCtrl.text.trim(),
@@ -1165,7 +1012,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     if (successCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$successCount개 키워드 광고 그룹이 등록되었습니다.'),
+          content: Text(
+            '$successCount개 키워드 광고 그룹이 등록되었습니다. '
+            '운영자 승인 후 광고가 시작되며, 그때 포인트가 차감됩니다.',
+          ),
           backgroundColor: _kGreen,
         ),
       );
@@ -1179,12 +1029,6 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   String _mapRpcError(String err) {
     if (err.contains('INSUFFICIENT_BALANCE')) {
       return '포인트가 부족합니다. 충전 후 다시 시도해주세요.';
-    }
-    if (err.contains('TAGS_REQUIRED')) {
-      return '태그를 1개 이상 입력해주세요.';
-    }
-    if (err.contains('INVALID_ANSWER_INDEX')) {
-      return '정답 태그를 선택해주세요.';
     }
     if (err.contains('DURATION_TOO_SHORT')) {
       return '광고 기간은 최소 7일 이상이어야 합니다.';

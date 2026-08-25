@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'supabase_client.dart';
+import '../features/admin/presentation/admin_campaign_screen.dart';
 import '../features/admin/presentation/admin_charge_screen.dart';
 import '../features/admin/presentation/admin_notice_screen.dart';
 import '../features/admin/presentation/admin_withdraw_screen.dart';
@@ -30,7 +31,7 @@ import '../shared/widgets/bottom_nav_bar.dart';
 /// 앱 (B2C Android)  : ShellRoute(/home, /history, /mypage) + /splash + /login
 ///                     + /mission/:id + /mission/:id/active + /withdraw
 /// 웹 (B2B 광고주)   : /web/login, /web/dashboard, /web/campaign/*, /web/charge, /web/transactions
-/// 어드민 웹 (운영자) : /admin/login, /admin/charge, /admin/withdraw
+/// 어드민 웹 (운영자) : /admin/login, /admin/charge, /admin/campaign, /admin/withdraw
 ///
 /// ShellRoute: /home, /history, /mypage 에 하단 탭 네비게이션 표시
 /// 비-Shell:   /splash, /login, /mission/*, /withdraw, /web/*, /admin/* — 하단 탭 없음
@@ -209,6 +210,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/admin/charge',
       builder: (context, state) => const AdminChargeScreen(),
+    ),
+    GoRoute(
+      path: '/admin/campaign',
+      builder: (context, state) => const AdminCampaignScreen(),
     ),
     GoRoute(
       path: '/admin/withdraw',
