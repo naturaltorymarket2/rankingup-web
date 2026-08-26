@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/supabase_client.dart';
+
 import '../domain/notice_model.dart';
 import 'admin_notice_provider.dart';
 
@@ -239,6 +241,15 @@ class _AdminNoticeScreenState extends ConsumerState<AdminNoticeScreen> {
           icon: const Icon(Icons.payments_outlined, size: 18),
           label: const Text('출금 처리'),
           style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
+        TextButton.icon(
+          onPressed: () async {
+            await supabase.auth.signOut();
+            if (context.mounted) context.go('/admin/login');
+          },
+          icon: const Icon(Icons.logout, size: 18),
+          label: const Text('로그아웃'),
+          style: TextButton.styleFrom(foregroundColor: Colors.grey),
         ),
         const SizedBox(width: 8),
       ],

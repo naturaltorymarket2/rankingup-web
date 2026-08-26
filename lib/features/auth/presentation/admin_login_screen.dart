@@ -46,6 +46,25 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         email: email,
         password: password,
       );
+
+      // 어드민 계정인지 확인 — 광고주/유저 계정으로 로그인하면 즉시 로그아웃.
+      // (같은 브라우저에 광고주 세션이 남은 채 어드민 화면에 들어가
+      //  RPC가 UNAUTHORIZED를 반환하던 문제 방지)
+      final userId = supabase.auth.currentUser?.id;
+      final row = userId == null
+          ? null
+          : await supabase
+              .from('users')
+              .select('role')
+              .eq('id', userId)
+              .maybeSingle();
+
+      if (row?['role'] != 'ADMIN') {
+        await supabase.auth.signOut();
+        _showError('관리자 계정이 아닙니다. 어드민 계정으로 로그인해주세요');
+        return;
+      }
+
       if (mounted) context.go('/admin/charge');
     } on AuthException catch (e) {
       _showError(_mapAuthError(e.message));

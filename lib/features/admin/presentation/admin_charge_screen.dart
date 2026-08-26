@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/supabase_client.dart';
+
 import '../domain/admin_charge_model.dart';
 import 'admin_charge_provider.dart';
 
@@ -116,6 +118,15 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
           icon: const Icon(Icons.campaign_outlined, size: 18),
           label: const Text('공지 등록'),
           style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
+        TextButton.icon(
+          onPressed: () async {
+            await supabase.auth.signOut();
+            if (context.mounted) context.go('/admin/login');
+          },
+          icon: const Icon(Icons.logout, size: 18),
+          label: const Text('로그아웃'),
+          style: TextButton.styleFrom(foregroundColor: Colors.grey),
         ),
         const SizedBox(width: 8),
       ],
