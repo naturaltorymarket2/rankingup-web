@@ -9,6 +9,11 @@ import '../../../app/supabase_client.dart';
 //
 // 로그인 전용 (회원가입 없음)
 // 로그인 성공 → /admin/charge
+//
+// 아이디 로그인:
+//   운영자는 이메일이 아닌 아이디(예: admin)로 로그인한다.
+//   Supabase Auth는 이메일을 요구하므로, '@'가 없는 입력은
+//   내부적으로 <아이디>@kAdminDomain 형태로 변환해 인증한다.
 // ─────────────────────────────────────────────────────────────────
 
 class AdminLoginScreen extends StatefulWidget {
@@ -31,12 +36,21 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     super.dispose();
   }
 
+  /// 아이디 로그인용 내부 도메인 — 화면에는 노출되지 않는다
+  static const String kAdminDomain = 'quizcashnow.co.kr';
+
+  /// 'admin'   → 'admin@quizcashnow.co.kr'
+  /// 'a@b.com' → 'a@b.com'   (이메일을 직접 입력한 경우 그대로 사용)
+  String _toLoginEmail(String input) =>
+      input.contains('@') ? input : '$input@$kAdminDomain';
+
   Future<void> _onLogin() async {
-    final email    = _emailCtrl.text.trim();
+    final loginId  = _emailCtrl.text.trim();
+    final email    = _toLoginEmail(loginId);
     final password = _passwordCtrl.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      _showError('이메일과 비밀번호를 입력해주세요');
+    if (loginId.isEmpty || password.isEmpty) {
+      _showError('아이디와 비밀번호를 입력해주세요');
       return;
     }
 
@@ -79,7 +93,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     final lower = msg.toLowerCase();
     if (lower.contains('invalid login credentials') ||
         lower.contains('invalid_credentials')) {
-      return '이메일 또는 비밀번호가 올바르지 않습니다';
+      return '아이디 또는 비밀번호가 올바르지 않습니다';
     }
     if (lower.contains('email not confirmed') ||
         lower.contains('email_not_confirmed')) {
@@ -120,11 +134,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _fieldLabel('이메일'),
+                      _fieldLabel('아이디'),
                       _inputField(
                         controller: _emailCtrl,
-                        hint: 'admin@example.com',
-                        keyboardType: TextInputType.emailAddress,
+                        hint: 'admin',
+                        keyboardType: TextInputType.text,
                       ),
                       const SizedBox(height: 16),
                       _fieldLabel('비밀번호'),
