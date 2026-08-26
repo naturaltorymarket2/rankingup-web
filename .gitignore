@@ -53,3 +53,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 환경변수 / 인증정보 (절대 커밋 금지)
+.env
+.env.*
+!.env.example
