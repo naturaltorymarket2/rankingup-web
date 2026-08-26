@@ -448,12 +448,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                '① 광고를 등록하면 운영자 검수(승인 대기) 상태로 접수됩니다.
-'
-                '② 운영자가 상품 페이지의 #태그를 직접 확인해 등록합니다.
-'
-                '③ 승인이 완료되면 광고가 시작되고, 그때 포인트가 차감됩니다.
-'
+                '① 광고를 등록하면 운영자 검수(승인 대기) 상태로 접수됩니다.\n'
+                '② 운영자가 상품 페이지의 #태그를 직접 확인해 등록합니다.\n'
+                '③ 승인이 완료되면 광고가 시작되고, 그때 포인트가 차감됩니다.\n'
                 '④ 승인 상태는 대시보드에서 확인할 수 있습니다.',
                 style: TextStyle(fontSize: 13, height: 1.7),
               ),
