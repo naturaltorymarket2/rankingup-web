@@ -84,7 +84,12 @@ class RankApiClient {
   ///   [RankTimeoutException]   — 10초 타임아웃 초과
   ///   [RankApiException]       — 4xx/5xx 서버 오류 또는 RANK_API_URL 미설정
   ///   [RankNetworkException]   — 네트워크 연결 오류
-  Future<RankResult> fetchRank(String productUrl, String keyword) async {
+  Future<RankResult> fetchRank(
+    String productUrl,
+    String keyword, {
+    String? productName,
+    String? brandName,
+  }) async {
     if (_baseUrl.isEmpty) {
       throw const RankApiException(0); // RANK_API_URL 미설정
     }
@@ -93,6 +98,11 @@ class RankApiClient {
       queryParameters: {
         'url':     productUrl,
         'keyword': keyword,
+        // 통합검색 결과에서 '내 상품'을 식별하는 데 사용 (스토어명/상품명 매칭)
+        if (productName != null && productName.isNotEmpty)
+          'product_name': productName,
+        if (brandName != null && brandName.isNotEmpty)
+          'brand_name': brandName,
       },
     );
 
@@ -126,7 +136,10 @@ class RankApiClient {
     );
   }
 
-  /// 상품 URL + 대표 키워드로 연관 키워드 목록과 각 순위를 반환합니다.
+  /// 상품 URL + 대표 키워드로 조합 키워드 목록과 각 통합검색 순위를 반환합니다.
+  ///
+  /// 서버는 상품명에서 뽑은 수식어와 시드 키워드를 조합해 최대 5개를 추천하고,
+  /// 각 키워드의 네이버 통합검색 노출 순위(1~10위)를 함께 반환합니다.
   ///
   /// 서버의 GET /keywords?url={productUrl}&keyword={seedKeyword} 엔드포인트를 호출합니다.
   /// RANK_API_URL 형식: https://host/rank → /keywords 경로로 자동 파생.
@@ -138,8 +151,10 @@ class RankApiClient {
   ///   [RankNetworkException]   — 네트워크 연결 오류
   Future<List<KeywordRankResult>> fetchKeywords(
     String productUrl,
-    String seedKeyword,
-  ) async {
+    String seedKeyword, {
+    String? productName,
+    String? brandName,
+  }) async {
     if (_baseUrl.isEmpty) {
       throw const RankApiException(0); // RANK_API_URL 미설정
     }
@@ -148,7 +163,15 @@ class RankApiClient {
     final base = Uri.parse(_baseUrl);
     final uri = base.replace(
       path: '/keywords',
-      queryParameters: {'url': productUrl, 'keyword': seedKeyword},
+      queryParameters: {
+        'url':     productUrl,
+        'keyword': seedKeyword,
+        // 상품명은 조합 키워드 생성(무안 + 양파즙 → 무안양파즙)에도 쓰인다
+        if (productName != null && productName.isNotEmpty)
+          'product_name': productName,
+        if (brandName != null && brandName.isNotEmpty)
+          'brand_name': brandName,
+      },
     );
 
     late http.Response response;

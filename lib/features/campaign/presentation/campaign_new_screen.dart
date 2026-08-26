@@ -863,7 +863,12 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
     setState(() => _isFetchingKeywords = true);
     try {
-      final keywords = await RankApiClient().fetchKeywords(url, seed);
+      final keywords = await RankApiClient().fetchKeywords(
+        url,
+        seed,
+        productName: _productNameCtrl.text.trim(),
+        brandName:   _brandNameCtrl.text.trim(),
+      );
       if (!mounted) return;
 
       if (keywords.isEmpty) {
@@ -875,7 +880,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         context,
         keywords,
         preSelected: _selectedKeywords,
-        productUrl: _urlCtrl.text.trim(),
+        productUrl:  _urlCtrl.text.trim(),
+        productName: _productNameCtrl.text.trim(),
+        brandName:   _brandNameCtrl.text.trim(),
       );
       if (!mounted) return;
 

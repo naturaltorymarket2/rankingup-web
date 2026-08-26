@@ -17,6 +17,8 @@ Future<List<KeywordRankResult>?> showKeywordSelectModal(
   List<KeywordRankResult> keywords, {
   List<KeywordRankResult> preSelected = const [],
   String productUrl = '',
+  String productName = '',
+  String brandName = '',
 }) {
   final maxH = MediaQuery.of(context).size.height * 0.85;
   return showModalBottomSheet<List<KeywordRankResult>>(
@@ -31,6 +33,8 @@ Future<List<KeywordRankResult>?> showKeywordSelectModal(
         keywords: keywords,
         preSelected: preSelected,
         productUrl: productUrl,
+        productName: productName,
+        brandName: brandName,
       ),
     ),
   );
@@ -44,10 +48,14 @@ class _KeywordSelectModal extends StatefulWidget {
   final List<KeywordRankResult> keywords;
   final List<KeywordRankResult> preSelected;
   final String productUrl;
+  final String productName;
+  final String brandName;
   const _KeywordSelectModal({
     required this.keywords,
     this.preSelected = const [],
     this.productUrl = '',
+    this.productName = '',
+    this.brandName = '',
   });
 
   @override
@@ -55,7 +63,8 @@ class _KeywordSelectModal extends StatefulWidget {
 }
 
 class _KeywordSelectModalState extends State<_KeywordSelectModal> {
-  static const _maxOn   = 10;
+  // 추천 키워드가 5개이고 SerpApi 쿼터가 등록 1건당 키워드 수만큼 소모되므로 5개로 제한
+  static const _maxOn   = 5;
   static const _kBlue   = Color(0xFF1E3A8A);
 
   late final List<bool> _toggles;
@@ -118,7 +127,12 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
     int? rank;
     if (widget.productUrl.isNotEmpty) {
       try {
-        final result = await _rankClient.fetchRank(widget.productUrl, input);
+        final result = await _rankClient.fetchRank(
+          widget.productUrl,
+          input,
+          productName: widget.productName,
+          brandName:   widget.brandName,
+        );
         rank = result.rank;
       } catch (_) {
         rank = null; // 타임아웃·네트워크 오류 → 순위권 밖으로 처리
@@ -225,7 +239,7 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
                   style: TextStyle(fontSize: 12, height: 1.7),
                 ),
                 Text(
-                  '• 15위 이내의 키워드만 ON해주세요',
+                  '• 통합검색 10위 이내 키워드만 ON해주세요',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.7,
@@ -512,9 +526,10 @@ class _RankBadge extends StatelessWidget {
         style: TextStyle(color: Colors.grey, fontSize: 12),
       );
     }
-    final color = rank! <= 15
-        ? const Color(0xFF2E7D32) // 15위 이내 — 초록
-        : Colors.orange;          // 16위 이상 — 주황
+    // 통합검색 쇼핑 블록은 10위까지만 노출되므로 그 안이면 모두 초록
+    final color = rank! <= 10
+        ? const Color(0xFF2E7D32)
+        : Colors.orange;
     return Text(
       '$rank위',
       style: TextStyle(
