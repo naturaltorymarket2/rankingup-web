@@ -129,6 +129,27 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
     now = datetime.now(timezone.utc)
     groups: Dict[tuple, Dict[str, Any]] = {}
 
+    # 그룹별 대표 캠페인 (시드 순위를 기록할 대상 — 대시보드 차트 기준)
+    representative: Dict[str, str] = {}
+    for row in sorted(rows, key=lambda r: r.get('id') or ''):
+        gid = row.get('group_id')
+        if gid and gid not in representative:
+            representative[gid] = row['id']
+
+    def add_target(product_url, keyword, row, campaign_id, is_seed):
+        key = (product_url, keyword, is_seed)
+        if key not in groups:
+            groups[key] = {
+                'product_url':  product_url,
+                'keyword':      keyword,
+                'product_name': row.get('product_name') or '',
+                'brand_name':   row.get('brand_name') or '',
+                'is_seed':      is_seed,
+                'campaign_ids': [],
+            }
+        if campaign_id not in groups[key]['campaign_ids']:
+            groups[key]['campaign_ids'].append(campaign_id)
+
     for row in rows:
         # 기간이 끝난 광고는 추적하지 않는다
         expires = row.get('expires_at')
@@ -139,26 +160,25 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
             except ValueError:
                 pass
 
-        keyword = (row.get('seed_keyword') or row.get('keyword') or '').strip()
-        if not keyword:
-            continue
+        url = row['product_url']
 
-        key = (row['product_url'], keyword)
-        if key not in groups:
-            groups[key] = {
-                'product_url':  row['product_url'],
-                'keyword':      keyword,
-                'product_name': row.get('product_name') or '',
-                'brand_name':   row.get('brand_name') or '',
-                'campaign_ids': [],
-            }
-        groups[key]['campaign_ids'].append(row['id'])
+        # ① 미션 키워드 순위 — 앱 화면의 "몇 위쯤에 있어요" 힌트에 쓰인다
+        mission_kw = (row.get('keyword') or '').strip()
+        if mission_kw:
+            add_target(url, mission_kw, row, row['id'], False)
+
+        # ② 시드(순위 추적 대표) 키워드 순위 — 광고주 대시보드 차트 기준
+        seed_kw = (row.get('seed_keyword') or '').strip()
+        gid     = row.get('group_id')
+        if seed_kw and gid and representative.get(gid) == row['id']:
+            add_target(url, seed_kw, row, row['id'], True)
 
     return list(groups.values())
 
 
 def save_rank(env: Dict[str, str], campaign_ids: List[str],
-              rank: Optional[int], checked_to: int) -> None:
+              rank: Optional[int], checked_to: int,
+              keyword: str = '', is_seed: bool = True) -> None:
     """
     당일 기록이 있으면 UPDATE, 없으면 INSERT (하루 1건 유지).
     rank=None 은 '500위 밖'을 의미한다.
@@ -168,12 +188,14 @@ def save_rank(env: Dict[str, str], campaign_ids: List[str],
     now_utc   = datetime.now(timezone.utc).isoformat()
 
     for campaign_id in campaign_ids:
+        # 같은 날 + 같은 키워드 기록이 있으면 갱신, 없으면 새로 넣는다
         existing = requests.get(
             env['url'] + '/rest/v1/campaign_rank_history',
             headers=sb_headers(env),
             params={
                 'select':      'id',
                 'campaign_id': 'eq.' + campaign_id,
+                'is_seed':     'is.' + ('true' if is_seed else 'false'),
                 'checked_at':  'gte.' + day_start.isoformat(),
                 'limit':       '1',
             },
@@ -182,7 +204,13 @@ def save_rank(env: Dict[str, str], campaign_ids: List[str],
         existing.raise_for_status()
         rows = existing.json()
 
-        payload = {'rank': rank, 'checked_at': now_utc, 'checked_to': checked_to}
+        payload = {
+            'rank':       rank,
+            'checked_at': now_utc,
+            'checked_to': checked_to,
+            'keyword':    keyword,
+            'is_seed':    is_seed,
+        }
 
         if rows:
             requests.patch(
@@ -267,7 +295,9 @@ def main(test_mode: bool = False) -> None:
 
             for i, target in enumerate(targets, 1):
                 product = to_product(target, nrs)
-                print(f'[{i}/{len(targets)}] "{product["keyword"]}" — {product["name"][:30]}')
+                kind = '시드' if target.get('is_seed') else '미션'
+                print(f'[{i}/{len(targets)}] [{kind}] "{product["keyword"]}" '
+                      f'— {product["name"][:30]}')
 
                 result = nrs.check_rank(page, product)
 
@@ -279,7 +309,9 @@ def main(test_mode: bool = False) -> None:
                 rank       = result.get('rank')
                 checked_to = result.get('checked_to') or 0
 
-                save_rank(env, target['campaign_ids'], rank, checked_to)
+                save_rank(env, target['campaign_ids'], rank, checked_to,
+                          keyword=target['keyword'],
+                          is_seed=target.get('is_seed', True))
 
                 if rank:
                     print(f'    → {rank}위 (캠페인 {len(target["campaign_ids"])}개 기록)')

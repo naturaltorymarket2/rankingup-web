@@ -194,6 +194,10 @@ class _DetailBody extends StatelessWidget {
 
                 // 키워드 히어로 섹션
                 _KeywordSection(campaign: campaign),
+                const SizedBox(height: 16),
+
+                // 상품 위치 힌트 — 검색 결과에서 상품을 못 찾고 이탈하는 문제 완화
+                _ProductHintSection(campaign: campaign),
                 const SizedBox(height: 24),
 
                 const Divider(),
@@ -213,6 +217,97 @@ class _DetailBody extends StatelessWidget {
           onPressed: isStarting ? null : onStartTapped,
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 상품 위치 힌트
+//
+// 크롤러가 매일 수집한 순위를 바탕으로 "몇 번째 · 몇 페이지"를 알려준다.
+// 순위 정보가 없으면(수집 전/500위 밖) 상품명만 보여준다.
+// ─────────────────────────────────────────────────────────────────
+
+class _ProductHintSection extends StatelessWidget {
+  final CampaignMissionModel campaign;
+  const _ProductHintSection({required this.campaign});
+
+  @override
+  Widget build(BuildContext context) {
+    final name  = campaign.productName;
+    final brand = campaign.brandName;
+    final hasName = name != null && name.trim().isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFC7DBFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.place_outlined, size: 18, color: Color(0xFF1E3A8A)),
+              const SizedBox(width: 6),
+              Text(
+                '찾을 상품',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue[900],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (hasName)
+            Text(
+              name.trim(),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          if (brand != null && brand.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '판매자 · ${brand.trim()}',
+              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          if (campaign.hasRankHint)
+            Row(
+              children: [
+                const Icon(Icons.search, size: 16, color: Color(0xFF2E7D32)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    campaign.rankHintText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2E7D32),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(
+              '순위 정보는 매일 갱신됩니다. 검색 결과를 아래로 넘기며 위 상품을 찾아주세요.',
+              style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5),
+            ),
+        ],
+      ),
     );
   }
 }

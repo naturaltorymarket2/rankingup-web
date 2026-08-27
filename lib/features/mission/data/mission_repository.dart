@@ -41,22 +41,29 @@ class MissionRepository {
     final todayStartIso = _kstTodayStartIso();
 
     // 1. 오늘 내가 SUCCESS 한 mission_logs → group_id / campaign_id 수집
-    final completedRaw = await supabase
+    // 오늘 내가 참여한 기록 — 성공(SUCCESS)과 진행중(IN_PROGRESS) 모두 수집.
+    // 서버(start_mission)가 두 경우 모두 재참여를 막으므로 화면도 같이 구분한다.
+    final myLogsRaw = await supabase
         .from('mission_logs')
-        .select('campaign_id, group_id')
+        .select('campaign_id, group_id, status')
         .eq('user_id', userId)
-        .eq('status', 'SUCCESS')
+        .inFilter('status', ['SUCCESS', 'IN_PROGRESS'])
         .gte('started_at', todayStartIso) as List<dynamic>;
 
-    final completedGroupIds    = <String>{};
-    final completedCampaignIds = <String>{}; // group_id NULL 폴백
-    for (final r in completedRaw) {
-      final m       = r as Map<String, dynamic>;
-      final groupId = m['group_id'] as String?;
+    final completedGroupIds     = <String>{};
+    final completedCampaignIds  = <String>{}; // group_id NULL 폴백
+    final inProgressGroupIds    = <String>{};
+    final inProgressCampaignIds = <String>{};
+
+    for (final r in myLogsRaw) {
+      final m        = r as Map<String, dynamic>;
+      final groupId  = m['group_id'] as String?;
+      final isDone   = m['status'] == 'SUCCESS';
       if (groupId != null) {
-        completedGroupIds.add(groupId);
+        (isDone ? completedGroupIds : inProgressGroupIds).add(groupId);
       } else {
-        completedCampaignIds.add(m['campaign_id'] as String);
+        (isDone ? completedCampaignIds : inProgressCampaignIds)
+            .add(m['campaign_id'] as String);
       }
     }
 
@@ -109,8 +116,14 @@ class MissionRepository {
           (groupId != null && completedGroupIds.contains(groupId)) ||
           (groupId == null && completedCampaignIds.contains(id));
 
-      // 미완료 캠페인은 일일 목표 도달 시 제외
-      if (!isCompleted && count >= target) continue;
+      // 진행중(시작만 하고 정답 미입력) 여부 — 완료가 아닌 경우에만 의미가 있다
+      final isInProgress = !isCompleted &&
+          ((groupId != null && inProgressGroupIds.contains(groupId)) ||
+           (groupId == null && inProgressCampaignIds.contains(id)));
+
+      // 오늘 참여하지 않은 캠페인만 일일 목표 도달 시 제외
+      // (참여한 미션은 '참여완료'로 계속 보여준다)
+      if (!isCompleted && !isInProgress && count >= target) continue;
 
       // group_id별 DISTINCT (첫 번째 등장 = 쿼리 반환 순서 기준)
       final key = groupId ?? id;
@@ -120,8 +133,9 @@ class MissionRepository {
         map,
         todaySuccessCount: count,
         isCompleted: isCompleted,
+        isInProgress: isInProgress,
       );
-      if (isCompleted) {
+      if (isCompleted || isInProgress) {
         completed.add(model);
       } else {
         available.add(model);
@@ -155,8 +169,26 @@ class MissionRepository {
         .eq('status', 'SUCCESS')
         .gte('started_at', todayStartIso) as List<dynamic>;
 
+    // 상품 위치 힌트용 최신 순위 (크롤러가 매일 수집한 미션 키워드 기준)
+    // is_seed=false = 유저가 실제로 검색할 미션 키워드의 순위
+    int? currentRank;
+    try {
+      final rankRaw = await supabase
+          .from('campaign_rank_history')
+          .select('rank')
+          .eq('campaign_id', campaignId)
+          .eq('is_seed', false)
+          .order('checked_at', ascending: false)
+          .limit(1) as List<dynamic>;
+      if (rankRaw.isNotEmpty) {
+        currentRank = (rankRaw.first['rank'] as num?)?.toInt();
+      }
+    } catch (_) {
+      // 순위 조회 실패는 미션 진행을 막지 않는다 — 힌트만 표시되지 않음
+    }
+
     return CampaignMissionModel.fromMap(
-      campaignRaw,
+      {...campaignRaw, 'current_rank': currentRank},
       todaySuccessCount: logsRaw.length,
     );
   }

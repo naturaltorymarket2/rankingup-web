@@ -36,6 +36,10 @@ class CampaignMissionModel {
   /// 오늘 이미 참여 완료한 캠페인 여부 — 홈 보드에서 시각적 구분 표시용
   final bool isCompleted;
 
+  /// 오늘 시작했지만 아직 정답을 입력하지 않은 상태.
+  /// 서버(start_mission)가 재참여를 막으므로 화면에서도 구분해 보여준다.
+  final bool isInProgress;
+
   /// 상품명 — 미션 진행 화면 안내용 (nullable, 구버전 캠페인은 null)
   final String? productName;
 
@@ -52,6 +56,7 @@ class CampaignMissionModel {
     this.productUrl,
     this.groupId,
     this.isCompleted = false,
+    this.isInProgress = false,
     this.productName,
     this.brandName,
   });
@@ -69,12 +74,37 @@ class CampaignMissionModel {
   /// RANK_OUT 상태 여부 — 상세 화면 경고 표시용
   bool get isRankOut => status == 'RANK_OUT';
 
+  /// 오늘 이 그룹에 이미 참여했는지 (완료 또는 진행 중)
+  bool get isParticipatedToday => isCompleted || isInProgress;
+
+  // ── 상품 위치 힌트 (크롤러가 매일 수집한 미션 키워드 순위) ──────
+  //    유저가 검색 결과에서 상품을 찾지 못해 미션을 포기하는 문제를 줄인다.
+
+  /// 네이버 쇼핑 검색 결과 한 페이지당 상품 수
+  static const int _pageSize = 40;
+
+  /// 순위 정보를 안내할 수 있는 상태인지 (500위 안에서 발견된 경우)
+  bool get hasRankHint => currentRank != null && currentRank! > 0;
+
+  /// 상품이 있는 페이지 번호 (1-based)
+  int get rankPage => hasRankHint ? ((currentRank! - 1) ~/ _pageSize) + 1 : 0;
+
+  /// 화면 안내 문구 — 예) "약 37위 · 2페이지쯤에 있어요"
+  String get rankHintText {
+    if (!hasRankHint) return '';
+    final page = rankPage;
+    return page <= 1
+        ? '약 $currentRank위 · 첫 페이지에 있어요'
+        : '약 $currentRank위 · $page페이지쯤에 있어요';
+  }
+
   /// Supabase 쿼리 Map → 모델
   /// todaySuccessCount 는 mission_logs 별도 집계 후 주입
   factory CampaignMissionModel.fromMap(
     Map<String, dynamic> map, {
     required int todaySuccessCount,
     bool isCompleted = false,
+    bool isInProgress = false,
   }) {
     return CampaignMissionModel(
       campaignId:        map['id']           as String,
@@ -84,6 +114,9 @@ class CampaignMissionModel {
       status:            map['status']       as String,
       productUrl:        map['product_url']  as String?,
       groupId:           map['group_id']     as String?,
+      // 크롤러가 수집한 미션 키워드 순위 (상품 위치 힌트용, 없으면 null)
+      currentRank:       (map['current_rank'] as num?)?.toInt(),
+      isInProgress:      isInProgress,
       isCompleted:       isCompleted,
       productName:       map['product_name'] as String?,
       brandName:         map['brand_name']   as String?,

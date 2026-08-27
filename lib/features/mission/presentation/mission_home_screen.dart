@@ -19,8 +19,21 @@ class MissionHomeScreen extends ConsumerStatefulWidget {
       _MissionHomeScreenState();
 }
 
+/// 미션 보드 필터
+enum MissionFilter { all, available, done }
+
 class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
   final _scrollController = ScrollController();
+
+  /// 참여가능 / 참여완료 필터 (기본: 전체)
+  MissionFilter _filter = MissionFilter.all;
+
+  List<CampaignMissionModel> _applyFilter(List<CampaignMissionModel> list) =>
+      switch (_filter) {
+        MissionFilter.all       => list,
+        MissionFilter.available => list.where((m) => !m.isParticipatedToday).toList(),
+        MissionFilter.done      => list.where((m) => m.isParticipatedToday).toList(),
+      };
 
   @override
   void initState() {
@@ -65,6 +78,12 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
           // ── 포인트 잔액 헤더 ──────────────────────────────────
           _BalanceHeader(balanceAsync: balanceAsync),
 
+          // ── 참여가능 / 참여완료 필터 ──────────────────────────
+          _FilterBar(
+            current: _filter,
+            onChanged: (f) => setState(() => _filter = f),
+          ),
+
           // ── 미션 목록 ─────────────────────────────────────────
           Expanded(
             child: missionState.when(
@@ -82,6 +101,11 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
                   return const _EmptyMissionsView();
                 }
 
+                final missions = _applyFilter(state.missions);
+                if (missions.isEmpty) {
+                  return _FilteredEmptyView(filter: _filter);
+                }
+
                 return RefreshIndicator(
                   onRefresh: () =>
                       ref.read(missionHomeProvider.notifier).refresh(),
@@ -89,10 +113,10 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                     // 로딩 중일 때 마지막에 스피너 아이템 추가
-                    itemCount: state.missions.length +
+                    itemCount: missions.length +
                         (state.isLoadingMore ? 1 : 0),
                     itemBuilder: (context, index) {
-                      if (index >= state.missions.length) {
+                      if (index >= missions.length) {
                         return const Padding(
                           padding: EdgeInsets.symmetric(vertical: 24),
                           child: Center(
@@ -100,9 +124,7 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
                           ),
                         );
                       }
-                      return _MissionCard(
-                        mission: state.missions[index],
-                      );
+                      return _MissionCard(mission: missions[index]);
                     },
                   ),
                 );
@@ -113,6 +135,83 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
           // ── 배너 광고 (하단 고정) ──────────────────────────────
           const AdmobBanner(),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 참여가능 / 참여완료 필터 바
+// ─────────────────────────────────────────────────────────────────
+
+class _FilterBar extends StatelessWidget {
+  final MissionFilter current;
+  final ValueChanged<MissionFilter> onChanged;
+
+  const _FilterBar({required this.current, required this.onChanged});
+
+  static const _labels = {
+    MissionFilter.all:       '전체',
+    MissionFilter.available: '참여가능',
+    MissionFilter.done:      '참여완료',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      child: Row(
+        children: MissionFilter.values.map((f) {
+          final selected = f == current;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(_labels[f]!),
+              selected: selected,
+              onSelected: (_) => onChanged(f),
+              labelStyle: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected ? Colors.white : Colors.grey[700],
+              ),
+              selectedColor: const Color(0xFF1E3A8A),
+              backgroundColor: Colors.grey[100],
+              side: BorderSide(
+                color: selected ? const Color(0xFF1E3A8A) : Colors.grey[300]!,
+              ),
+              showCheckmark: false,
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 필터 결과가 없을 때
+// ─────────────────────────────────────────────────────────────────
+
+class _FilteredEmptyView extends StatelessWidget {
+  final MissionFilter filter;
+  const _FilteredEmptyView({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final message = switch (filter) {
+      MissionFilter.available => '지금 참여할 수 있는 미션이 없습니다.\n내일 다시 확인해주세요.',
+      MissionFilter.done      => '오늘 참여한 미션이 없습니다.',
+      MissionFilter.all       => '미션이 없습니다.',
+    };
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey[600], height: 1.6),
+        ),
       ),
     );
   }
@@ -204,7 +303,9 @@ class _MissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme       = Theme.of(context);
-    final isCompleted = mission.isCompleted;
+    // 오늘 이미 참여한 미션(완료/진행중)은 목록에 남기되 흐리게 표시하고 탭을 막는다.
+    // 서버가 재참여를 거부하므로 눌러도 오류만 나기 때문이다.
+    final isCompleted = mission.isParticipatedToday;
     final isFull      = !isCompleted && mission.todayRemaining == 0; // A-010
     final isAlmostFull = !isFull && !isCompleted && mission.todayProgressRatio > 0.8;
     final progressColor = (isFull || isCompleted)
@@ -248,7 +349,7 @@ class _MissionCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     if (isCompleted)
-                      const _CompletedBadge()
+                      _CompletedBadge(isDone: mission.isCompleted)
                     else if (isFull)
                       const _SoldOutBadge()
                     else
@@ -270,7 +371,7 @@ class _MissionCard extends StatelessWidget {
                     ),
                     Text(
                       isCompleted
-                          ? '오늘 참여완료'
+                          ? (mission.isCompleted ? '오늘 미션완료' : '진행 중 — 앱에서 정답 입력')
                           : (isFull
                               ? '오늘 마감'
                               : '${mission.todayRemaining}명 남음'),
@@ -311,21 +412,26 @@ class _MissionCard extends StatelessWidget {
 
 // 참여완료 뱃지
 class _CompletedBadge extends StatelessWidget {
-  const _CompletedBadge();
+  /// 정답까지 마쳤으면 '미션완료', 시작만 했으면 '진행중'
+  final bool isDone;
+  const _CompletedBadge({this.isDone = true});
 
   @override
   Widget build(BuildContext context) {
+    final color = isDone ? Colors.grey.shade500 : const Color(0xFFE65100);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: isDone ? Colors.grey.shade100 : const Color(0xFFFFF3E0),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(
+          color: isDone ? Colors.grey.shade300 : const Color(0xFFFFCC80),
+        ),
       ),
       child: Text(
-        '참여완료',
+        isDone ? '미션완료' : '진행중',
         style: TextStyle(
-          color: Colors.grey.shade500,
+          color: color,
           fontWeight: FontWeight.bold,
           fontSize: 12,
         ),
