@@ -54,10 +54,19 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.13.1
 
+# 앱 아이콘 생성 설정 (dart run flutter_launcher_icons)
+#
+#   image_path      구형 안드로이드(8.0 미만)용 정사각 아이콘
+#   adaptive_icon_* 안드로이드 8.0+ 적응형 아이콘 (배경/전경 2겹)
+#                   런처가 기기별 모양(원/사각/물방울)으로 마스킹하므로
+#                   전경은 중앙 안전영역 안에만 배치돼 있어야 잘리지 않는다
 flutter_icons:
   image_path: "assets/icon/app_icon.png"
   android: true
   ios: false
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/icon/app_icon_background.png"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

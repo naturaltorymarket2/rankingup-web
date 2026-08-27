@@ -12,3 +12,8 @@ const out=o.slice(0,10).map(t=>'#'+t).join('');
 if(!out){alert('태그를 찾지 못했습니다. 페이지를 끝까지 스크롤한 뒤 다시 실행해 주세요.');return;}
 navigator.clipboard.writeText(out).then(()=>alert('태그 '+o.slice(0,10).length+'개 복사됨\n\n'+out),
 ()=>prompt('아래 값을 직접 복사하세요 (Ctrl+C)',out));})();
+
+
+
+[퀴즈캐시나우 실행]
+python tools\reward_rank_crawler.py            ← 전체 실행

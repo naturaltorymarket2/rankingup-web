@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/account_type.dart';
+import '../../onboarding/presentation/onboarding_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // 스플래시 화면 — Supabase 세션 복원 후 자동 이동
@@ -70,8 +71,13 @@ class _SplashScreenState extends State<SplashScreen> {
           context.go(emailConfirmedAt != null ? '/home' : '/email_verify');
         }
       }
+    } else if (kIsWeb) {
+      context.go('/web/login');
     } else {
-      context.go(kIsWeb ? '/web/login' : '/login');
+      // 앱 첫 실행이면 사용법 안내(온보딩)를 먼저 보여준다
+      final seen = await hasSeenOnboarding();
+      if (!mounted) return;
+      context.go(seen ? '/login' : '/onboarding');
     }
   }
 

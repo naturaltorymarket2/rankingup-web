@@ -20,6 +20,7 @@ import '../features/dashboard/presentation/web_dashboard_screen.dart';
 import '../features/mission/presentation/mission_active_screen.dart';
 import '../features/mission/presentation/mission_detail_screen.dart';
 import '../features/mission/presentation/mission_home_screen.dart';
+import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/wallet/presentation/history_screen.dart';
 import '../features/wallet/presentation/mypage_screen.dart';
 import '../features/wallet/presentation/withdraw_screen.dart';
@@ -99,6 +100,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/onboarding',
+      builder: (context, state) => const OnboardingScreen(),
     ),
     GoRoute(
       path: '/email_verify',

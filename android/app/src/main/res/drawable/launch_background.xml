@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   앱 실행 직후 (Flutter 엔진이 첫 프레임을 그리기 전까지) 표시되는 화면.
+
   기본값은 흰 배경이라 앱 아이콘만 덩그러니 보였다.
-  브랜드 색 + 중앙 로고로 바꿔 Flutter 스플래시(같은 색)로 자연스럽게 이어지게 한다.
+  Flutter 스플래시와 같은 브랜드 배너를 네이티브 단계에서 바로 띄워
+  "앱명 + 설명 + 안내"가 처음부터 보이게 한다.
+  (Android 12+ 는 OS가 아이콘 스플래시를 잠깐 강제 표시한 뒤 이 화면으로 넘어온다)
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/splash_background" />
 
     <item>
         <bitmap
-            android:gravity="center"
-            android:src="@mipmap/ic_launcher" />
+            android:gravity="fill"
+            android:src="@drawable/launch_banner" />
     </item>
 </layer-list>
