@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12(API 31) 이상 전용 테마.
+
+  Android 12부터는 앱을 켤 때 OS가 스플래시 화면을 강제로 표시한다.
+  아무 설정도 하지 않으면 '흰 배경 + 앱 아이콘'이 그대로 나와
+  로딩 중 화면이 비어 보인다.
+  배경색을 브랜드 색으로 지정해 Flutter 스플래시와 이어지게 한다.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <!-- Flutter 엔진 준비 후 전환될 테마 -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+</resources>

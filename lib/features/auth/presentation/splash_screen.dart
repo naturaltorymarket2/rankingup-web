@@ -29,14 +29,20 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuth() async {
-    // A-009: onAuthStateChange 스트림의 첫 이벤트로 세션 복원 완료를 감지
-    // 3초 타임아웃: 이벤트 미수신 시 currentSession으로 fallback
-    try {
-      await supabase.auth.onAuthStateChange
-          .first
-          .timeout(const Duration(seconds: 3));
-    } catch (_) {
-      // TimeoutException 또는 스트림 오류 — currentSession으로 fallback
+    // 세션 복원 대기.
+    //
+    // 기존에는 onAuthStateChange 첫 이벤트를 최대 3초 기다렸는데,
+    // 로그인한 적이 없는 사용자는 이벤트가 오지 않아 매번 3초를 그냥 버렸다.
+    // → 이미 복원된 세션이 있으면 기다리지 않고,
+    //   없을 때만 짧게(1.2초) 기다린 뒤 넘어간다.
+    if (supabase.auth.currentSession == null) {
+      try {
+        await supabase.auth.onAuthStateChange
+            .first
+            .timeout(const Duration(milliseconds: 1200));
+      } catch (_) {
+        // TimeoutException 또는 스트림 오류 — currentSession으로 fallback
+      }
     }
     if (!mounted) return;
 

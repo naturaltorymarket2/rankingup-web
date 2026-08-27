@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!--
+  앱 실행 직후 (Flutter 엔진이 첫 프레임을 그리기 전까지) 표시되는 화면.
+  기본값은 흰 배경이라 앱 아이콘만 덩그러니 보였다.
+  브랜드 색 + 중앙 로고로 바꿔 Flutter 스플래시(같은 색)로 자연스럽게 이어지게 한다.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+    <item android:drawable="@color/splash_background" />
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@mipmap/ic_launcher" />
+    </item>
 </layer-list>
