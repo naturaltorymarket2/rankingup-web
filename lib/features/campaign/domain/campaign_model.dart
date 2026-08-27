@@ -95,9 +95,15 @@ class CampaignStats {
   final int  totalSuccess;
   final int? currentRank;
 
+  /// 순위 기록이 존재하는지 여부.
+  /// currentRank == null 이면서 이 값이 true면 '500위 밖'(크롤러가 확인했으나 미발견),
+  /// false면 아직 수집 전이라 '데이터 없음'이다.
+  final bool hasRankRecord;
+
   const CampaignStats({
     required this.todaySuccess,
     required this.totalSuccess,
     this.currentRank,
+    this.hasRankRecord = false,
   });
 }

@@ -33,6 +33,7 @@ class DashboardRepository {
         .from('campaign_rank_history')
         .select('rank, checked_at')
         .eq('campaign_id', campaignId)
+        .not('rank', 'is', null)   // 500위 밖(NULL)인 날은 차트에서 제외
         .gte('checked_at', sevenDaysAgo.toIso8601String())
         .order('checked_at', ascending: false)
         .limit(100);

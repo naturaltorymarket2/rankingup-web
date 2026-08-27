@@ -265,9 +265,10 @@ class CampaignDetailScreen extends ConsumerWidget {
           final progress = dailyTarget > 0
               ? (stats.todaySuccess / dailyTarget).clamp(0.0, 1.0)
               : 0.0;
+          // 순위 기록은 있으나 rank 가 없으면 500위 안에서 찾지 못한 것
           final rankLabel = stats.currentRank != null
               ? '${stats.currentRank}위'
-              : '데이터 없음';
+              : (stats.hasRankRecord ? '500위 밖' : '데이터 없음');
           final rankColor = stats.currentRank != null
               ? (stats.currentRank! <= 15
                   ? const Color(0xFF2E7D32)

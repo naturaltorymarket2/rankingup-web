@@ -19,6 +19,12 @@ final pendingCampaignsProvider =
   return ref.read(adminCampaignRepositoryProvider).fetchPendingCampaigns();
 });
 
+/// 전체 광고 그룹 목록 (승인 상태 무관) — 광고 관리/삭제용
+final allCampaignsProvider =
+    FutureProvider.autoDispose<List<AdminCampaignRecord>>((ref) {
+  return ref.read(adminCampaignRepositoryProvider).fetchAllCampaigns();
+});
+
 /// 처리 완료(승인/거절) 광고 그룹 목록 — 최근 20건
 final processedCampaignsProvider =
     FutureProvider.autoDispose<List<AdminCampaignRecord>>((ref) {

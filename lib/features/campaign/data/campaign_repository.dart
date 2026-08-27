@@ -169,14 +169,16 @@ class CampaignRepository {
         .order('checked_at', ascending: false)
         .limit(1);
     final rankList = rankRes as List;
+    // rank 가 NULL 인 기록 = 크롤러가 500위까지 확인했으나 찾지 못함
     final currentRank = rankList.isNotEmpty
         ? (rankList.first['rank'] as num?)?.toInt()
         : null;
 
     return CampaignStats(
-      todaySuccess: todaySuccess,
-      totalSuccess: totalSuccess,
-      currentRank: currentRank,
+      todaySuccess:  todaySuccess,
+      totalSuccess:  totalSuccess,
+      currentRank:   currentRank,
+      hasRankRecord: rankList.isNotEmpty,
     );
   }
 

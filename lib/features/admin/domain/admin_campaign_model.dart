@@ -23,6 +23,7 @@ class AdminCampaignRecord {
   final int          budget;          // 승인 시 차감될 포인트 (그룹 합산)
   final DateTime     createdAt;
   final int          campaignCount;
+  final int          missionCount;    // 그룹 누적 미션 수행 건수 (삭제 시 함께 지워짐)
 
   // 처리 완료 목록에서만 채워지는 필드
   final String?      approvalStatus;  // APPROVED / REJECTED
@@ -44,6 +45,7 @@ class AdminCampaignRecord {
     required this.budget,
     required this.createdAt,
     required this.campaignCount,
+    this.missionCount = 0,
     this.startDate,
     this.endDate,
     this.approvalStatus,
@@ -72,6 +74,7 @@ class AdminCampaignRecord {
       durationDays:             (map['duration_days']      as num?)?.toInt() ?? 0,
       budget:                   (map['budget']             as num?)?.toInt() ?? 0,
       campaignCount:            (map['campaign_count']     as num?)?.toInt() ?? 0,
+      missionCount:             (map['mission_count']      as num?)?.toInt() ?? 0,
       createdAt:                parseDate(map['created_at']) ?? DateTime.now(),
       startDate:                parseDate(map['start_date']),
       endDate:                  parseDate(map['end_date']),

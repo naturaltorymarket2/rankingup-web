@@ -63,8 +63,8 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingAsync   = ref.watch(pendingCampaignsProvider);
-    final processedAsync = ref.watch(processedCampaignsProvider);
+    final pendingAsync = ref.watch(pendingCampaignsProvider);
+    final allAsync     = ref.watch(allCampaignsProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
@@ -81,7 +81,7 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
                 const SizedBox(height: 16),
                 _buildPendingSection(pendingAsync),
                 const SizedBox(height: 24),
-                _buildProcessedSection(processedAsync),
+                _buildAllSection(allAsync),
                 const SizedBox(height: 24),
               ],
             ),
@@ -109,7 +109,7 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
           tooltip: '새로고침',
           onPressed: () {
             ref.invalidate(pendingCampaignsProvider);
-            ref.invalidate(processedCampaignsProvider);
+            ref.invalidate(allCampaignsProvider);
           },
         ),
         TextButton.icon(
@@ -288,13 +288,13 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
 
   // ── 처리 완료 섹션 ────────────────────────────────────────────
 
-  Widget _buildProcessedSection(AsyncValue<List<AdminCampaignRecord>> async) {
+  Widget _buildAllSection(AsyncValue<List<AdminCampaignRecord>> async) {
     return _AdminCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            '처리 완료 내역 (최근 20건)',
+            '전체 광고 목록 — 삭제 가능',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -321,14 +321,18 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 32),
                     child: Center(
                       child: Text(
-                        '처리 완료 내역이 없습니다.',
+                        '등록된 광고가 없습니다.',
                         style: TextStyle(color: Colors.grey[500]),
                       ),
                     ),
                   )
                 : Column(
                     children: records
-                        .map((r) => _ProcessedCampaignRow(record: r))
+                        .map((r) => _CampaignRow(
+                              record:    r,
+                              isLoading: _loadingIds.contains(r.groupId),
+                              onDelete:  () => _handleDelete(r),
+                            ))
                         .toList(),
                   ),
           ),
@@ -450,7 +454,7 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
       if (result['success'] == true) {
         _tagCtrls.remove(record.groupId)?.dispose();
         ref.invalidate(pendingCampaignsProvider);
-        ref.invalidate(processedCampaignsProvider);
+        ref.invalidate(allCampaignsProvider);
         _showSnack(
           '${record.productName} 광고 승인 완료 '
           '(태그 ${result['tag_count']}개 · '
@@ -545,10 +549,94 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
       if (result['success'] == true) {
         _tagCtrls.remove(record.groupId)?.dispose();
         ref.invalidate(pendingCampaignsProvider);
-        ref.invalidate(processedCampaignsProvider);
+        ref.invalidate(allCampaignsProvider);
         _showSnack('${record.productName} 광고 거절 완료', _kRed);
       } else {
         _showSnack('거절 오류: ${result['error'] ?? 'UNKNOWN'}', _kRed);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (_isAuthError(e)) {
+        context.go('/admin/login');
+        return;
+      }
+      _showSnack('오류: $e', Colors.red);
+    } finally {
+      if (mounted) setState(() => _loadingIds.remove(record.groupId));
+    }
+  }
+
+  Future<void> _handleDelete(AdminCampaignRecord record) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('광고 삭제'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${record.productName} / ${record.brandName}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text('광고주: ${record.userEmail}',
+                  style: const TextStyle(fontSize: 13)),
+              Text('키워드 ${record.campaignCount}개 · 미션 이력 ${record.missionCount}건',
+                  style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 12),
+              const Text(
+                '이 광고를 완전히 삭제합니다.\n'
+                '미션 수행 이력, 순위 기록, 태그가 함께 지워지며 되돌릴 수 없습니다.',
+                style: TextStyle(fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '※ 이미 차감된 포인트는 환불되지 않습니다. '
+                '환불이 필요하면 충전 승인으로 별도 처리하세요.',
+                style: TextStyle(fontSize: 12, color: Color(0xFFB71C1C)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kRed,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+    if (_loadingIds.contains(record.groupId)) return;
+    setState(() => _loadingIds.add(record.groupId));
+
+    try {
+      final result = await ref
+          .read(adminCampaignRepositoryProvider)
+          .deleteCampaign(groupId: record.groupId);
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        ref.invalidate(pendingCampaignsProvider);
+        ref.invalidate(allCampaignsProvider);
+        _showSnack(
+          '${record.productName} 삭제 완료 '
+          '(키워드 ${result['campaign_count']}개 · 미션 ${result['mission_count']}건)',
+          _kRed,
+        );
+      } else {
+        _showSnack('삭제 오류: ${result['error'] ?? 'UNKNOWN'}', _kRed);
       }
     } catch (e) {
       if (!mounted) return;
@@ -975,9 +1063,18 @@ class _InfoItem extends StatelessWidget {
 // 처리 완료 행
 // ─────────────────────────────────────────────────────────────────
 
-class _ProcessedCampaignRow extends StatelessWidget {
+class _CampaignRow extends StatelessWidget {
   final AdminCampaignRecord record;
-  const _ProcessedCampaignRow({required this.record});
+  final bool                isLoading;
+  final VoidCallback        onDelete;
+
+  const _CampaignRow({
+    required this.record,
+    required this.isLoading,
+    required this.onDelete,
+  });
+
+  static const _kRed = Color(0xFFB71C1C);
 
   @override
   Widget build(BuildContext context) {
@@ -1008,18 +1105,17 @@ class _ProcessedCampaignRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      record.userEmail,
+                      '${record.userEmail}  ·  키워드 ${record.campaignCount}개'
+                      '  ·  미션 ${record.missionCount}건',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (record.tags.isNotEmpty) ...[
+                    if (record.subKeywords.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        '태그 ${record.tags.length}개 · '
-                        '${record.tags.asMap().entries.map((e) => '${e.key + 1}.${e.value}').join('  ')}',
-                        style:
-                            TextStyle(fontSize: 11, color: Colors.grey[500]),
-                        maxLines: 2,
+                        record.subKeywords.join('  ·  '),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -1027,8 +1123,7 @@ class _ProcessedCampaignRow extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '거절 사유: ${record.rejectReason}',
-                        style: const TextStyle(
-                            fontSize: 11, color: Color(0xFFB71C1C)),
+                        style: const TextStyle(fontSize: 11, color: _kRed),
                       ),
                     ],
                   ],
@@ -1050,6 +1145,28 @@ class _ProcessedCampaignRow extends StatelessWidget {
                     color: record.statusColor,
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 76,
+                child: isLoading
+                    ? const Center(
+                        child: SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : OutlinedButton(
+                        onPressed: onDelete,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _kRed,
+                          side: const BorderSide(color: _kRed),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          textStyle: const TextStyle(fontSize: 12),
+                        ),
+                        child: const Text('삭제'),
+                      ),
               ),
             ],
           ),

@@ -37,6 +37,22 @@ class AdminCampaignRepository {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// 전체 광고 그룹 목록 (승인 상태 무관) — 삭제 화면용
+  Future<List<AdminCampaignRecord>> fetchAllCampaigns() async {
+    final res = await supabase.rpc('get_all_campaigns') as Map<String, dynamic>;
+    return _parseList(res);
+  }
+
+  /// 광고 그룹 완전 삭제 (미션 이력·순위 기록·태그 포함)
+  ///
+  /// ⚠️ 차감된 포인트는 환불되지 않는다.
+  Future<Map<String, dynamic>> deleteCampaign({required String groupId}) async {
+    final res = await supabase.rpc('delete_campaign_group', params: {
+      'p_group_id': groupId,
+    });
+    return Map<String, dynamic>.from(res as Map);
+  }
+
   /// 광고 거절 (등록 시점 차감이 없으므로 환불 처리 불필요)
   Future<Map<String, dynamic>> rejectCampaign({
     required String  groupId,

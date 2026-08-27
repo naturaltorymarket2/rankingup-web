@@ -1,0 +1,14 @@
+사용법
+어드민 화면에서 [상품 페이지 열기] → 네이버 상품 페이지가 열립니다
+그 페이지에서 F12 → 위쪽 탭 중 Console 클릭
+(최초 1회만) 입력칸에 allow pasting 이라고 타이핑하고 Enter
+아래 코드를 복사해서 입력칸에 붙여넣고 Enter
+
+(()=>{const s=new Set(),o=[];
+const push=t=>{t=(t||'').trim().replace(/^#+/,'');if(!t||t.length>30||/\s{2,}/.test(t))return;const k=t.replace(/\s/g,'').toLowerCase();if(k&&!s.has(k)){s.add(k);o.push(t);}};
+document.querySelectorAll('a,span,li,em,strong').forEach(el=>{if(el.children.length)return;const t=el.textContent||'';if(/^#\S/.test(t.trim()))push(t);});
+if(!o.length){const m=document.documentElement.innerHTML.match(/#[^\s"'<>#,]{1,30}/g)||[];m.forEach(push);}
+const out=o.slice(0,10).map(t=>'#'+t).join('');
+if(!out){alert('태그를 찾지 못했습니다. 페이지를 끝까지 스크롤한 뒤 다시 실행해 주세요.');return;}
+navigator.clipboard.writeText(out).then(()=>alert('태그 '+o.slice(0,10).length+'개 복사됨\n\n'+out),
+()=>prompt('아래 값을 직접 복사하세요 (Ctrl+C)',out));})();
