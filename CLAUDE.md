@@ -1744,6 +1744,112 @@ service_role_key를 MCP 헤더에 그대로 노출하는 현재 방식도 권장
 
 ---
 
+## 16. 협업 규칙 (2인 이상 동시 개발)
+
+> 맥(기존 개발자) / 윈도우(운영자 PC) 두 환경에서 함께 작업한다.
+> 아래 4가지에서 충돌이 나기 쉬우므로 규칙을 지킨다.
+
+### 1) versionCode — 앱 배포 사고 1순위
+
+각자 빌드하면 같은 번호로 만들어 한쪽이 업로드 거부된다.
+
+- **빌드 전 반드시 Play Console에서 최신 versionCode 확인**
+- 앱 배포는 한 번에 한 사람만 진행
+- 2026-08-27 기준: **27** 빌드 완료 (26이 프로덕션 100% 출시 중)
+
+### 2) git — pull 먼저, force push 금지
+
+- 작업 시작 전 `git pull`, 끝나면 즉시 push
+- `git push --force` 금지 (상대 작업이 사라진다)
+- `main` 단일 브랜치로 운영 중
+
+### 3) Supabase 마이그레이션 — 적용 여부를 문서에 남긴다
+
+SQL Editor 수동 적용 방식이라 누가 무엇을 적용했는지 서로 알 수 없다.
+새 마이그레이션을 만들면 섹션 14의 표에 적용 여부를 기록한다.
+
+### 4) Railway 자동 배포 — push 즉시 웹이 재배포된다
+
+`main` push -> 광고주/어드민 웹 재빌드. 컴파일 오류가 있으면 배포가 실패한다.
+push 전 아래를 통과시킨다.
+
+```bash
+flutter analyze lib
+flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7797.up.railway.app/rank
+```
+
+### 각자 보관하는 파일 (git 추적 제외)
+
+| 파일 | 비고 |
+|------|------|
+| `upload-keystore.jks` | **양쪽이 반드시 동일한 파일**. 다른 키로 서명하면 업로드 거부 |
+| `android/key.properties` | `storeFile` 경로만 각 PC에 맞게 다름 |
+| `.env` | SUPABASE_URL / SUPABASE_SECRET_KEY / GITHUB_PAT / SERPAPI_KEY |
+
+윈도우 PC 기준 경로:
+- 키스토어: `C:/android/keystore/upload-keystore.jks`
+- Android SDK: `C:/android/sdk` (SDK 36 + build-tools 36.0.0)
+- JDK: `C:/android/jdk/jdk-17.0.20.1+1`
+- Flutter: `C:/src/flutter` (3.47.1)
+
+---
+
+## 17. 2026-08 대규모 변경 요약 (합류 시 필독)
+
+2026-08-24 ~ 08-27 사이 구조가 크게 바뀌었다. 이전 코드 기준으로 작업하면 어긋난다.
+
+### 네이버 공식 쇼핑 검색 API 종료
+
+`openapi.naver.com/v1/search/shop.json` 이 **404** 를 반환한다(서비스 종료).
+이 API에 의존하던 순위 조회·일일 추적이 전부 실패하고 있었다(마지막 정상 기록 2026-07-30).
+
+| 용도 | 변경 후 |
+|------|---------|
+| 광고 등록 시 키워드 추천 + 순위 | **SerpApi 네이버 통합검색** (`engine=naver&where=nexearch`) |
+| 일일 메인 키워드 순위 추적 | **로컬 크롤러** (`tools/reward_rank_crawler.py`, 500위까지) |
+
+- SerpApi 키는 Railway 랭킹 서버(`web` 프로젝트) 환경변수 `SERPAPI_KEY`
+- Starter 플랜 월 1,000회 — **광고 등록 1건당 5회** 소모. 일일 추적에는 쓰지 않는다
+- 통합검색 쇼핑 블록은 10위까지만 노출 -> 그 밖은 '순위권 밖'
+- 일일 추적은 500위까지 확인하고, 못 찾으면 `rank = NULL`(= '500위 밖')로 기록
+
+### 광고 승인 절차 신설 (Phase 22)
+
+```
+광고주 등록 (차감 없음, PENDING)
+  -> 어드민이 상품 페이지 태그를 직접 등록
+  -> 승인 -> 이때 포인트 차감 + ACTIVE 전환 -> 앱 노출
+```
+
+- 광고주는 더 이상 태그를 입력하지 않는다 (등록 화면에서 태그 UI 제거)
+- `register_campaign` 시그니처 변경 — `p_tags` / `p_sort_orders` / `p_answer_index` **제거**
+- 미션 정답 태그는 매번 **랜덤 출제** (`start_mission` 이 ORDER BY RANDOM())
+- 태그 비교는 `normalize_tag()` 기준 (# / 공백 / 대소문자 무시)
+- 어드민 화면에 **광고 삭제** 기능 추가 (`delete_campaign_group`)
+
+### 적용된 마이그레이션
+
+| 번호 | 내용 | 상태 |
+|------|------|------|
+| 0038~0042 | 광고 승인 구조, 랜덤 태그, 대시보드 승인 상태 | 적용 완료 (2026-08-26) |
+| 0043 | 어드민 광고 삭제, 순위 NULL 허용(500위 밖) | 적용 완료 (2026-08-27) |
+
+> 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
+
+### 자동화
+
+| 대상 | 실행 |
+|------|------|
+| 일일 순위 수집 | 윈도우 작업 스케줄러 "네이버 순위 수집 (매일 9시)" -> `tools/run_daily_rank.bat` |
+| 웹 배포 | `main` push 시 Railway 자동 재배포 |
+
+### 운영 계정
+
+- 어드민 로그인: `/admin/login` — **아이디 `admin`** (내부적으로 `admin@quizcashnow.co.kr` 로 변환)
+- 광고주/어드민을 같은 브라우저에서 동시에 쓸 수 없다(세션 공유) -> 크롬 프로필 분리 권장
+
+---
+
 ## 15. 추후 개선 사항
 
 개선사항, 버그, 신규 기능 요청은 모두 **`BACKLOG.md`** 파일에서 관리한다.
