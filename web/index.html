@@ -41,6 +41,55 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <!--
+    배포 후 옛 화면이 남던 문제 대응 (2026-08-27)
+
+    원인: nginx가 main.dart.js / flutter_service_worker.js 를 1년 immutable로
+          캐시해, 새로 배포해도 브라우저가 새 버전을 확인조차 하지 않았다.
+          nginx 헤더는 수정했지만, 이미 옛 파일을 물고 있는 브라우저는
+          그 헤더를 받을 기회가 없으므로 아래 스크립트로 한 번 정리한다.
+
+    동작: 최초 1회만 서비스워커/캐시를 비우고 진입 파일을 강제로 다시 받은 뒤
+          평소대로 flutter_bootstrap.js 를 실행한다. (localStorage 플래그로 1회 보장)
+  -->
+  <script>
+    (function () {
+      var KEY = 'cache-reset-2026-08-27';
+
+      function boot() {
+        var s = document.createElement('script');
+        s.src = 'flutter_bootstrap.js';
+        s.async = true;
+        document.body.appendChild(s);
+      }
+
+      if (localStorage.getItem(KEY)) { boot(); return; }
+
+      var tasks = [];
+      if ('serviceWorker' in navigator) {
+        tasks.push(
+          navigator.serviceWorker.getRegistrations()
+            .then(function (rs) {
+              return Promise.all(rs.map(function (r) { return r.unregister(); }));
+            })
+            .catch(function () {})
+        );
+      }
+      if (window.caches && caches.keys) {
+        tasks.push(
+          caches.keys()
+            .then(function (ks) {
+              return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+            })
+            .catch(function () {})
+        );
+      }
+      // HTTP 캐시까지 갱신 — cache:'reload' 는 캐시를 무시하고 받아 캐시를 덮어쓴다
+      tasks.push(fetch('main.dart.js', { cache: 'reload' }).catch(function () {}));
+
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      Promise.all(tasks).then(boot, boot);
+    })();
+  </script>
 </body>
 </html>
