@@ -62,3 +62,9 @@ app.*.map.json
 # 임시 작업 파일
 *.tmp
 tools/logs/
+
+# 앱 서명 키 — 절대 커밋 금지 (분실 시 재발급 불가, 유출 시 앱 위조 가능)
+*.jks
+*.keystore
+key.properties
+**/key.properties
