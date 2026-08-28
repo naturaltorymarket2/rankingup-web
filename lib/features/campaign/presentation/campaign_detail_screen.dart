@@ -388,26 +388,30 @@ class CampaignDetailScreen extends ConsumerWidget {
     final deduped = byDate.values.toList()
       ..sort((a, b) => a.checkedAt.compareTo(b.checkedAt));
 
-    // 15위 이내 데이터만 플롯 (초과는 이탈 처리)
+    // 실제 수집 범위(최대 500위)에 맞춰 플롯한다.
+    // 예전에는 15위 이내만 그려서, 30~40위대 상품은 차트가 비어 있었다.
     final spots = deduped.asMap().entries
-        .where((e) => e.value.rank <= 15)
         .map((e) => FlSpot(e.key.toDouble(), e.value.rank.toDouble()))
         .toList();
+
+    final ranks   = deduped.map((e) => e.rank).toList();
+    final maxRank = ranks.isEmpty ? 15 : ranks.reduce((a, b) => a > b ? a : b);
+    final minRank = ranks.isEmpty ? 1  : ranks.reduce((a, b) => a < b ? a : b);
+    // 위아래 여백 — 1위 미만으로는 내려가지 않게 한다
+    final chartMinY = (minRank - 2).clamp(1, 500).toDouble();
+    final chartMaxY = (maxRank + 2).toDouble();
 
     return LineChartData(
       minX: 0,
       maxX: deduped.isEmpty ? 0 : (deduped.length - 1).toDouble(),
-      minY: 1,
-      maxY: 15,
+      minY: chartMinY,
+      maxY: chartMaxY,
       clipData: const FlClipData.all(),
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
-        horizontalInterval: 1,
-        checkToShowHorizontalLine: (value) {
-          final v = value.round();
-          return v == 1 || v == 5 || v == 10 || v == 15;
-        },
+        horizontalInterval:
+            (((chartMaxY - chartMinY) / 4).ceilToDouble()).clamp(1, 200),
         getDrawingHorizontalLine: (_) =>
             FlLine(color: Colors.grey[200]!, strokeWidth: 1),
       ),
@@ -417,14 +421,14 @@ class CampaignDetailScreen extends ConsumerWidget {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 36,
-            interval: 1,
+            // 데이터 범위에 맞춰 4~5개 눈금만 표시 (1·5·10·15 고정이면
+            // 30위대 상품은 눈금이 하나도 안 보였다)
+            interval: (((chartMaxY - chartMinY) / 4).ceilToDouble()).clamp(1, 200),
             getTitlesWidget: (value, _) {
               final rank = value.round();
-              if (rank == 1 || rank == 5 || rank == 10 || rank == 15) {
-                return Text('$rank위',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]));
-              }
-              return const SizedBox.shrink();
+              if (rank < 1) return const SizedBox.shrink();
+              return Text('$rank위',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]));
             },
           ),
         ),

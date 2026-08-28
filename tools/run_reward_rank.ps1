@@ -20,6 +20,10 @@ $Python    = 'C:\Python313\python.exe'
 $RewardDir = 'C:\Users\model\Desktop\quizcashnow'
 $LogDir    = Join-Path $RewardDir 'tools\logs'
 
+# 파이썬 출력 인코딩 고정 (재사용 크롤러가 이모지를 출력한다)
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Force $LogDir | Out-Null }
 $Log = Join-Path $LogDir ((Get-Date -Format 'yyyy-MM-dd') + '.log')
 

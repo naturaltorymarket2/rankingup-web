@@ -2,9 +2,13 @@
 리워드 광고 순위 크롤러 — 매일 1회 실행
 
 무엇을 하나:
-    승인 완료된 광고의 **메인(시드) 키워드**로 네이버 쇼핑 검색을 훑어
-    최대 500위까지 상품 순위를 찾아 campaign_rank_history 에 기록한다.
+    승인 완료된 광고의 키워드로 네이버 쇼핑 검색을 훑어 최대 500위까지
+    상품 순위를 찾아 campaign_rank_history 에 기록한다.
     500위 안에 없으면 rank = NULL 로 기록한다 (화면에는 '500위 밖'으로 표시).
+
+    - 시드(순위 추적 대표) 키워드 : 매일 수집 — 광고주 대시보드 KPI
+    - 미션 키워드                 : MISSION_REFRESH_DAYS 주기로만 수집
+                                    — 앱의 상품 위치 힌트 용도
 
 왜 크롤링인가:
     - 네이버 공식 쇼핑 검색 API는 2026년 종료(404)됐다.
@@ -36,6 +40,15 @@ from typing import Optional, List, Dict, Any
 
 import requests
 
+# 출력 인코딩 고정.
+# 재사용하는 크롤러(naver_rank_standalone)가 이모지를 출력하는데,
+# 한국어 Windows 콘솔 기본값(CP949)에서는 인코딩 오류로 죽는다.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 설정
 # ─────────────────────────────────────────────────────────────────────────────
@@ -47,6 +60,15 @@ MAX_RANK = 500
 
 # 상품 간 대기 (초) — 연속 요청으로 차단되지 않도록
 DELAY_BETWEEN = (4, 8)
+
+# ── 수집 정책 ────────────────────────────────────────────────────
+# 시드(순위 추적 대표) 키워드는 광고주에게 매일 보여주는 KPI라 매일 수집한다.
+# 미션 키워드는 앱의 위치 힌트("약 37위") 용도라 매일일 필요가 없다.
+# 키워드 1개당 최대 2~3분이 걸리므로, 광고주가 늘면 매일 수집은 불가능하다.
+#   예) 광고주 30 × 키워드 5 = 150개 → 매일이면 5시간 이상
+# 그래서 미션 키워드는 아래 주기로만 갱신하고, 1회 실행량도 제한한다.
+MISSION_REFRESH_DAYS = 7    # 이 일수 안에 수집한 미션 키워드는 건너뛴다
+MISSION_MAX_PER_RUN  = 20   # 1회 실행에서 처리할 미션 키워드 최대 개수
 
 # 순위 추적 서비스의 크롤러 위치 (로그인/차단감지/페이지네이션 로직 재사용)
 DEFAULT_NRS_PATH = Path(
@@ -105,6 +127,33 @@ def sb_headers(env: Dict[str, str]) -> Dict[str, str]:
     }
 
 
+def load_recent_mission_ranks(env: Dict[str, str]) -> Dict[str, str]:
+    """
+    최근 MISSION_REFRESH_DAYS 안에 수집된 미션 키워드 순위 기록을 모은다.
+
+    Returns: {campaign_id: 마지막 수집 시각(ISO)}
+    """
+    since = (datetime.now(timezone.utc)
+             - timedelta(days=MISSION_REFRESH_DAYS)).isoformat()
+    res = requests.get(
+        env['url'] + '/rest/v1/campaign_rank_history',
+        headers=sb_headers(env),
+        params={
+            'select':     'campaign_id,checked_at',
+            'is_seed':    'is.false',
+            'checked_at': 'gte.' + since,
+            'order':      'checked_at.desc',
+        },
+        timeout=30,
+    )
+    res.raise_for_status()
+
+    recent: Dict[str, str] = {}
+    for row in res.json():
+        recent.setdefault(row['campaign_id'], row['checked_at'])
+    return recent
+
+
 def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
     """
     승인 완료 + 진행 중인 광고를 그룹 단위로 모은다.
@@ -126,6 +175,7 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
     res.raise_for_status()
     rows = res.json()
 
+    recent_missions = load_recent_mission_ranks(env)
     now = datetime.now(timezone.utc)
     groups: Dict[tuple, Dict[str, Any]] = {}
 
@@ -163,8 +213,9 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
         url = row['product_url']
 
         # ① 미션 키워드 순위 — 앱 화면의 "몇 위쯤에 있어요" 힌트에 쓰인다
+        #    최근에 수집했으면 건너뛴다 (MISSION_REFRESH_DAYS 주기)
         mission_kw = (row.get('keyword') or '').strip()
-        if mission_kw:
+        if mission_kw and row['id'] not in recent_missions:
             add_target(url, mission_kw, row, row['id'], False)
 
         # ② 시드(순위 추적 대표) 키워드 순위 — 광고주 대시보드 차트 기준
@@ -173,7 +224,18 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
         if seed_kw and gid and representative.get(gid) == row['id']:
             add_target(url, seed_kw, row, row['id'], True)
 
-    return list(groups.values())
+    targets = list(groups.values())
+
+    # 시드는 전부 수집하고, 미션 키워드는 1회 실행량을 제한한다.
+    # (오래 안 본 것부터 처리되도록 순서를 유지한다)
+    seeds    = [t for t in targets if t.get('is_seed')]
+    missions = [t for t in targets if not t.get('is_seed')]
+    skipped  = max(0, len(missions) - MISSION_MAX_PER_RUN)
+    if skipped:
+        print(f'미션 키워드 {len(missions)}개 중 {MISSION_MAX_PER_RUN}개만 처리 '
+              f'(나머지 {skipped}개는 다음 실행에서)')
+
+    return seeds + missions[:MISSION_MAX_PER_RUN]
 
 
 def save_rank(env: Dict[str, str], campaign_ids: List[str],

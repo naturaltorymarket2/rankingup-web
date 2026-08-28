@@ -294,7 +294,11 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 28,
+            // 눈금 간격을 지정하지 않으면 fl_chart 가 소수점 위치에도 눈금을 만들어
+            // 같은 날짜가 여러 번 찍힌다(0.1, 0.2 … 가 모두 인덱스 0으로 변환)
+            interval: 1,
             getTitlesWidget: (value, _) {
+              if (value != value.roundToDouble()) return const SizedBox.shrink();
               final idx = value.toInt();
               if (idx < 0 || idx >= history.length) {
                 return const SizedBox.shrink();
