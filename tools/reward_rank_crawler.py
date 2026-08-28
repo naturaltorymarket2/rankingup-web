@@ -166,7 +166,7 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
         headers=sb_headers(env),
         params={
             'select': 'id,group_id,product_url,keyword,seed_keyword,'
-                      'product_name,brand_name,expires_at',
+                      'product_name,brand_name,expires_at,created_at',
             'status':          'eq.ACTIVE',
             'approval_status': 'eq.APPROVED',
         },
@@ -179,9 +179,14 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
     now = datetime.now(timezone.utc)
     groups: Dict[tuple, Dict[str, Any]] = {}
 
-    # 그룹별 대표 캠페인 (시드 순위를 기록할 대상 — 대시보드 차트 기준)
+    # 그룹별 대표 캠페인 (시드 순위를 기록할 대상)
+    #
+    # ⚠️ 반드시 get_dashboard_data RPC 와 같은 기준이어야 한다.
+    #    RPC 는 '그룹 내 created_at 이 가장 이른 캠페인'을 대표로 쓴다.
+    #    예전에는 UUID 문자열 순으로 골라서, 수집한 순위가 대시보드가 보는
+    #    캠페인과 달라 차트에 데이터가 나타나지 않았다.
     representative: Dict[str, str] = {}
-    for row in sorted(rows, key=lambda r: r.get('id') or ''):
+    for row in sorted(rows, key=lambda r: (r.get('created_at') or '', r.get('id') or '')):
         gid = row.get('group_id')
         if gid and gid not in representative:
             representative[gid] = row['id']

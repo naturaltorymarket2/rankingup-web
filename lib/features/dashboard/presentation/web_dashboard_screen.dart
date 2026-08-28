@@ -272,6 +272,8 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
+        horizontalInterval:
+            (((maxRank - minRank) / 4).ceilToDouble()).clamp(1, 200),
         getDrawingHorizontalLine: (_) =>
             FlLine(color: Colors.grey[200]!, strokeWidth: 1),
       ),
@@ -281,8 +283,11 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 36,
+            // 간격을 지정하지 않으면 소수점 위치에도 눈금이 생겨
+            // 반올림 결과가 같은 값("41위, 41위")으로 중복 표시된다
+            interval: (((maxRank - minRank) / 4).ceilToDouble()).clamp(1, 200),
             getTitlesWidget: (value, _) {
-              final rank = (-value).toInt();
+              final rank = (-value).round();
               if (rank <= 0) return const SizedBox.shrink();
               return Text('$rank위',
                   style: TextStyle(
