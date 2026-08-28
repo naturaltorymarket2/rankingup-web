@@ -14,6 +14,36 @@ class WalletRepository {
   // 참여 내역 조회 (mission_logs JOIN campaigns, 페이지네이션)
   // ─────────────────────────────────────────────────────────────
 
+  /// 진행 중인 미션 정보 (이어하기용)
+  ///
+  /// 이어하려면 log_id 와 '몇 번째 태그인지'가 필요한데, campaign_tags 는
+  /// 정답 노출 방지를 위해 클라이언트 조회가 막혀 있다.
+  /// get_active_mission RPC 가 tag_word 없이 필요한 값만 돌려준다.
+  ///
+  /// 진행 중인 미션이 없으면 null.
+  Future<Map<String, dynamic>?> fetchActiveMission() async {
+    final res = await supabase.rpc('get_active_mission') as Map<String, dynamic>;
+    if (res['success'] != true) return null;
+    final mission = res['mission'];
+    return mission == null ? null : Map<String, dynamic>.from(mission as Map);
+  }
+
+  /// 이번 달 참여 요약 — (성공 건수, 적립 포인트)
+  Future<({int count, int point})> fetchMonthlySummary(String userId) async {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month)
+        .subtract(const Duration(hours: 9)); // KST 기준 월초 → UTC
+
+    final raw = await supabase
+        .from('mission_logs')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'SUCCESS')
+        .gte('started_at', monthStart.toIso8601String()) as List<dynamic>;
+
+    return (count: raw.length, point: raw.length * kMissionReward);
+  }
+
   /// 미션 참여 내역 목록 (최신순)
   ///
   /// - mission_logs.user_id = userId
@@ -28,7 +58,8 @@ class WalletRepository {
 
     final raw = await supabase
         .from('mission_logs')
-        .select('id, status, started_at, campaigns(keyword)')
+        .select('id, status, started_at, campaign_id, attempt_count, '
+                'campaigns(keyword, product_name, thumbnail_url)')
         .eq('user_id', userId)
         .order('started_at', ascending: false)
         .range(start, end) as List<dynamic>;

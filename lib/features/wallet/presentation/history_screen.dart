@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/admob_banner.dart';
+import '../data/wallet_repository.dart';
 import '../domain/wallet_model.dart';
 import 'history_provider.dart';
 
@@ -38,6 +40,34 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
   }
 
+  /// 진행 중인 미션을 태그 입력 화면으로 이어서 연다.
+  ///
+  /// 이어하려면 log_id 와 '몇 번째 태그인지'가 필요한데 이 값은
+  /// 서버(get_active_mission)에서만 받을 수 있다.
+  Future<void> _resumeMission(MissionLogModel log) async {
+    final mission = await WalletRepository().fetchActiveMission();
+    if (!mounted) return;
+
+    if (mission == null || mission['campaign_id'] != log.campaignId) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('이어서 진행할 수 있는 미션이 없습니다.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      ref.read(historyProvider.notifier).refresh();
+      return;
+    }
+
+    context.push('/mission/${log.campaignId}/active', extra: {
+      'log_id':        mission['log_id'],
+      'keyword':       mission['keyword'],
+      'tag_index':     mission['tag_index'],
+      'product_url':   mission['product_url'],
+      'product_name':  mission['product_name'],
+      'brand_name':    mission['brand_name'],
+      'thumbnail_url': mission['thumbnail_url'],
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final historyAsync = ref.watch(historyProvider);
@@ -49,6 +79,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       ),
       body: Column(
         children: [
+          // 이번 달 참여 요약 — "얼마 벌었는지"가 한눈에 보이도록
+          _MonthlySummaryBar(summaryAsync: ref.watch(monthlySummaryProvider)),
+
           Expanded(
             child: historyAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -75,7 +108,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                           child: Center(child: CircularProgressIndicator()),
                         );
                       }
-                      return _LogCard(log: state.logs[i]);
+                      final log = state.logs[i];
+                      return _LogCard(
+                        log: log,
+                        onResume: log.canResume ? () => _resumeMission(log) : null,
+                      );
                     },
                   ),
                 );
@@ -95,9 +132,56 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 // 참여 내역 카드
 // ─────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────
+// 이번 달 요약 바
+// ─────────────────────────────────────────────────────────────────
+
+class _MonthlySummaryBar extends StatelessWidget {
+  final AsyncValue<({int count, int point})> summaryAsync;
+  const _MonthlySummaryBar({required this.summaryAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = summaryAsync.valueOrNull;
+    final count = summary?.count ?? 0;
+    final point = summary?.point ?? 0;
+
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFF1F6FF),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_month_outlined,
+              size: 18, color: Color(0xFF1E3A8A)),
+          const SizedBox(width: 8),
+          Text(
+            '이번 달 $count건 참여',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '+${point}P 적립',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.green.shade700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LogCard extends StatelessWidget {
   final MissionLogModel log;
-  const _LogCard({required this.log});
+  final VoidCallback? onResume;
+  const _LogCard({required this.log, this.onResume});
 
   static String _formatDate(DateTime utc) {
     final d = utc.toLocal();
@@ -113,29 +197,28 @@ class _LogCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColor = Color(log.statusColorValue);
 
-    return Padding(
+    return InkWell(
+      // 진행 중인 미션은 탭하면 이어서 진행한다
+      onTap: log.canResume ? onResume : null,
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
-          // 상태 아이콘
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              log.status == 'SUCCESS'
-                  ? Icons.check_circle_rounded
-                  : log.status == 'IN_PROGRESS'
-                      ? Icons.pending_rounded
-                      : Icons.cancel_rounded,
-              color: statusColor,
-              size: 22,
-            ),
-          ),
+          // 상품 썸네일 (없으면 상태 아이콘)
+          if ((log.thumbnailUrl ?? '').isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                log.thumbnailUrl!,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _StatusAvatar(
+                    status: log.status, color: statusColor),
+              ),
+            )
+          else
+            _StatusAvatar(status: log.status, color: statusColor),
           const SizedBox(width: 14),
 
           // 키워드 + 일시
@@ -151,6 +234,17 @@ class _LogCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if ((log.productName ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    log.productName!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const SizedBox(height: 3),
                 Text(
                   _formatDate(log.startedAt),
@@ -158,6 +252,15 @@ class _LogCard extends StatelessWidget {
                     color: Colors.grey.shade500,
                   ),
                 ),
+                // 오답으로 남아 있는 건은 이유를 알려준다
+                if (log.subLabel != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    log.subLabel!,
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFFE65100)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -184,7 +287,7 @@ class _LogCard extends StatelessWidget {
               if (log.showReward) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '+7원',
+                  '+${log.earnedPoint}P',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -192,9 +295,50 @@ class _LogCard extends StatelessWidget {
                   ),
                 ),
               ],
+              if (log.canResume) ...[
+                const SizedBox(height: 4),
+                const Text(
+                  '이어하기 >',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+              ],
             ],
           ),
         ],
+      ),
+    ));
+  }
+}
+
+// ── 상태 아이콘 (썸네일이 없을 때) ────────────────────────────────
+
+class _StatusAvatar extends StatelessWidget {
+  final String status;
+  final Color  color;
+  const _StatusAvatar({required this.status, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        status == 'SUCCESS'
+            ? Icons.check_circle_rounded
+            : status == 'IN_PROGRESS'
+                ? Icons.pending_rounded
+                : Icons.cancel_rounded,
+        color: color,
+        size: 22,
       ),
     );
   }

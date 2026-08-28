@@ -88,3 +88,23 @@ class HistoryNotifier extends AutoDisposeAsyncNotifier<HistoryState> {
     state = await AsyncValue.guard(build);
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// 이번 달 참여 요약 (건수 / 적립 포인트)
+// ─────────────────────────────────────────────────────────────────
+
+final monthlySummaryProvider =
+    FutureProvider.autoDispose<({int count, int point})>((ref) async {
+  final userId = supabase.auth.currentUser?.id;
+  if (userId == null) return (count: 0, point: 0);
+  return WalletRepository().fetchMonthlySummary(userId);
+});
+
+// ─────────────────────────────────────────────────────────────────
+// 진행 중인 미션 (이어하기용)
+// ─────────────────────────────────────────────────────────────────
+
+final activeMissionProvider =
+    FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
+  return WalletRepository().fetchActiveMission();
+});
