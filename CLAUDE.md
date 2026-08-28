@@ -1763,7 +1763,8 @@ service_role_key를 MCP 헤더에 그대로 노출하는 현재 방식도 권장
 
 - **빌드 전 반드시 Play Console에서 최신 versionCode 확인**
 - 앱 배포는 한 번에 한 사람만 진행
-- 2026-08-27 기준: **27** 빌드 완료 (26이 프로덕션 100% 출시 중)
+- 2026-08-28 기준: **28 · 29 · 30 출시 완료, 31 업로드 중**
+  (27은 30/31 로 대체돼 미사용)
 
 ### 2) git — pull 먼저, force push 금지
 
@@ -1840,7 +1841,10 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 번호 | 내용 | 상태 |
 |------|------|------|
 | 0038~0042 | 광고 승인 구조, 랜덤 태그, 대시보드 승인 상태 | 적용 완료 (2026-08-26) |
-| 0043 | 어드민 광고 삭제, 순위 NULL 허용(500위 밖) | 적용 완료 (2026-08-27) |
+| 0043 | 어드민 광고 삭제, 순위 NULL 허용(500위 밖), checked_to | 적용 완료 (2026-08-27) |
+| 0044 | campaign_rank_history.keyword / is_seed — 키워드별 순위, 앱 조회 RLS | 적용 완료 (2026-08-28) |
+| 0045 | campaigns.thumbnail_url, mission_logs.attempt_count / last_submitted_tag, verify_mission 갱신 | 적용 완료 (2026-08-28) |
+| 0046 | get_active_mission RPC — 진행 중 미션 이어하기 | 적용 완료 (2026-08-28) |
 
 > 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
 
@@ -1848,8 +1852,25 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 
 | 대상 | 실행 |
 |------|------|
-| 일일 순위 수집 | 윈도우 작업 스케줄러 "네이버 순위 수집 (매일 9시)" -> `tools/run_daily_rank.bat` |
+| 순위 모니터링 수집 | 윈도우 작업 스케줄러 `NaverRank_Daily` (09:00, 기존 개발자 등록분 — 그대로 유지) |
+| 리워드 광고 순위 수집 | 윈도우 작업 스케줄러 "리워드 광고 순위 수집 (매일 9시30분)" -> `tools/run_reward_rank.ps1` |
 | 웹 배포 | `main` push 시 Railway 자동 재배포 |
+
+### 2026-08-27 ~ 28 변경 (앱 28~31)
+
+핵심만 적는다. 항목별 상세는 **`docs/CHANGELOG_2026-08-27_28.md`** 참고.
+
+- **기기 식별 버그 수정 (중요)** — `androidInfo.id`(펌웨어 빌드번호)를 기기 고유값으로 쓰고 있었다.
+  같은 기종 사용자가 서로 차단되고, 기기를 바꾸면 다중 계정이 가능해 어뷰징 방지가 양방향으로
+  무력화된 상태였다. ANDROID_ID 로 교체 (`android_id` 패키지).
+- **순위 수집 구조 확정** — 등록 시점은 SerpApi 통합검색, 일일 추적은 로컬 크롤러(500위).
+  시드 키워드 매일 / 미션 키워드 7일 주기 + 1회 20개 제한.
+- **상품 식별 강화** — 같은 판매자가 용량만 다른 상품을 운영하면 유저가 다른 상품의 태그를 읽어
+  오답 처리된다. 썸네일·상품명·판매자·위치 힌트를 미션 화면에 노출.
+- **완주율** — 진행 중 미션 이어하기(`get_active_mission`), 미션 보드 진행중 필터.
+- **광고 시작일은 내일부터** — 등록 당일은 크롤링 정보가 없어 유저가 상품을 찾을 단서가 없다.
+  미션 보드도 `start_date` 가 지난 광고만 노출한다.
+- **윈도우 PC 빌드 환경 구축** — Android SDK 36 + JDK 17 + Flutter 3.47.1. 맥 없이 AAB 빌드 가능.
 
 ### 운영 계정
 
