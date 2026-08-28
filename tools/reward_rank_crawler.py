@@ -299,28 +299,31 @@ def save_rank(env: Dict[str, str], campaign_ids: List[str],
     _ = day_end  # (범위 계산 의도를 남기기 위한 참조)
 
 
-def save_thumbnail(env: Dict[str, str], campaign_ids: List[str],
+def save_thumbnail(env: Dict[str, str], product_url: str,
                    image_url: str) -> None:
     """
     상품 썸네일 URL 저장.
 
     같은 판매자가 용량만 다른 상품을 여러 개 운영하면 유저가 검색 결과에서
     어느 것이 미션 대상인지 구분하지 못한다. 앱에서 사진으로 확인할 수 있도록
-    크롤링 중 확보한 썸네일을 캠페인에 저장한다.
+    크롤링 중 확보한 썸네일을 저장한다.
+
+    썸네일은 키워드가 아니라 상품의 속성이므로, 같은 상품 URL 을 쓰는
+    모든 캠페인에 한 번에 반영한다. (미션 키워드는 7일 주기로만 크롤링해서
+    캠페인별로 저장하면 상당수가 썸네일 없이 남는다)
     """
-    if not image_url:
+    if not image_url or not product_url:
         return
-    for campaign_id in campaign_ids:
-        try:
-            requests.patch(
-                env['url'] + '/rest/v1/campaigns',
-                headers=sb_headers(env),
-                params={'id': 'eq.' + campaign_id},
-                json={'thumbnail_url': image_url},
-                timeout=30,
-            ).raise_for_status()
-        except requests.exceptions.RequestException as e:
-            print(f'    썸네일 저장 실패({campaign_id[:8]}): {e}')
+    try:
+        requests.patch(
+            env['url'] + '/rest/v1/campaigns',
+            headers=sb_headers(env),
+            params={'product_url': 'eq.' + product_url},
+            json={'thumbnail_url': image_url},
+            timeout=30,
+        ).raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f'    썸네일 저장 실패: {e}')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -406,7 +409,7 @@ def main(test_mode: bool = False) -> None:
 
                 # 상품을 찾았으면 썸네일도 갱신 (앱에서 상품 식별용)
                 if rank:
-                    save_thumbnail(env, target['campaign_ids'],
+                    save_thumbnail(env, target['product_url'],
                                    result.get('image') or '')
 
                 if rank:
