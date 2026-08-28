@@ -20,7 +20,10 @@ class MissionHomeScreen extends ConsumerStatefulWidget {
 }
 
 /// 미션 보드 필터
-enum MissionFilter { all, available, done }
+///
+/// 진행중(시작했지만 정답 미입력)을 참여완료와 묶으면
+/// "아직 안 끝냈는데 완료로 보인다"는 혼란이 생긴다 → 별도 항목으로 분리.
+enum MissionFilter { all, available, inProgress, done }
 
 class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
   final _scrollController = ScrollController();
@@ -30,9 +33,10 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
 
   List<CampaignMissionModel> _applyFilter(List<CampaignMissionModel> list) =>
       switch (_filter) {
-        MissionFilter.all       => list,
-        MissionFilter.available => list.where((m) => !m.isParticipatedToday).toList(),
-        MissionFilter.done      => list.where((m) => m.isParticipatedToday).toList(),
+        MissionFilter.all        => list,
+        MissionFilter.available  => list.where((m) => !m.isParticipatedToday).toList(),
+        MissionFilter.inProgress => list.where((m) => m.isInProgress).toList(),
+        MissionFilter.done       => list.where((m) => m.isCompleted).toList(),
       };
 
   @override
@@ -151,9 +155,10 @@ class _FilterBar extends StatelessWidget {
   const _FilterBar({required this.current, required this.onChanged});
 
   static const _labels = {
-    MissionFilter.all:       '전체',
-    MissionFilter.available: '참여가능',
-    MissionFilter.done:      '참여완료',
+    MissionFilter.all:        '전체',
+    MissionFilter.available:  '참여가능',
+    MissionFilter.inProgress: '진행중',
+    MissionFilter.done:       '참여완료',
   };
 
   @override
@@ -200,9 +205,10 @@ class _FilteredEmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = switch (filter) {
-      MissionFilter.available => '지금 참여할 수 있는 미션이 없습니다.\n내일 다시 확인해주세요.',
-      MissionFilter.done      => '오늘 참여한 미션이 없습니다.',
-      MissionFilter.all       => '미션이 없습니다.',
+      MissionFilter.available  => '지금 참여할 수 있는 미션이 없습니다.\n내일 다시 확인해주세요.',
+      MissionFilter.inProgress => '진행 중인 미션이 없습니다.',
+      MissionFilter.done       => '오늘 완료한 미션이 없습니다.',
+      MissionFilter.all        => '미션이 없습니다.',
     };
     return Center(
       child: Padding(
@@ -334,6 +340,20 @@ class _MissionCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 상품 썸네일 — 어떤 상품을 찾아야 하는지 목록에서 바로 확인
+                    if ((mission.thumbnailUrl ?? '').isNotEmpty) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          mission.thumbnailUrl!,
+                          width: 52,
+                          height: 52,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Text(
                         mission.keyword,

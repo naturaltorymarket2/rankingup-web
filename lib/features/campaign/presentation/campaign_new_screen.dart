@@ -904,12 +904,19 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
+    // 광고 시작일은 내일부터.
+    //
+    // 등록 당일에는 순위·상품 이미지 크롤링 정보가 아직 없어,
+    // 앱 유저가 "몇 위쯤에 있는지", "어떤 상품인지" 단서 없이 미션을 받게 된다.
+    // 하루 뒤부터 시작하도록 해 수집이 끝난 뒤 노출되게 한다.
+    final tomorrow = DateTime(now.year, now.month, now.day)
+        .add(const Duration(days: 1));
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: now,
+      firstDate: tomorrow,
       lastDate: now.add(const Duration(days: 365)),
       initialDateRange: _dateRange,
-      helpText: '광고 기간 선택 (최소 7일)',
+      helpText: '광고 기간 선택 (내일부터, 최소 7일)',
       saveText: '선택 완료',
       builder: (context, child) {
         return Theme(

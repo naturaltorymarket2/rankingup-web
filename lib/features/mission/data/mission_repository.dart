@@ -13,6 +13,14 @@ class MissionRepository {
   // ─────────────────────────────────────────────────────────────
   // 내부 유틸 — KST 오늘 00:00 기준 ISO 문자열
   // ─────────────────────────────────────────────────────────────
+  /// KST 기준 오늘 날짜 (YYYY-MM-DD) — start_date 비교용
+  static String _kstTodayDate() {
+    final kst = DateTime.now().toUtc().add(const Duration(hours: 9));
+    return '${kst.year}-'
+        '${kst.month.toString().padLeft(2, '0')}-'
+        '${kst.day.toString().padLeft(2, '0')}';
+  }
+
   static String _kstTodayStartIso() {
     final now = DateTime.now().toUtc();
     final kstNow = now.add(const Duration(hours: 9));
@@ -73,9 +81,14 @@ class MissionRepository {
 
     final campaignsRaw = await supabase
         .from('campaigns')
-        .select('id, keyword, daily_target, group_id, status')
+        .select('id, keyword, daily_target, group_id, status, '
+                'product_name, thumbnail_url')
         .eq('status', 'ACTIVE')
         .eq('approval_status', 'APPROVED')   // 어드민 승인 완료 광고만 노출
+        // 광고 시작일 전에는 노출하지 않는다.
+        // 등록 당일에는 크롤링 정보(순위·썸네일)가 없어 유저가 상품을
+        // 찾을 단서 없이 미션을 받게 되기 때문이다.
+        .lte('start_date', _kstTodayDate())
         .gte('expires_at', now.toIso8601String())
         .range(start, end) as List<dynamic>;
 
