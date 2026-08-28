@@ -112,7 +112,11 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
       body: balanceAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('잔액을 불러오지 못했습니다')),
-        data: (balance) => SafeArea(
+        data: (balance) => balance < _minAmount
+            // 잔액이 최소 출금 금액에 못 미치면 신청 자체를 막고 안내한다.
+            // (예전에는 폼이 그대로 열려 신청까지 시도한 뒤 서버에서 거절됐다)
+            ? _NotEnoughBalanceView(balance: balance, minAmount: _minAmount)
+            : SafeArea(
           child: Column(
             children: [
               Expanded(
@@ -235,6 +239,89 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
 // ─────────────────────────────────────────────────────────────────
 // 서브 위젯들
 // ─────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────
+// 잔액 부족 안내
+// ─────────────────────────────────────────────────────────────────
+
+class _NotEnoughBalanceView extends StatelessWidget {
+  final int balance;
+  final int minAmount;
+
+  const _NotEnoughBalanceView({
+    required this.balance,
+    required this.minAmount,
+  });
+
+  static String _fmt(int n) {
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write(',');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remain = minAmount - balance;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF4FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.savings_outlined,
+                  size: 46, color: Color(0xFF1E3A8A)),
+            ),
+            const SizedBox(height: 28),
+            Text(
+              '포인트 ${_fmt(minAmount)}P 이상부터\n출금 신청이 가능합니다.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '현재 보유 ${_fmt(balance)}P · ${_fmt(remain)}P 더 모으면 신청할 수 있어요',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.5),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () => context.go('/home'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E3A8A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text('미션하러 가기',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _BalanceSummary extends StatelessWidget {
   final int balance;
