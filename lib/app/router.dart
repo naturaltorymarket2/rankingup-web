@@ -157,8 +157,9 @@ final appRouter = GoRouter(
               keyword:     extra?['keyword']      as String? ?? '',
               tagIndex:    extra?['tag_index']    as int?,
               productUrl:  extra?['product_url']  as String?,
-              productName: extra?['product_name'] as String?,
-              brandName:   extra?['brand_name']   as String?,
+              productName:  extra?['product_name']  as String?,
+              brandName:    extra?['brand_name']    as String?,
+              thumbnailUrl: extra?['thumbnail_url'] as String?,
             );
           },
         ),

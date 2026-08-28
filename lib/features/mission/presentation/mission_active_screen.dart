@@ -39,6 +39,7 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
   final String? productUrl;   // 캠페인 상품 URL (null이면 미표시)
   final String? productName;  // 상품명 (null이면 미표시)
   final String? brandName;    // 브랜드명 (null이면 미표시)
+  final String? thumbnailUrl; // 상품 썸네일 (null이면 미표시)
 
   const MissionActiveScreen({
     super.key,
@@ -49,6 +50,7 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
     this.productUrl,
     this.productName,
     this.brandName,
+    this.thumbnailUrl,
   });
 
   @override
@@ -65,6 +67,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   int?    _tagIndex;
   String? _productUrl;
   String? _productName;
+  String? _thumbnailUrl;
   String? _brandName;
 
   bool _resolved      = false; // 데이터 준비 완료 (extra 정상 또는 복원 성공)
@@ -107,7 +110,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
         _keyword     = widget.keyword;
         _tagIndex    = widget.tagIndex;
         _productUrl  = widget.productUrl;
-        _productName = widget.productName;
+        _productName  = widget.productName;
+        _thumbnailUrl = widget.thumbnailUrl;
         _brandName   = widget.brandName;
         _resolved    = true;
       });
@@ -137,7 +141,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
       _keyword     = restored['keyword']      as String?;
       _tagIndex    = restored['tag_index']    as int?;
       _productUrl  = restored['product_url']  as String?;
-      _productName = restored['product_name'] as String?;
+      _productName  = restored['product_name']  as String?;
+      _thumbnailUrl = restored['thumbnail_url'] as String?;
       _brandName   = restored['brand_name']   as String?;
       _resolved    = true;
     });
@@ -272,7 +277,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
                               keyword:     _keyword ?? '',
                               tagIndex:    _tagIndex,
                               productUrl:  _productUrl,
-                              productName: _productName,
+                              productName:  _productName,
+                              thumbnailUrl: _thumbnailUrl,
                               brandName:   _brandName,
                               tagController: _tagController,
                             ),
@@ -355,6 +361,7 @@ class _ActiveBody extends StatelessWidget {
   final String? productName;
   final String? brandName;
   final TextEditingController tagController;
+  final String? thumbnailUrl;
 
   const _ActiveBody({
     required this.keyword,
@@ -363,6 +370,7 @@ class _ActiveBody extends StatelessWidget {
     this.productUrl,
     this.productName,
     this.brandName,
+    this.thumbnailUrl,
   });
 
   @override
@@ -376,7 +384,11 @@ class _ActiveBody extends StatelessWidget {
 
         // 상품명/브랜드명 안내 (있을 경우)
         if (productName != null || brandName != null) ...[
-          _ProductInfoCard(productName: productName, brandName: brandName),
+          _ProductInfoCard(
+            productName: productName,
+            brandName: brandName,
+            thumbnailUrl: thumbnailUrl,
+          ),
           const SizedBox(height: 20),
         ],
 
@@ -432,8 +444,13 @@ class _KeywordReminder extends StatelessWidget {
 class _ProductInfoCard extends StatelessWidget {
   final String? productName;
   final String? brandName;
+  final String? thumbnailUrl;
 
-  const _ProductInfoCard({this.productName, this.brandName});
+  const _ProductInfoCard({
+    this.productName,
+    this.brandName,
+    this.thumbnailUrl,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -463,6 +480,22 @@ class _ProductInfoCard extends StatelessWidget {
               ),
             ],
           ),
+
+          // 썸네일 — 같은 판매자의 비슷한 상품과 헷갈리지 않도록 사진으로 확인
+          if ((thumbnailUrl ?? '').isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                thumbnailUrl!,
+                width: 96,
+                height: 96,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          ],
+
           if (productName != null) ...[
             const SizedBox(height: 6),
             Text.rich(

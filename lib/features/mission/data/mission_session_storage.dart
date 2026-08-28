@@ -25,6 +25,7 @@ class MissionSessionStorage {
     String? productUrl,
     String? productName,
     String? brandName,
+    String? thumbnailUrl,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, jsonEncode({
@@ -34,6 +35,7 @@ class MissionSessionStorage {
       'tag_index':    tagIndex,
       'product_url':  productUrl,
       'product_name': productName,
+      'thumbnail_url': thumbnailUrl,
       'brand_name':   brandName,
     }));
   }

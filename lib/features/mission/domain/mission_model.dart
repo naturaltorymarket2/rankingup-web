@@ -40,6 +40,10 @@ class CampaignMissionModel {
   /// 서버(start_mission)가 재참여를 막으므로 화면에서도 구분해 보여준다.
   final bool isInProgress;
 
+  /// 상품 썸네일 URL (크롤러가 순위 조회 중 확보).
+  /// 같은 판매자의 비슷한 상품과 헷갈리지 않도록 사진으로 확인시킨다.
+  final String? thumbnailUrl;
+
   /// 상품명 — 미션 진행 화면 안내용 (nullable, 구버전 캠페인은 null)
   final String? productName;
 
@@ -57,6 +61,7 @@ class CampaignMissionModel {
     this.groupId,
     this.isCompleted = false,
     this.isInProgress = false,
+    this.thumbnailUrl,
     this.productName,
     this.brandName,
   });
@@ -116,6 +121,7 @@ class CampaignMissionModel {
       groupId:           map['group_id']     as String?,
       // 크롤러가 수집한 미션 키워드 순위 (상품 위치 힌트용, 없으면 null)
       currentRank:       (map['current_rank'] as num?)?.toInt(),
+      thumbnailUrl:      map['thumbnail_url'] as String?,
       isInProgress:      isInProgress,
       isCompleted:       isCompleted,
       productName:       map['product_name'] as String?,

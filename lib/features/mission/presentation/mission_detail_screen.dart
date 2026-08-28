@@ -127,8 +127,9 @@ class MissionDetailScreen extends ConsumerWidget {
       keyword:     result.keyword,
       tagIndex:    result.tagIndex,
       productUrl:  campaign.productUrl,
-      productName: campaign.productName,
-      brandName:   campaign.brandName,
+      productName:  campaign.productName,
+      brandName:    campaign.brandName,
+      thumbnailUrl: campaign.thumbnailUrl,
     );
 
     // 5. 미션 진행 화면으로 이동
@@ -146,6 +147,7 @@ class MissionDetailScreen extends ConsumerWidget {
           'product_url':  campaign.productUrl,
           'product_name': campaign.productName,
           'brand_name':   campaign.brandName,
+          'thumbnail_url': campaign.thumbnailUrl,
         },
       );
     }
@@ -265,22 +267,62 @@ class _ProductHintSection extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          if (hasName)
-            Text(
-              name.trim(),
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
+          // 썸네일 + 상품명/판매자 — 같은 판매자의 비슷한 상품과 구분하기 위함
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if ((campaign.thumbnailUrl ?? '').isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    campaign.thumbnailUrl!,
+                    width: 84,
+                    height: 84,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 84,
+                      height: 84,
+                      color: Colors.grey[200],
+                      child: Icon(Icons.image_not_supported_outlined,
+                          color: Colors.grey[400]),
+                    ),
+                    loadingBuilder: (context, child, progress) =>
+                        progress == null
+                            ? child
+                            : Container(
+                                width: 84,
+                                height: 84,
+                                color: Colors.grey[100],
+                              ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (hasName)
+                      Text(
+                        name.trim(),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          height: 1.4,
+                        ),
+                      ),
+                    if (brand != null && brand.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '판매자 · ${brand.trim()}',
+                        style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          if (brand != null && brand.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              '판매자 · ${brand.trim()}',
-              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-            ),
-          ],
+            ],
+          ),
 
           const SizedBox(height: 12),
 
@@ -306,6 +348,13 @@ class _ProductHintSection extends StatelessWidget {
               '순위 정보는 매일 갱신됩니다. 검색 결과를 아래로 넘기며 위 상품을 찾아주세요.',
               style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5),
             ),
+
+          const SizedBox(height: 8),
+          Text(
+            '※ 같은 판매자의 비슷한 상품(용량·수량 차이)이 함께 노출될 수 있습니다. '
+            '위 사진과 상품명이 일치하는 상품에서 태그를 확인해주세요.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600], height: 1.5),
+          ),
         ],
       ),
     );
