@@ -41,6 +41,13 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
   final String? brandName;    // 브랜드명 (null이면 미표시)
   final String? thumbnailUrl; // 상품 썸네일 (null이면 미표시)
 
+  /// 이어하기로 진입했는지 여부.
+  ///
+  /// 미션을 처음 시작할 때는 네이버 앱으로 나갔다 돌아오는 것을 기다려야 하지만,
+  /// 이미 검색을 마치고 목록에서 다시 들어온 경우에는 그 대기가 불필요하다.
+  /// (기다림 화면에 갇혀 다른 화면을 거쳐야 입력창이 나오던 문제)
+  final bool resume;
+
   const MissionActiveScreen({
     super.key,
     required this.id,
@@ -51,6 +58,7 @@ class MissionActiveScreen extends ConsumerStatefulWidget {
     this.productName,
     this.brandName,
     this.thumbnailUrl,
+    this.resume = false,
   });
 
   @override
@@ -99,6 +107,9 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
       curve: Curves.easeOut,
     );
 
+    // 이어하기 진입은 이미 검색을 마친 상태이므로 복귀 대기를 건너뛴다
+    _isResumed = widget.resume;
+
     _resolveMissionData();
   }
 
@@ -135,6 +146,11 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
       });
       return;
     }
+
+    // 저장된 세션에서 복원했다는 건 이미 네이버를 다녀와 앱으로 돌아온 상태다.
+    // (앱이 완전히 종료됐다 재실행된 경우 resumed 콜백이 오지 않아
+    //  '검색 중입니다' 화면에 갇히던 문제)
+    _isResumed = true;
 
     setState(() {
       _logId       = restored['log_id']       as String?;

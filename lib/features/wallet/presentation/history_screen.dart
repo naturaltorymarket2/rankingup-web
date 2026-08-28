@@ -64,6 +64,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       'product_url':   mission['product_url'],
       'product_name':  mission['product_name'],
       'brand_name':    mission['brand_name'],
+      'resume':        true,
       'thumbnail_url': mission['thumbnail_url'],
     });
   }

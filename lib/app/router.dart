@@ -160,6 +160,8 @@ final appRouter = GoRouter(
               productName:  extra?['product_name']  as String?,
               brandName:    extra?['brand_name']    as String?,
               thumbnailUrl: extra?['thumbnail_url'] as String?,
+              // 목록에서 이어하기로 들어온 경우 복귀 대기 화면을 건너뛴다
+              resume:       extra?['resume'] == true,
             );
           },
         ),

@@ -83,6 +83,7 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
       'product_url':   active['product_url'],
       'product_name':  active['product_name'],
       'brand_name':    active['brand_name'],
+      'resume':        true,
       'thumbnail_url': active['thumbnail_url'],
     });
   }
