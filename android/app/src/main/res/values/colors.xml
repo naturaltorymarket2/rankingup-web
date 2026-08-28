@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 스플래시 배경 — Flutter SplashScreen(0xFF1E3A8A)과 동일한 값 -->
-    <color name="splash_background">#1E3A8A</color>
+    <!--
+      스플래시 배경 — 배너 이미지의 배경 톤과 맞춘 값.
+      Android 12+ 는 OS 스플래시(아이콘 화면)를 강제로 먼저 보여주는데,
+      그 배경색이 곧바로 이어지는 배너와 다르면 화면이 한 번 번쩍인다.
+    -->
+    <color name="splash_background">#CDC6BF</color>
+
+    <!-- 브랜드 색 (버튼 등 앱 전반에서 쓰는 남색) -->
+    <color name="brand_navy">#1E3A8A</color>
 </resources>
