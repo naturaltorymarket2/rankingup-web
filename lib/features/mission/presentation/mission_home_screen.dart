@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/admob_banner.dart';
+import '../../wallet/data/wallet_repository.dart';
 import '../../wallet/presentation/wallet_provider.dart';
 import '../domain/mission_model.dart';
 import 'mission_home_provider.dart';
@@ -57,6 +58,33 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
     if (pos.pixels >= pos.maxScrollExtent - 200) {
       ref.read(missionHomeProvider.notifier).loadMore();
     }
+  }
+
+  /// 진행 중인 미션을 태그 입력 화면으로 이어서 연다.
+  ///
+  /// log_id / tag_index 는 서버(get_active_mission)에서만 받을 수 있다.
+  Future<void> _resumeMission(CampaignMissionModel mission) async {
+    final active = await WalletRepository().fetchActiveMission();
+    if (!mounted) return;
+
+    if (active == null || active['campaign_id'] != mission.campaignId) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('이어서 진행할 수 있는 미션이 없습니다.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      ref.read(missionHomeProvider.notifier).refresh();
+      return;
+    }
+
+    context.push('/mission/${mission.campaignId}/active', extra: {
+      'log_id':        active['log_id'],
+      'keyword':       active['keyword'],
+      'tag_index':     active['tag_index'],
+      'product_url':   active['product_url'],
+      'product_name':  active['product_name'],
+      'brand_name':    active['brand_name'],
+      'thumbnail_url': active['thumbnail_url'],
+    });
   }
 
   @override
@@ -128,7 +156,11 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
                           ),
                         );
                       }
-                      return _MissionCard(mission: missions[index]);
+                      final mission = missions[index];
+                      return _MissionCard(
+                        mission: mission,
+                        onResume: () => _resumeMission(mission),
+                      );
                     },
                   ),
                 );
@@ -303,8 +335,9 @@ class _BalanceHeader extends StatelessWidget {
 
 class _MissionCard extends StatelessWidget {
   final CampaignMissionModel mission;
+  final VoidCallback? onResume;
 
-  const _MissionCard({required this.mission});
+  const _MissionCard({required this.mission, this.onResume});
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +352,8 @@ class _MissionCard extends StatelessWidget {
         : (isAlmostFull ? Colors.red.shade400 : Colors.indigo);
 
     return Opacity(
-      opacity: isCompleted ? 0.5 : 1.0,
+      // 완료된 미션만 흐리게. 진행중은 이어서 할 수 있으므로 그대로 보여준다.
+      opacity: mission.isCompleted ? 0.5 : 1.0,
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         elevation: 1,
@@ -328,9 +362,12 @@ class _MissionCard extends StatelessWidget {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: (isFull || isCompleted)
-              ? null
-              : () => context.push('/mission/${mission.campaignId}'),
+          onTap: mission.isInProgress
+              // 진행 중이면 태그 입력 화면으로 이어서 진행
+              ? () => onResume?.call()
+              : (isFull || isCompleted)
+                  ? null
+                  : () => context.push('/mission/${mission.campaignId}'),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(

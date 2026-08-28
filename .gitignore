@@ -68,3 +68,6 @@ tools/logs/
 *.keystore
 key.properties
 **/key.properties
+
+# 스플래시 문구 렌더링용 폰트 (Google Fonts, OFL)
+.fonts/

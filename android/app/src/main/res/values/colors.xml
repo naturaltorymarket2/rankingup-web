@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      스플래시 배경 — 배너 이미지의 배경 톤과 맞춘 값.
-      Android 12+ 는 OS 스플래시(아이콘 화면)를 강제로 먼저 보여주는데,
-      그 배경색이 곧바로 이어지는 배너와 다르면 화면이 한 번 번쩍인다.
+      스플래시 배경 — 브랜드 남색.
+      배너 톤(베이지)으로 맞춰 봤으나 아이콘이 배경에 묻혀 흐릿해 보여
+      기존 남색으로 되돌렸다. 하단 브랜딩 문구도 남색 위 흰색/골드 기준이다.
     -->
-    <color name="splash_background">#CDC6BF</color>
+    <color name="splash_background">#1E3A8A</color>
 
     <!-- 브랜드 색 (버튼 등 앱 전반에서 쓰는 남색) -->
     <color name="brand_navy">#1E3A8A</color>
