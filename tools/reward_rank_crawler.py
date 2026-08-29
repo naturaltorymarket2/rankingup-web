@@ -358,9 +358,31 @@ def to_product(target: Dict[str, Any], nrs) -> Dict[str, Any]:
     }
 
 
+def expire_stale_missions(env: Dict[str, str]) -> None:
+    """날짜가 지난 '진행 중' 미션을 종료 처리한다.
+
+    시작만 하고 끝내지 않은 기록이 참여 내역에 계속 '진행 중'으로 남아
+    이어하기가 눌리는 문제가 있었다. 미션은 하루 단위라 날짜가 지나면
+    이어서 진행할 수 없으므로 매일 한 번 정리한다.
+    """
+    try:
+        res = requests.post(
+            env['url'] + '/rest/v1/rpc/expire_stale_missions',
+            headers=sb_headers(env),
+            json={},
+            timeout=30,
+        )
+        res.raise_for_status()
+        print(f'[정리] 기한 지난 진행 중 미션 {res.text.strip()}건 종료 처리')
+    except Exception as e:  # 정리는 실패해도 순위 수집을 막지 않는다
+        print(f'[정리] 건너뜀: {e}')
+
+
 def main(test_mode: bool = False) -> None:
     env = load_env()
     nrs = load_crawler()
+
+    expire_stale_missions(env)
 
     targets = load_targets(env)
     if test_mode:

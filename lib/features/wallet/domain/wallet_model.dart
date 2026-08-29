@@ -69,8 +69,21 @@ class MissionLogModel {
   /// 적립 포인트 (성공 건만)
   int get earnedPoint => status == 'SUCCESS' ? kMissionReward : 0;
 
-  /// 이어서 진행할 수 있는 상태인지
-  bool get canResume => status == 'IN_PROGRESS';
+  /// 이어서 진행할 수 있는 상태인지.
+  ///
+  /// 미션은 하루 단위로 끝나므로 서버(get_active_mission)는 '오늘 시작한'
+  /// 미션만 돌려준다. 날짜가 지난 IN_PROGRESS 기록에까지 [이어하기]를
+  /// 보여주면 눌러도 "이어서 진행할 수 있는 미션이 없습니다"만 뜬다.
+  bool get canResume => status == 'IN_PROGRESS' && _isToday;
+
+  /// 시작 시각이 오늘(KST)인지
+  bool get _isToday {
+    final kstNow   = DateTime.now().toUtc().add(const Duration(hours: 9));
+    final kstStart = startedAt.toUtc().add(const Duration(hours: 9));
+    return kstNow.year  == kstStart.year &&
+           kstNow.month == kstStart.month &&
+           kstNow.day   == kstStart.day;
+  }
 
   /// 진행 중인데 오답 시도가 있었으면 그 사실을 알려준다
   String? get subLabel {
@@ -86,7 +99,8 @@ class MissionLogModel {
     'SUCCESS'     => '적립 완료',
     'TIMEOUT'     => '시간 초과',
     'FAILED'      => '실패',
-    'IN_PROGRESS' => '진행 중',
+    // 날짜가 지난 진행 중 기록은 이어할 수 없으므로 다르게 표시한다
+    'IN_PROGRESS' => _isToday ? '진행 중' : '미완료',
     _             => '알 수 없음',
   };
 

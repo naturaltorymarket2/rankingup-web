@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/utils/admob_interstitial.dart';
 import '../data/mission_session_storage.dart';
@@ -255,6 +256,40 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     );
   }
 
+  /// 네이버 앱을 다시 연다.
+  ///
+  /// 미션 시작 시 딥링크가 열리지 않는 기기가 있고(제조사별 차이),
+  /// 검색을 마치기 전에 앱으로 돌아오는 경우도 있다. 이때 처음부터
+  /// 다시 시작하지 않고 이 화면에서 바로 네이버로 나갈 수 있게 한다.
+  Future<void> _openNaver() async {
+    final keyword = _keyword ?? '';
+    if (keyword.isEmpty) return;
+
+    await Clipboard.setData(ClipboardData(text: keyword));
+    final encoded = Uri.encodeQueryComponent(keyword);
+
+    try {
+      await launchUrl(
+        Uri.parse('naversearchapp://search?query=$encoded'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      // 네이버 앱이 없으면 브라우저로 대체한다
+      try {
+        await launchUrl(
+          Uri.parse('https://search.naver.com/search.naver?query=$encoded'),
+          mode: LaunchMode.externalApplication,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('네이버를 열 수 없습니다. 키워드를 복사했으니 직접 검색해 주세요.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
   // ── 빌드 ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -299,7 +334,10 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
                               tagController: _tagController,
                             ),
                           )
-                        : const _WaitingBody(),
+                        : _WaitingBody(
+                            keyword:  _keyword ?? '',
+                            onReopen: _openNaver,
+                          ),
                   ),
 
                   // 하단 고정: [리워드 받기] 버튼 (복귀 후만 표시)
@@ -327,37 +365,157 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
 // ─────────────────────────────────────────────────────────────────
 
 class _WaitingBody extends StatelessWidget {
-  const _WaitingBody();
+  final String        keyword;
+  final Future<void> Function() onReopen;
+
+  const _WaitingBody({required this.keyword, required this.onReopen});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(
-            width: 72,
-            height: 72,
-            child: CircularProgressIndicator(
-              strokeWidth: 4,
-              color: Colors.indigo.shade400,
-            ),
-          ),
-          const SizedBox(height: 32),
           Text(
-            '네이버에서 검색 중...',
+            '네이버 앱에서 상품을 찾아주세요',
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
               color: Colors.indigo.shade700,
             ),
           ),
+          const SizedBox(height: 20),
+
+          // 복사된 키워드 — 붙여넣기만 하면 된다는 것을 눈으로 확인시킨다
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.indigo.shade100),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.content_paste_rounded,
+                        size: 16, color: Colors.indigo.shade400),
+                    const SizedBox(width: 6),
+                    Text(
+                      '검색어가 복사되어 있어요',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.indigo.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  keyword,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo.shade900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              'assets/images/naver_guide.png',
+              width: double.infinity,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          const _GuideStep(
+            no: '1',
+            text: '네이버 검색창을 길게 눌러 붙여넣기 하세요',
+          ),
+          const _GuideStep(
+            no: '2',
+            text: '검색 결과에서 미션 상품을 찾아 들어가세요',
+          ),
+          const _GuideStep(
+            no: '3',
+            text: '상품 페이지의 #태그를 확인하고 이 앱으로 돌아오세요',
+          ),
+          const SizedBox(height: 28),
+
+          OutlinedButton.icon(
+            onPressed: onReopen,
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: const Text('네이버 앱 다시 열기'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: Colors.indigo.shade700,
+              side: BorderSide(color: Colors.indigo.shade200),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
-            '키워드로 검색하고 상품을 찾은 후\n이 앱으로 돌아오세요',
+            '앱으로 돌아오면 태그 입력창이 나타납니다',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.grey.shade600,
-              height: 1.6,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 대기 화면의 단계별 안내 한 줄
+class _GuideStep extends StatelessWidget {
+  final String no;
+  final String text;
+
+  const _GuideStep({required this.no, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade600,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              no,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.45,
+                color: Colors.grey.shade800,
+              ),
             ),
           ),
         ],

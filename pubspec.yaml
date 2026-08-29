@@ -82,6 +82,7 @@ flutter:
 
   assets:
     - assets/images/mission_guide.png
+    - assets/images/naver_guide.png
     - assets/images/tag_guide.png
     - assets/images/KakaoTalk_Photo_2026-07-20-09-28-12.png
 
