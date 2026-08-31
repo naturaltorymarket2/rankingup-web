@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/supabase_client.dart';
@@ -7,8 +9,21 @@ final missionRepositoryProvider = Provider.autoDispose<MissionRepository>(
   (_) => MissionRepository(),
 );
 
+/// 페이싱 조회에 실패했음을 나타내는 표식 (그룹 ID로 쓰일 수 없는 값)
+const String _kPacingUnavailable = '__pacing_unavailable__';
+
 class MissionRepository {
   static const int pageSize = 20;
+
+  /// 유저별로 노출 순서를 섞는다.
+  ///
+  /// 같은 유저는 같은 날 같은 순서를 보고(스크롤 중 순서가 흔들리지 않게),
+  /// 유저끼리는 서로 다른 순서를 본다.
+  void _shuffleForUser(List<CampaignMissionModel> list, String userId) {
+    if (list.length < 2) return;
+    final seed = Object.hash(userId, _kstTodayDate());
+    list.shuffle(math.Random(seed));
+  }
 
   // ─────────────────────────────────────────────────────────────
   // 내부 유틸 — KST 오늘 00:00 기준 ISO 문자열
@@ -94,6 +109,20 @@ class MissionRepository {
 
     if (campaignsRaw.isEmpty) return [];
 
+    // 2-1. 유입 분산 — 지금 이 시각에 열려 있는 그룹만 노출한다.
+    //      하루 목표를 운영 시간(09~22시)에 걸쳐 나눠 풀기 때문에,
+    //      한도를 채운 광고는 잠시 사라졌다가 시간이 지나면 다시 나타난다.
+    //      서버(start_mission)에서도 같은 기준으로 막는다.
+    final openGroupIds = <String>{};
+    try {
+      final open = await supabase.rpc('get_open_mission_groups') as List<dynamic>;
+      openGroupIds.addAll(open.map((e) => e as String));
+    } catch (_) {
+      // 페이싱 조회 실패 시에는 기존 일일 목표 기준으로 동작한다
+      openGroupIds.add(_kPacingUnavailable);
+    }
+    final pacingReady = !openGroupIds.contains(_kPacingUnavailable);
+
     // 3. 오늘 각 캠페인 SUCCESS 건수 일괄 조회
     final campaignIds = campaignsRaw
         .map((c) => (c as Map<String, dynamic>)['id'] as String)
@@ -134,9 +163,16 @@ class MissionRepository {
           ((groupId != null && inProgressGroupIds.contains(groupId)) ||
            (groupId == null && inProgressCampaignIds.contains(id)));
 
-      // 오늘 참여하지 않은 캠페인만 일일 목표 도달 시 제외
+      // 오늘 참여하지 않은 캠페인만 한도 도달 시 제외
       // (참여한 미션은 '참여완료'로 계속 보여준다)
-      if (!isCompleted && !isInProgress && count >= target) continue;
+      if (!isCompleted && !isInProgress) {
+        if (pacingReady && groupId != null) {
+          // 페이싱 대상 — 지금 열려 있지 않으면 숨긴다
+          if (!openGroupIds.contains(groupId)) continue;
+        } else if (count >= target) {
+          continue;
+        }
+      }
 
       // group_id별 DISTINCT (첫 번째 등장 = 쿼리 반환 순서 기준)
       final key = groupId ?? id;
@@ -154,6 +190,10 @@ class MissionRepository {
         available.add(model);
       }
     }
+
+    // 노출 순서 랜덤화 — 모든 유저에게 같은 순서로 보이면 상단 광고에
+    // 유입이 몰린다. 유저·날짜를 씨앗으로 섞어 하루 동안은 순서가 유지된다.
+    _shuffleForUser(available, userId);
 
     // 참여가능 먼저, 참여완료 나중에
     return [...available, ...completed];
