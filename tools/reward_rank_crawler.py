@@ -395,6 +395,36 @@ def to_product(target: Dict[str, Any], nrs) -> Dict[str, Any]:
     }
 
 
+def assert_not_running(port: int) -> None:
+    """다른 크롤러가 이미 크롬을 잡고 있으면 실행하지 않는다.
+
+    순위 모니터링 크롤러(naver_rank_standalone)와 이 크롤러는 같은
+    네이버 계정과 같은 디버그 포트를 쓴다. 둘이 동시에 돌면 한 계정이
+    두 곳에서 검색을 쏟아내는 모양이 되어 차단된다.
+    (2026-09-01 차단 발생 — 두 프로그램을 함께 실행한 것이 원인으로 추정)
+    """
+    import socket
+
+    sock = socket.socket()
+    sock.settimeout(1)
+    try:
+        sock.connect(('127.0.0.1', port))
+    except OSError:
+        return          # 포트가 비어 있음 — 정상
+    finally:
+        sock.close()
+
+    sys.exit(
+        f'중단: 디버그 포트 {port} 를 이미 사용 중입니다.
+'
+        '      순위 모니터링 크롤러가 실행 중이거나 크롬이 열려 있습니다.
+'
+        '      두 크롤러를 동시에 돌리면 네이버에 차단됩니다.
+'
+        '      해당 작업이 끝난 뒤 다시 실행하세요.'
+    )
+
+
 def expire_stale_missions(env: Dict[str, str]) -> None:
     """날짜가 지난 '진행 중' 미션을 종료 처리한다.
 
@@ -433,6 +463,8 @@ def main(test_mode: bool = False) -> None:
     account = nrs.NAVER_ACCOUNTS[random.randrange(len(nrs.NAVER_ACCOUNTS))]
     port    = nrs.CDP_PORT_BASE
     profile = Path(nrs.BASE_DIR) / ('chrome_profile_' + account['id'])
+
+    assert_not_running(port)
 
     proc = nrs.launch_chrome(profile, port)
     success = outside = failed = skipped = 0
