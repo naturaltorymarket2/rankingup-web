@@ -58,8 +58,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # 최대 탐색 순위 — 이 순위까지 못 찾으면 '500위 밖'으로 기록하고 더 훑지 않는다
 MAX_RANK = 500
 
-# 상품 간 대기 (초) — 연속 요청으로 차단되지 않도록
-DELAY_BETWEEN = (4, 8)
+# 상품 간 대기 (초) — 연속 요청으로 차단되지 않도록.
+# 2026-09-01 차단 발생 후 간격을 늘렸다.
+DELAY_BETWEEN = (8, 15)
 
 # ── 수집 정책 ────────────────────────────────────────────────────
 # 시드(순위 추적 대표) 키워드는 광고주에게 매일 보여주는 KPI라 매일 수집한다.
@@ -67,6 +68,11 @@ DELAY_BETWEEN = (4, 8)
 # 키워드 1개당 최대 2~3분이 걸리므로, 광고주가 늘면 매일 수집은 불가능하다.
 #   예) 광고주 30 × 키워드 5 = 150개 → 매일이면 5시간 이상
 # 그래서 미션 키워드는 아래 주기로만 갱신하고, 1회 실행량도 제한한다.
+# '500위 밖'으로 확인된 상품은 매일 훑어봐야 소용이 없다.
+# 500위까지 확인하는 데 13페이지(상품당 1~2분)가 걸리고, 그만큼 네이버에
+# 요청을 더 보내게 돼 차단 위험만 커진다. 아래 주기로만 재확인한다.
+OUTSIDE_RECHECK_DAYS = 7
+
 MISSION_REFRESH_DAYS = 7    # 이 일수 안에 수집한 미션 키워드는 건너뛴다
 MISSION_MAX_PER_RUN  = 20   # 1회 실행에서 처리할 미션 키워드 최대 개수
 
@@ -152,6 +158,34 @@ def load_recent_mission_ranks(env: Dict[str, str]) -> Dict[str, str]:
     for row in res.json():
         recent.setdefault(row['campaign_id'], row['checked_at'])
     return recent
+
+
+def load_outside_campaigns(env: Dict[str, str]) -> set:
+    """최근 OUTSIDE_RECHECK_DAYS 안에 '500위 밖'으로 확인된 (캠페인, 키워드).
+
+    가장 최근 기록만 본다. 그 사이에 순위 안으로 들어온 기록이 있으면
+    다시 매일 수집 대상이 된다.
+    """
+    since = (datetime.now(timezone.utc)
+             - timedelta(days=OUTSIDE_RECHECK_DAYS)).isoformat()
+    res = requests.get(
+        env['url'] + '/rest/v1/campaign_rank_history',
+        headers=sb_headers(env),
+        params={
+            'select':     'campaign_id,keyword,rank,checked_at',
+            'checked_at': 'gte.' + since,
+            'order':      'checked_at.desc',
+        },
+        timeout=30,
+    )
+    res.raise_for_status()
+
+    latest: Dict[tuple, Any] = {}
+    for row in res.json():
+        key = (row['campaign_id'], row.get('keyword') or '')
+        latest.setdefault(key, row['rank'])   # 정렬이 최신순이라 첫 값이 최신
+
+    return {k for k, rank in latest.items() if rank is None}
 
 
 def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
@@ -385,6 +419,7 @@ def main(test_mode: bool = False) -> None:
     expire_stale_missions(env)
 
     targets = load_targets(env)
+    outside_recent = load_outside_campaigns(env)
     if test_mode:
         targets = targets[:1]
 
@@ -397,7 +432,7 @@ def main(test_mode: bool = False) -> None:
     profile = Path(nrs.BASE_DIR) / ('chrome_profile_' + account['id'])
 
     proc = nrs.launch_chrome(profile, port)
-    success = outside = failed = 0
+    success = outside = failed = skipped = 0
 
     try:
         from playwright.sync_api import sync_playwright
@@ -414,6 +449,15 @@ def main(test_mode: bool = False) -> None:
                 kind = '시드' if target.get('is_seed') else '미션'
                 print(f'[{i}/{len(targets)}] [{kind}] "{product["keyword"]}" '
                       f'— {product["name"][:30]}')
+
+                # 최근에 '500위 밖'으로 확인된 상품은 건너뛴다.
+                # 매일 13페이지씩 훑어도 결과는 같고 차단 위험만 커진다.
+                if all((cid, target['keyword']) in outside_recent
+                       for cid in target['campaign_ids']):
+                    print(f'    -> 건너뜀 (최근 {MAX_RANK}위 밖 확인, '
+                          f'{OUTSIDE_RECHECK_DAYS}일마다 재확인)')
+                    skipped += 1
+                    continue
 
                 result = nrs.check_rank(page, product)
 
@@ -448,7 +492,8 @@ def main(test_mode: bool = False) -> None:
     finally:
         nrs.stop_chrome(proc)
 
-    print(f'\n완료 — 순위 확인 {success}건 / {MAX_RANK}위 밖 {outside}건 / 실패 {failed}건')
+    print(f'\n완료 — 순위 확인 {success}건 / {MAX_RANK}위 밖 {outside}건 / '
+          f'건너뜀 {skipped}건 / 실패 {failed}건')
 
 
 if __name__ == '__main__':
