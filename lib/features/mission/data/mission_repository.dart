@@ -9,9 +9,6 @@ final missionRepositoryProvider = Provider.autoDispose<MissionRepository>(
   (_) => MissionRepository(),
 );
 
-/// 페이싱 조회에 실패했음을 나타내는 표식 (그룹 ID로 쓰일 수 없는 값)
-const String _kPacingUnavailable = '__pacing_unavailable__';
-
 class MissionRepository {
   static const int pageSize = 20;
 
@@ -109,19 +106,6 @@ class MissionRepository {
 
     if (campaignsRaw.isEmpty) return [];
 
-    // 2-1. 유입 분산 — 지금 이 시각에 열려 있는 그룹만 노출한다.
-    //      하루 목표를 운영 시간(09~22시)에 걸쳐 나눠 풀기 때문에,
-    //      한도를 채운 광고는 잠시 사라졌다가 시간이 지나면 다시 나타난다.
-    //      서버(start_mission)에서도 같은 기준으로 막는다.
-    final openGroupIds = <String>{};
-    try {
-      final open = await supabase.rpc('get_open_mission_groups') as List<dynamic>;
-      openGroupIds.addAll(open.map((e) => e as String));
-    } catch (_) {
-      // 페이싱 조회 실패 시에는 기존 일일 목표 기준으로 동작한다
-      openGroupIds.add(_kPacingUnavailable);
-    }
-    final pacingReady = !openGroupIds.contains(_kPacingUnavailable);
 
     // 3. 오늘 각 캠페인 SUCCESS 건수 일괄 조회
     final campaignIds = campaignsRaw
@@ -163,16 +147,9 @@ class MissionRepository {
           ((groupId != null && inProgressGroupIds.contains(groupId)) ||
            (groupId == null && inProgressCampaignIds.contains(id)));
 
-      // 오늘 참여하지 않은 캠페인만 한도 도달 시 제외
+      // 오늘 참여하지 않은 캠페인만 일일 목표 도달 시 제외
       // (참여한 미션은 '참여완료'로 계속 보여준다)
-      if (!isCompleted && !isInProgress) {
-        if (pacingReady && groupId != null) {
-          // 페이싱 대상 — 지금 열려 있지 않으면 숨긴다
-          if (!openGroupIds.contains(groupId)) continue;
-        } else if (count >= target) {
-          continue;
-        }
-      }
+      if (!isCompleted && !isInProgress && count >= target) continue;
 
       // group_id별 DISTINCT (첫 번째 등장 = 쿼리 반환 순서 기준)
       final key = groupId ?? id;
