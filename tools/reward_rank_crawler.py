@@ -68,9 +68,12 @@ DELAY_BETWEEN = (8, 15)
 # 키워드 1개당 최대 2~3분이 걸리므로, 광고주가 늘면 매일 수집은 불가능하다.
 #   예) 광고주 30 × 키워드 5 = 150개 → 매일이면 5시간 이상
 # 그래서 미션 키워드는 아래 주기로만 갱신하고, 1회 실행량도 제한한다.
-# '500위 밖'으로 확인된 상품은 매일 훑어봐야 소용이 없다.
+# 미션 키워드가 '500위 밖'으로 확인되면 매일 훑어봐야 소용이 없다.
 # 500위까지 확인하는 데 13페이지(상품당 1~2분)가 걸리고, 그만큼 네이버에
 # 요청을 더 보내게 돼 차단 위험만 커진다. 아래 주기로만 재확인한다.
+#
+# 시드 키워드에는 적용하지 않는다 — 순위 변화 자체가 광고주에게 제공하는
+# 핵심 정보라 500위 밖이어도 매일 기록해야 한다.
 OUTSIDE_RECHECK_DAYS = 7
 
 MISSION_REFRESH_DAYS = 7    # 이 일수 안에 수집한 미션 키워드는 건너뛴다
@@ -450,9 +453,14 @@ def main(test_mode: bool = False) -> None:
                 print(f'[{i}/{len(targets)}] [{kind}] "{product["keyword"]}" '
                       f'— {product["name"][:30]}')
 
-                # 최근에 '500위 밖'으로 확인된 상품은 건너뛴다.
+                # 미션 키워드가 최근 '500위 밖'으로 확인됐으면 건너뛴다.
                 # 매일 13페이지씩 훑어도 결과는 같고 차단 위험만 커진다.
-                if all((cid, target['keyword']) in outside_recent
+                #
+                # 시드 키워드는 제외한다. 광고 진행에 따라 순위가 오르는지
+                # 떨어지는지를 매일 광고주에게 보여줘야 하는 핵심 지표라,
+                # 500위 밖이더라도 매일 확인해 기록을 이어간다.
+                if not target.get('is_seed') and all(
+                       (cid, target['keyword']) in outside_recent
                        for cid in target['campaign_ids']):
                     print(f'    -> 건너뜀 (최근 {MAX_RANK}위 밖 확인, '
                           f'{OUTSIDE_RECHECK_DAYS}일마다 재확인)')
