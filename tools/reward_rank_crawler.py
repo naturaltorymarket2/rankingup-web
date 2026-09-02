@@ -203,7 +203,8 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
         headers=sb_headers(env),
         params={
             'select': 'id,group_id,product_url,keyword,seed_keyword,'
-                      'product_name,brand_name,expires_at,created_at',
+                      'product_name,brand_name,expires_at,created_at,'
+                      'thumbnail_url',
             'status':          'eq.ACTIVE',
             'approval_status': 'eq.APPROVED',
         },
@@ -237,6 +238,7 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
                 'product_name': row.get('product_name') or '',
                 'brand_name':   row.get('brand_name') or '',
                 'is_seed':      is_seed,
+                'has_thumbnail': bool(row.get('thumbnail_url')),
                 'campaign_ids': [],
             }
         if campaign_id not in groups[key]['campaign_ids']:
@@ -366,6 +368,33 @@ def save_thumbnail(env: Dict[str, str], product_url: str,
 # ─────────────────────────────────────────────────────────────────────────────
 # 크롤링
 # ─────────────────────────────────────────────────────────────────────────────
+
+def fetch_og_image(page, product_url: str) -> str:
+    """상품 페이지에서 대표 이미지(og:image)를 가져온다.
+
+    썸네일은 보통 검색 결과에서 순위를 찾을 때 함께 확보한다.
+    그런데 500위 안에 없는 상품은 검색 결과에 등장하지 않아 썸네일도
+    비게 된다. 앱에서는 순위와 무관하게 '어떤 상품인지' 보여줘야 하므로
+    (같은 판매자의 용량만 다른 상품과 혼동되는 문제) 이 경우에만
+    상품 페이지를 직접 열어 대표 이미지를 읽는다.
+    """
+    try:
+        page.goto(product_url, wait_until='domcontentloaded', timeout=30000)
+        time.sleep(random.uniform(1.5, 2.5))
+        img = page.evaluate(
+            "() => {"
+            " const list = document.getElementsByTagName('meta');"
+            " for (const m of list) {"
+            "   if (m.getAttribute('property') === 'og:image') return m.content;"
+            " }"
+            " return '';"
+            "}"
+        )
+        return img or ''
+    except Exception as e:
+        print(f'    썸네일 조회 실패: {e}')
+        return ''
+
 
 def to_product(target: Dict[str, Any], nrs) -> Dict[str, Any]:
     """크롤러의 check_rank(page, product) 가 기대하는 형태로 변환"""
@@ -510,10 +539,17 @@ def main(test_mode: bool = False) -> None:
                           keyword=target['keyword'],
                           is_seed=target.get('is_seed', True))
 
-                # 상품을 찾았으면 썸네일도 갱신 (앱에서 상품 식별용)
+                # 썸네일 확보 (앱에서 상품 식별용)
                 if rank:
                     save_thumbnail(env, target['product_url'],
                                    result.get('image') or '')
+                elif not target.get('has_thumbnail'):
+                    # 500위 밖이라 검색 결과에서 이미지를 얻지 못한 경우.
+                    # 썸네일이 아직 없을 때만 상품 페이지를 직접 연다.
+                    image = fetch_og_image(page, target['product_url'])
+                    if image:
+                        save_thumbnail(env, target['product_url'], image)
+                        print('    썸네일 확보 (상품 페이지)')
 
                 if rank:
                     print(f'    → {rank}위 (캠페인 {len(target["campaign_ids"])}개 기록)')
