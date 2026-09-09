@@ -76,14 +76,36 @@ DELAY_BETWEEN = (8, 15)
 # 핵심 정보라 500위 밖이어도 매일 기록해야 한다.
 OUTSIDE_RECHECK_DAYS = 7
 
+# 네이버 차단이 아닌 일시적 오류(네트워크 끊김, 크롬 종료 등)를 몇 번까지
+# 넘기고 계속할지. 이 횟수를 넘으면 환경 문제로 보고 중단한다.
+MAX_TRANSIENT = 3
+
 MISSION_REFRESH_DAYS = 7    # 이 일수 안에 수집한 미션 키워드는 건너뛴다
 MISSION_MAX_PER_RUN  = 20   # 1회 실행에서 처리할 미션 키워드 최대 개수
 
 # 순위 추적 서비스의 크롤러 위치 (로그인/차단감지/페이지네이션 로직 재사용)
-DEFAULT_NRS_PATH = Path(
-    os.path.expanduser('~/Documents/카카오톡 받은 파일/naver_rank_2026-08-21/'
-                       'naver_rank/naver_rank_standalone.py')
-)
+# 폴더가 옮겨지는 일이 잦아(카카오톡 받은 파일 -> 바탕화면 등) 후보를
+# 순서대로 확인한다. 여기에 없으면 환경변수 NRS_PATH 로 지정한다.
+NRS_CANDIDATES = [
+    '~/Desktop/naver_rank/naver_rank/naver_rank_standalone.py',
+    '~/Desktop/naver_rank/naver_rank_standalone.py',
+    '~/Documents/카카오톡 받은 파일/naver_rank_2026-08-21/'
+    'naver_rank/naver_rank_standalone.py',
+]
+
+
+def find_nrs_path() -> Path:
+    """순위 모니터링 크롤러(naver_rank_standalone.py)의 위치를 찾는다."""
+    env_path = os.getenv('NRS_PATH')
+    if env_path:
+        return Path(env_path)
+
+    for cand in NRS_CANDIDATES:
+        path = Path(os.path.expanduser(cand))
+        if path.exists():
+            return path
+
+    return Path(os.path.expanduser(NRS_CANDIDATES[0]))
 
 KST = timezone(timedelta(hours=9))
 
@@ -110,7 +132,7 @@ def load_env() -> Dict[str, str]:
 
 def load_crawler():
     """naver_rank_standalone.py 를 모듈로 불러온다 (실행은 하지 않음)"""
-    path = Path(os.getenv('NRS_PATH', str(DEFAULT_NRS_PATH)))
+    path = find_nrs_path()
     if not path.exists():
         sys.exit(
             f'크롤러를 찾을 수 없습니다: {path}\n'
@@ -189,6 +211,39 @@ def load_outside_campaigns(env: Dict[str, str]) -> set:
         latest.setdefault(key, row['rank'])   # 정렬이 최신순이라 첫 값이 최신
 
     return {k for k, rank in latest.items() if rank is None}
+
+
+def is_transient_error(message: str) -> bool:
+    """네이버 차단이 아니라 환경 문제(네트워크·브라우저)인지 판별한다."""
+    low = (message or '').lower()
+    return any(sig in low for sig in (
+        'has been closed',      # 크롬/탭이 닫힘
+        'net::',                # ERR_ABORTED, ERR_INTERNET_DISCONNECTED 등
+        'timeout',              # 페이지 로딩 시간 초과
+        'connection',           # 연결 끊김
+    ))
+
+
+def load_collected_today(env: Dict[str, str]) -> set:
+    """오늘(KST) 이미 수집된 (캠페인, 키워드).
+
+    실행이 중간에 끊기는 일이 있다(핫스팟 끊김, 크롬 종료 등). 다시 돌릴 때
+    처음부터 훑으면 앞쪽만 반복하고 뒤쪽은 영영 수집되지 않는다.
+    이미 오늘 기록이 있는 대상은 건너뛰어 이어서 진행되게 한다.
+    """
+    day_start = datetime.now(KST).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    res = requests.get(
+        env['url'] + '/rest/v1/campaign_rank_history',
+        headers=sb_headers(env),
+        params={
+            'select':     'campaign_id,keyword',
+            'checked_at': 'gte.' + day_start.isoformat(),
+        },
+        timeout=30,
+    )
+    res.raise_for_status()
+    return {(r['campaign_id'], r.get('keyword') or '') for r in res.json()}
 
 
 def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
@@ -478,7 +533,8 @@ def main(test_mode: bool = False) -> None:
     expire_stale_missions(env)
 
     targets = load_targets(env)
-    outside_recent = load_outside_campaigns(env)
+    outside_recent  = load_outside_campaigns(env)
+    collected_today = load_collected_today(env)
     if test_mode:
         targets = targets[:1]
 
@@ -493,7 +549,7 @@ def main(test_mode: bool = False) -> None:
     assert_not_running(port)
 
     proc = nrs.launch_chrome(profile, port)
-    success = outside = failed = skipped = 0
+    success = outside = failed = skipped = transient = 0
 
     try:
         from playwright.sync_api import sync_playwright
@@ -511,6 +567,13 @@ def main(test_mode: bool = False) -> None:
                 print(f'[{i}/{len(targets)}] [{kind}] "{product["keyword"]}" '
                       f'— {product["name"][:30]}')
 
+                # 오늘 이미 수집한 대상은 건너뛴다 (중단 후 재실행 대응)
+                if all((cid, target['keyword']) in collected_today
+                       for cid in target['campaign_ids']):
+                    print('    -> 건너뜀 (오늘 이미 수집)')
+                    skipped += 1
+                    continue
+
                 # 미션 키워드가 최근 '500위 밖'으로 확인됐으면 건너뛴다.
                 # 매일 13페이지씩 훑어도 결과는 같고 차단 위험만 커진다.
                 #
@@ -527,8 +590,21 @@ def main(test_mode: bool = False) -> None:
 
                 result = nrs.check_rank(page, product)
 
-                if result.get('blocked'):
-                    print(f'    ⚠️ 차단 감지: {result.get("blocked")} — 중단합니다')
+                blocked = result.get('blocked')
+                if blocked:
+                    # 네트워크 끊김·크롬 종료는 네이버 차단이 아니다.
+                    # 차단으로 오인해 중단하면 뒤쪽 상품이 영영 수집되지 않는다.
+                    if is_transient_error(blocked):
+                        transient += 1
+                        print(f'    ⚠️ 일시 오류({transient}/{MAX_TRANSIENT}): {blocked}')
+                        failed += 1
+                        if transient >= MAX_TRANSIENT:
+                            print('    연속 오류가 많아 중단합니다')
+                            break
+                        time.sleep(random.uniform(*DELAY_BETWEEN))
+                        continue
+
+                    print(f'    ⚠️ 차단 감지: {blocked} — 중단합니다')
                     failed += 1
                     break
 

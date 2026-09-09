@@ -19,7 +19,17 @@ $ErrorActionPreference = 'Continue'
 
 $Python     = 'C:\Python313\python.exe'
 $RewardDir  = 'C:\Users\model\Desktop\quizcashnow'
-$TrackerDir = Join-Path $env:USERPROFILE 'Documents\카카오톡 받은 파일\naver_rank_2026-08-21\naver_rank'
+# 크롤러 폴더는 자주 옮겨진다(카카오톡 받은 파일 -> 바탕화면 등).
+# 후보를 순서대로 확인해 실제로 존재하는 경로를 쓴다.
+$TrackerCandidates = @(
+    (Join-Path $env:USERPROFILE 'Desktop\naver_rank\naver_rank'),
+    (Join-Path $env:USERPROFILE 'Desktop\naver_rank'),
+    (Join-Path $env:USERPROFILE 'Documents\카카오톡 받은 파일\naver_rank_2026-08-21\naver_rank')
+)
+$TrackerDir = $TrackerCandidates[0]
+foreach ($cand in $TrackerCandidates) {
+    if (Test-Path (Join-Path $cand 'naver_rank_standalone.py')) { $TrackerDir = $cand; break }
+}
 $LogDir     = Join-Path $RewardDir 'tools\logs'
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Force $LogDir | Out-Null }
