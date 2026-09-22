@@ -13,6 +13,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/web_login_screen.dart';
 import '../features/campaign/presentation/campaign_detail_screen.dart';
+import '../features/campaign/presentation/campaign_bulk_screen.dart';
 import '../features/campaign/presentation/campaign_new_screen.dart';
 import '../features/charge/presentation/charge_screen.dart';
 import '../features/charge/presentation/transactions_screen.dart';
@@ -193,6 +194,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/web/campaign/new',
       builder: (context, state) => const CampaignNewScreen(),
+    ),
+    GoRoute(
+      // ':id' 보다 먼저 선언한다. 뒤에 두면 'bulk' 가 캠페인 id 로 해석된다.
+      path: '/web/campaign/bulk',
+      builder: (context, state) => const CampaignBulkScreen(),
     ),
     GoRoute(
       path: '/web/campaign/:id',

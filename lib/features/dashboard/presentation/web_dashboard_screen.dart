@@ -364,16 +364,33 @@ class _WebDashboardScreenState extends ConsumerState<WebDashboardScreen> {
       BuildContext context, DashboardData data) {
     return _SectionCard(
       title: '내 광고 목록',
-      trailing: ElevatedButton.icon(
-        onPressed: () => context.push('/web/campaign/new'),
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('광고 등록'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1E3A8A),
-          foregroundColor: Colors.white,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => context.push('/web/campaign/bulk'),
+            icon: const Icon(Icons.table_view_outlined, size: 18),
+            label: const Text('엑셀 대량 등록'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF1E3A8A),
+              side: const BorderSide(color: Color(0xFFC7D2FE)),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: () => context.push('/web/campaign/new'),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('개별 등록'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E3A8A),
+              foregroundColor: Colors.white,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ],
       ),
       child: data.campaigns.isEmpty
           ? const _EmptyState(message: '등록된 광고가 없습니다.')
