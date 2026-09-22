@@ -31,6 +31,11 @@ class AdminCampaignRecord {
   final String?      rejectReason;
   final List<String> tags;            // 어드민이 등록한 태그 (순서대로)
 
+  /// 크롤러가 상품 페이지에서 미리 수집해 둔 태그 초안.
+  /// 승인 화면 입력칸을 채우는 용도이며, 확정은 운영자가 한다.
+  final List<String> scrapedTags;
+  final DateTime?    scrapedAt;
+
   const AdminCampaignRecord({
     required this.groupId,
     required this.representativeCampaignId,
@@ -52,6 +57,8 @@ class AdminCampaignRecord {
     this.processedAt,
     this.rejectReason,
     this.tags = const [],
+    this.scrapedTags = const [],
+    this.scrapedAt,
   });
 
   factory AdminCampaignRecord.fromMap(Map<String, dynamic> map) {
@@ -82,8 +89,15 @@ class AdminCampaignRecord {
       processedAt:              parseDate(map['processed_at']),
       rejectReason:             map['reject_reason'] as String?,
       tags:                     strList(map['tags']),
+      scrapedTags:              strList(map['scraped_tags']),
+      scrapedAt:                parseDate(map['scraped_at']),
     );
   }
+
+  /// 수집된 태그를 붙여넣기 칸 형식('#a#b#c')으로 돌려준다
+  String get scrapedTagsText => scrapedTags
+      .map((t) => t.startsWith('#') ? t : '#$t')
+      .join();
 
   /// 표시용 키워드: seed_keyword 우선, 없으면 첫 서브키워드
   String get displayKeyword => seedKeyword.isNotEmpty

@@ -54,8 +54,16 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
     super.dispose();
   }
 
-  TextEditingController _ctrlFor(String groupId) =>
-      _tagCtrls.putIfAbsent(groupId, () => TextEditingController());
+  /// 태그 입력칸.
+  ///
+  /// 크롤러가 미리 수집해 둔 태그가 있으면 처음 만들 때 채워 둔다.
+  /// 한 번 만든 뒤에는 덮어쓰지 않는다 — 목록이 갱신될 때마다 운영자가
+  /// 고치던 내용이 사라지면 안 되기 때문이다.
+  TextEditingController _ctrlFor(String groupId, {String initial = ''}) =>
+      _tagCtrls.putIfAbsent(
+        groupId,
+        () => TextEditingController(text: initial),
+      );
 
   // ─────────────────────────────────────────────────────────────
   // Build
@@ -266,7 +274,10 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
                       for (final r in records) ...[
                         _PendingCampaignCard(
                           record:     r,
-                          controller: _ctrlFor(r.groupId),
+                          controller: _ctrlFor(
+                            r.groupId,
+                            initial: r.scrapedTagsText,
+                          ),
                           isLoading:  _loadingIds.contains(r.groupId),
                           maxTags:    kMaxTags,
                           onChanged:  () => setState(() {}),
@@ -858,6 +869,35 @@ class _PendingCampaignCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+
+          // 크롤러가 미리 수집한 태그가 있으면 입력칸에 채워져 있다.
+          // 잘못 긁혔을 수 있으므로 상품 페이지와 대조하도록 알린다.
+          if (record.scrapedTags.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 16, color: _kBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '크롤러가 상품 페이지에서 태그 ${record.scrapedTags.length}개를 '
+                      '미리 가져와 아래에 채워 두었습니다. 상품 페이지와 대조해 '
+                      '확인한 뒤 승인해 주세요.',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF1E3A8A)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
 
           // ── 태그 붙여넣기 ────────────────────────────────────
           Row(

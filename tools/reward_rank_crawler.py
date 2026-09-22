@@ -424,6 +424,120 @@ def save_thumbnail(env: Dict[str, str], product_url: str,
 # 크롤링
 # ─────────────────────────────────────────────────────────────────────────────
 
+def load_pending_groups(env: Dict[str, str]) -> List[Dict[str, Any]]:
+    """승인 대기(PENDING) 광고 중 아직 태그를 수집하지 않은 그룹.
+
+    승인 화면에서 운영자가 상품 페이지에 들어가 #태그를 직접 복사하던
+    작업을 대신한다. 수집한 값은 초안이고, 확정은 승인 시점에 사람이 한다.
+    """
+    res = requests.get(
+        env['url'] + '/rest/v1/campaigns',
+        headers=sb_headers(env),
+        params={
+            'select':          'group_id,product_url,product_name,scraped_tags',
+            'approval_status': 'eq.PENDING',
+        },
+        timeout=30,
+    )
+    res.raise_for_status()
+
+    groups: Dict[str, Dict[str, Any]] = {}
+    for row in res.json():
+        gid = row.get('group_id')
+        if not gid or gid in groups:
+            continue
+        # 이미 수집된 그룹은 건너뛴다 (운영자가 고친 값을 덮어쓰지 않는다)
+        if row.get('scraped_tags'):
+            continue
+        groups[gid] = {
+            'group_id':     gid,
+            'product_url':  row.get('product_url') or '',
+            'product_name': row.get('product_name') or '',
+        }
+
+    return [g for g in groups.values() if g['product_url']]
+
+
+def fetch_product_tags(page, product_url: str) -> List[str]:
+    """상품 페이지에서 #태그를 순서대로 읽는다.
+
+    태그는 상품 상세 하단에 검색 링크로 붙어 있다. 지연 로딩이라
+    끝까지 스크롤해야 나타난다. 화면에 보이는 순서를 그대로 유지한다 —
+    앱이 "N번째 태그"를 묻기 때문에 순서가 곧 정답이다.
+    """
+    try:
+        page.goto(product_url, wait_until='domcontentloaded', timeout=40000)
+        time.sleep(random.uniform(2.0, 3.0))
+
+        # 하단까지 내려 태그 영역을 불러온다
+        for _ in range(6):
+            page.evaluate('() => window.scrollBy(0, document.body.scrollHeight)')
+            time.sleep(random.uniform(0.6, 1.0))
+
+        tags = page.evaluate(
+            "() => {"
+            " const out = [];"
+            " const seen = new Set();"
+            " for (const a of document.querySelectorAll('a, span')) {"
+            "   const t = (a.textContent || '').trim();"
+            "   if (!t.startsWith('#')) continue;"
+            "   if (t.length < 2 || t.length > 40) continue;"
+            "   if (t.indexOf(' ') >= 0) continue;"
+            "   if (seen.has(t)) continue;"
+            "   seen.add(t);"
+            "   out.push(t);"
+            " }"
+            " return out;"
+            "}"
+        )
+        return [t for t in (tags or [])][:10]
+    except Exception as e:
+        print(f'    태그 수집 실패: {e}')
+        return []
+
+
+def save_scraped_tags(env: Dict[str, str], group_id: str, tags: List[str]) -> None:
+    """수집한 태그를 승인 화면이 읽을 수 있도록 저장한다."""
+    res = requests.post(
+        env['url'] + '/rest/v1/rpc/save_scraped_tags',
+        headers=sb_headers(env),
+        json={'p_group_id': group_id, 'p_tags': tags},
+        timeout=30,
+    )
+    res.raise_for_status()
+
+
+def scrape_pending_tags(env: Dict[str, str], page) -> int:
+    """승인 대기 광고의 태그를 모아 저장한다. 수집한 그룹 수를 돌려준다."""
+    pending = load_pending_groups(env)
+    if not pending:
+        return 0
+
+    print(f'\n승인 대기 광고 태그 수집: {len(pending)}건')
+    done = 0
+
+    for i, g in enumerate(pending, 1):
+        print(f'[{i}/{len(pending)}] {g["product_name"][:30]}')
+        tags = fetch_product_tags(page, g['product_url'])
+
+        if not tags:
+            print('    -> 태그를 찾지 못했습니다 (승인 화면에서 직접 입력 필요)')
+            continue
+
+        try:
+            save_scraped_tags(env, g['group_id'], tags)
+            print(f'    -> {len(tags)}개 수집: {" ".join(tags[:5])}'
+                  f'{" ..." if len(tags) > 5 else ""}')
+            done += 1
+        except Exception as e:
+            print(f'    -> 저장 실패: {e}')
+
+        if i < len(pending):
+            time.sleep(random.uniform(*DELAY_BETWEEN))
+
+    return done
+
+
 def fetch_og_image(page, product_url: str) -> str:
     """상품 페이지에서 대표 이미지(og:image)를 가져온다.
 
@@ -539,7 +653,8 @@ def main(test_mode: bool = False) -> None:
         targets = targets[:1]
 
     print(f'\n대상 광고: {len(targets)}건 (최대 {MAX_RANK}위까지 확인)\n')
-    if not targets:
+    pending_count = len(load_pending_groups(env))
+    if not targets and not pending_count:
         return
 
     account = nrs.NAVER_ACCOUNTS[random.randrange(len(nrs.NAVER_ACCOUNTS))]
@@ -636,6 +751,16 @@ def main(test_mode: bool = False) -> None:
 
                 if i < len(targets):
                     time.sleep(random.uniform(*DELAY_BETWEEN))
+
+            # 순위 수집이 끝난 뒤 승인 대기 광고의 태그를 모은다.
+            # 크롬 세션을 띄워 둔 김에 함께 처리한다. 실패해도 순위
+            # 수집 결과에는 영향이 없도록 예외를 삼킨다.
+            try:
+                scraped = scrape_pending_tags(env, page)
+                if scraped:
+                    print(f'태그 수집 완료: {scraped}건')
+            except Exception as e:
+                print(f'태그 수집 건너뜀: {e}')
 
             browser.close()
     finally:
