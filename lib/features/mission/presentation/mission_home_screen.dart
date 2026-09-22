@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/admob_banner.dart';
 import '../../wallet/data/wallet_repository.dart';
 import '../../wallet/presentation/wallet_provider.dart';
+import '../data/mission_event_logger.dart';
 import '../domain/mission_model.dart';
 import 'mission_home_provider.dart';
 
@@ -368,7 +369,12 @@ class _MissionCard extends StatelessWidget {
               ? () => onResume?.call()
               : (isFull || isCompleted)
                   ? null
-                  : () => context.push('/mission/${mission.campaignId}'),
+                  : () {
+                      // 이탈 지점 측정 — 상세까지만 보고 나가는 경우를 잡는다
+                      logMissionEvent(MissionStep.viewDetail,
+                          campaignId: mission.campaignId);
+                      context.push('/mission/${mission.campaignId}');
+                    },
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(

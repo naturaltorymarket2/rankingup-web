@@ -112,6 +112,11 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
         ),
       ),
       actions: [
+        TextButton.icon(
+          onPressed: () => context.go('/admin/funnel'),
+          icon:  const Icon(Icons.insights_outlined, size: 18),
+          label: const Text('이탈 지점'),
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: '새로고침',

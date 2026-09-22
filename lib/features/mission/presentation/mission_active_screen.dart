@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/utils/admob_interstitial.dart';
+import '../data/mission_event_logger.dart';
 import '../data/mission_session_storage.dart';
 import '../domain/mission_model.dart';
 import 'mission_active_provider.dart';
@@ -189,6 +190,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   }
 
   void _onResumedFromNaver() {
+    logMissionEvent(MissionStep.returnApp,
+        campaignId: widget.id, logId: _logId);
     setState(() {
       _isResumed      = true;
       _isButtonLocked = true;
@@ -214,6 +217,9 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
       return;
     }
 
+    // 이탈 지점 측정 — 어디까지 왔는지 남긴다 (실패해도 무시)
+    logMissionEvent(MissionStep.submit, campaignId: widget.id, logId: logId);
+
     final result = await ref.read(missionVerifyProvider.notifier).verifyMission(
       logId:        logId,
       submittedTag: tag,
@@ -223,6 +229,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
 
     switch (result) {
       case VerifyMissionResult.success:
+        logMissionEvent(MissionStep.success,
+            campaignId: widget.id, logId: logId);
         setState(() => _isSuccess = true);
         _confettiCtrl.forward();
         AdmobInterstitial.load();
@@ -236,6 +244,8 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
         }
 
       case VerifyMissionResult.wrongAnswer:
+        logMissionEvent(MissionStep.wrongTag,
+            campaignId: widget.id, logId: logId);
         HapticFeedback.vibrate();
         _showSnackBar('오답입니다. 다시 확인해주세요');
 

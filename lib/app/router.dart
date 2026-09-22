@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'supabase_client.dart';
+import '../features/admin/presentation/admin_funnel_screen.dart';
 import '../features/admin/presentation/admin_campaign_screen.dart';
 import '../features/admin/presentation/admin_charge_screen.dart';
 import '../features/admin/presentation/admin_notice_screen.dart';
@@ -224,6 +225,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/admin/charge',
       builder: (context, state) => const AdminChargeScreen(),
+    ),
+    GoRoute(
+      path: '/admin/funnel',
+      builder: (context, state) => const AdminFunnelScreen(),
     ),
     GoRoute(
       path: '/admin/campaign',

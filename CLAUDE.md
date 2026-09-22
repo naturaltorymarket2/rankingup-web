@@ -1962,6 +1962,31 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 - 태그는 지연 로딩이라 하단까지 스크롤한 뒤 읽는다. 화면 순서를 그대로 유지한다 —
   앱이 "N번째 태그"를 묻기 때문에 순서가 곧 정답이다
 
+### 미션 이탈 지점 측정 (2026-09-22, migration 0051)
+
+'완주율이 낮다'만으로는 무엇을 고칠지 알 수 없었다. 시작과 성공만 기록돼
+있어 중간에 어디서 빠지는지 알 방법이 없었다.
+
+| 단계 | 기록 시점 |
+|------|-----------|
+| VIEW_DETAIL | 홈에서 미션 카드를 눌러 상세로 이동 |
+| START | start_mission 성공 |
+| LAUNCH_NAVER | 네이버 앱 딥링크 실행 성공 |
+| RETURN_APP | 앱으로 복귀해 태그 입력 화면 표시 |
+| SUBMIT | 태그 제출 |
+| WRONG_TAG | 오답 판정 (단계가 아니라 별도 지표) |
+| SUCCESS | 적립 완료 |
+
+- `mission_events` 테이블 + `log_mission_event` RPC (user_id 는 auth.uid() 강제,
+  정해진 단계만 허용). 클라이언트 직접 INSERT/SELECT 불가
+- 앱은 결과를 기다리지 않고 호출하며 실패는 무시한다 — 통계 때문에 미션이
+  막히면 안 된다
+- 어드민 `/admin/funnel` 에서 단계별 도달 수·이탈 수와 해석 힌트를 본다
+  (`get_mission_funnel(p_days)`, 어드민 전용)
+
+읽는 법: '네이버 이동'은 많은데 '앱 복귀'가 적으면 딥링크·복귀 안내 문제,
+'앱 복귀'는 많은데 '태그 제출'이 적으면 상품을 못 찾는 문제다.
+
 ### 운영 계정
 
 - 어드민 로그인: `/admin/login` — **아이디 `admin`** (내부적으로 `admin@quizcashnow.co.kr` 로 변환)

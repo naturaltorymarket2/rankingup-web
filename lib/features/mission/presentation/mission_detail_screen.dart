@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/device_util.dart';
+import '../data/mission_event_logger.dart';
 import '../data/mission_session_storage.dart';
 import '../domain/mission_model.dart';
 import 'mission_detail_provider.dart';
@@ -84,6 +85,10 @@ class MissionDetailScreen extends ConsumerWidget {
       return;
     }
 
+    // 어디까지 진행했는지 남긴다 (이탈 지점 측정 — 실패해도 무시)
+    logMissionEvent(MissionStep.start,
+        campaignId: campaignId, logId: result.logId);
+
     // 2. 키워드 클립보드 복사 — 실패해도 딥링크 실행은 계속 진행 (유저가 직접 입력 가능)
     try {
       await Clipboard.setData(ClipboardData(text: result.keyword));
@@ -117,6 +122,9 @@ class MissionDetailScreen extends ConsumerWidget {
       }
       return;
     }
+
+    logMissionEvent(MissionStep.launchNaver,
+        campaignId: campaignId, logId: result.logId);
 
     // 4. 딥링크 성공 직후 세션 영속화
     //    네이버 앱에 가 있는 동안 OS가 백그라운드 프로세스를 종료해도
