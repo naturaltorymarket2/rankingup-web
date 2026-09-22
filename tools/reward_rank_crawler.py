@@ -221,6 +221,8 @@ def is_transient_error(message: str) -> bool:
         'net::',                # ERR_ABORTED, ERR_INTERNET_DISCONNECTED 등
         'timeout',              # 페이지 로딩 시간 초과
         'connection',           # 연결 끊김
+        'interrupted by another navigation',  # 크롬 창을 사람이 조작함
+        'target closed',
     ))
 
 
@@ -458,12 +460,14 @@ def load_pending_groups(env: Dict[str, str]) -> List[Dict[str, Any]]:
     return [g for g in groups.values() if g['product_url']]
 
 
-def fetch_product_tags(page, product_url: str) -> List[str]:
+def fetch_product_tags(page, product_url: str) -> tuple:
     """상품 페이지에서 #태그를 순서대로 읽는다.
 
     태그는 상품 상세 하단에 검색 링크로 붙어 있다. 지연 로딩이라
     끝까지 스크롤해야 나타난다. 화면에 보이는 순서를 그대로 유지한다 —
     앱이 "N번째 태그"를 묻기 때문에 순서가 곧 정답이다.
+
+    Returns: (태그 목록, 오류 메시지 or None)
     """
     try:
         page.goto(product_url, wait_until='domcontentloaded', timeout=40000)
@@ -490,10 +494,10 @@ def fetch_product_tags(page, product_url: str) -> List[str]:
             " return out;"
             "}"
         )
-        return [t for t in (tags or [])][:10]
+        return [t for t in (tags or [])][:10], None
     except Exception as e:
         print(f'    태그 수집 실패: {e}')
-        return []
+        return [], str(e)
 
 
 def save_scraped_tags(env: Dict[str, str], group_id: str, tags: List[str]) -> None:
@@ -518,7 +522,13 @@ def scrape_pending_tags(env: Dict[str, str], page) -> int:
 
     for i, g in enumerate(pending, 1):
         print(f'[{i}/{len(pending)}] {g["product_name"][:30]}')
-        tags = fetch_product_tags(page, g['product_url'])
+        tags, error = fetch_product_tags(page, g['product_url'])
+
+        # 크롬이 닫혔으면 남은 건을 훑어도 전부 같은 오류가 난다.
+        # 수집되지 않은 건은 다음 실행에서 이어서 처리된다.
+        if error and 'has been closed' in error.lower():
+            print('    -> 크롬이 닫혀 중단합니다. 남은 건은 다음 실행에서 처리됩니다.')
+            break
 
         if not tags:
             print('    -> 태그를 찾지 못했습니다 (승인 화면에서 직접 입력 필요)')
