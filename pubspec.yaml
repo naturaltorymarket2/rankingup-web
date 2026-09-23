@@ -45,6 +45,7 @@ dependencies:
   excel: ^4.0.6
   file_picker: ^11.0.3
   web: ^1.1.1
+  android_intent_plus: ^6.1.0
 
 dev_dependencies:
   flutter_test:

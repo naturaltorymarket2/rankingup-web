@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../shared/utils/naver_launcher.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/device_util.dart';
@@ -101,17 +101,9 @@ class MissionDetailScreen extends ConsumerWidget {
     // 3. 네이버 딥링크 실행
     //    - naversearchapp://: 네이버 앱 전용 scheme
     //    - where=nexearch 제거 후 query만 전달 (일부 기기에서 파라미터 무시 문제 대응)
-    final encoded  = Uri.encodeComponent(result.keyword);
-    final naverUri = Uri.parse(
-      'naversearchapp://search?query=$encoded',
-    );
-
-    bool launched = false;
-    try {
-      launched = await launchUrl(naverUri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      launched = false;
-    }
+    //    패키지를 지정한 인텐트 → 커스텀 스킴 → 웹 검색 순으로 시도한다.
+    //    커스텀 스킴만으로는 네이버 앱이 꺼져 있을 때 실행되지 않는 기기가 있다.
+    final launched = await openNaverSearch(result.keyword);
 
     if (!launched) {
       if (context.mounted) {

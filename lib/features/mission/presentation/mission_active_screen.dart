@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../app/supabase_client.dart';
+import '../../../shared/utils/naver_launcher.dart';
 
 import '../../../shared/utils/admob_interstitial.dart';
 import '../data/mission_event_logger.dart';
@@ -84,6 +85,12 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   bool _resolveFailed = false; // 복원도 실패 — /home 리다이렉트 진행 중
 
   // ── 네이버 앱 복귀 감지 ────────────────────────────────────
+  /// 앱이 백그라운드로 내려간 적이 있는지 (네이버로 실제로 나갔는지 판별)
+  bool _wentBackground = false;
+
+  /// 상품이 검색 결과 몇 번째쯤에 있는지 (크롤러가 수집한 최신 순위).
+  /// 500위 밖이면 null 로 남는다.
+  int? _currentRank;
   bool _isResumed      = false; // 네이버 앱에서 복귀 여부
   bool _isButtonLocked = false; // 복귀 후 3초 잠금
   bool _isSuccess      = false;
@@ -113,6 +120,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     _isResumed = widget.resume;
 
     _resolveMissionData();
+    _loadRankHint();
   }
 
   // ── extra 정상 사용 또는 SharedPreferences 복원 ────────────
@@ -184,7 +192,19 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // 데이터 복원이 끝나기 전에는 무시 — null 참조 방지
     if (!_resolved) return;
-    if (state == AppLifecycleState.resumed && !_isResumed) {
+
+    // 앱을 실제로 벗어난 적이 있어야 '네이버에서 돌아왔다'로 본다.
+    // [네이버 앱 다시 열기]를 눌렀는데 네이버가 뜨지 않은 경우에도
+    // resumed 가 오면서 대기 화면이 그냥 넘어가던 문제가 있었다.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _wentBackground = true;
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed &&
+        !_isResumed &&
+        _wentBackground) {
       _onResumedFromNaver();
     }
   }
@@ -266,6 +286,30 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     );
   }
 
+  /// 상품 위치 힌트를 읽어 온다.
+  ///
+  /// 태그를 찾으려면 검색 결과에서 상품을 먼저 찾아야 한다. 몇 페이지쯤에
+  /// 있는지 알려주면 훨씬 빨리 찾는다. 실패해도 미션 진행에는 영향이 없다.
+  Future<void> _loadRankHint() async {
+    try {
+      final rows = await supabase
+          .from('campaign_rank_history')
+          .select('rank')
+          .eq('campaign_id', widget.id)
+          .eq('is_seed', false)
+          .order('checked_at', ascending: false)
+          .limit(1) as List<dynamic>;
+
+      if (!mounted || rows.isEmpty) return;
+      final rank = (rows.first['rank'] as num?)?.toInt();
+      if (rank != null && rank > 0) {
+        setState(() => _currentRank = rank);
+      }
+    } catch (_) {
+      // 힌트는 없어도 미션은 진행할 수 있다
+    }
+  }
+
   /// 네이버 앱을 다시 연다.
   ///
   /// 미션 시작 시 딥링크가 열리지 않는 기기가 있고(제조사별 차이),
@@ -276,27 +320,13 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     if (keyword.isEmpty) return;
 
     await Clipboard.setData(ClipboardData(text: keyword));
-    final encoded = Uri.encodeQueryComponent(keyword);
 
-    try {
-      await launchUrl(
-        Uri.parse('naversearchapp://search?query=$encoded'),
-        mode: LaunchMode.externalApplication,
-      );
-    } catch (_) {
-      // 네이버 앱이 없으면 브라우저로 대체한다
-      try {
-        await launchUrl(
-          Uri.parse('https://search.naver.com/search.naver?query=$encoded'),
-          mode: LaunchMode.externalApplication,
-        );
-      } catch (_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('네이버를 열 수 없습니다. 키워드를 복사했으니 직접 검색해 주세요.'),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+    final opened = await openNaverSearch(keyword);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('네이버를 열 수 없습니다. 검색어를 복사했으니 직접 검색해 주세요.'),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -340,6 +370,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
                               productUrl:  _productUrl,
                               productName:  _productName,
                               thumbnailUrl: _thumbnailUrl,
+                              currentRank:  _currentRank,
                               brandName:   _brandName,
                               tagController: _tagController,
                             ),
@@ -540,6 +571,7 @@ class _GuideStep extends StatelessWidget {
 
 class _ActiveBody extends StatelessWidget {
   final String  keyword;
+  final int?    currentRank;
   final int?    tagIndex;
   final String? productUrl;
   final String? productName;
@@ -549,6 +581,7 @@ class _ActiveBody extends StatelessWidget {
 
   const _ActiveBody({
     required this.keyword,
+    this.currentRank,
     required this.tagController,
     this.tagIndex,
     this.productUrl,
@@ -569,6 +602,7 @@ class _ActiveBody extends StatelessWidget {
         // 상품명/브랜드명 안내 (있을 경우)
         if (productName != null || brandName != null) ...[
           _ProductInfoCard(
+            currentRank:  currentRank,
             productName: productName,
             brandName: brandName,
             thumbnailUrl: thumbnailUrl,
@@ -625,12 +659,23 @@ class _KeywordReminder extends StatelessWidget {
 // 상품명/브랜드명 안내 카드
 // ─────────────────────────────────────────────────────────────────
 
+/// 순위를 '몇 페이지쯤'으로 바꿔 알려준다.
+/// 검색 결과는 한 페이지에 40개씩 나온다.
+String _rankHintText(int rank) {
+  final page = ((rank - 1) ~/ 40) + 1;
+  return page == 1
+      ? '약 $rank위 · 첫 페이지에 있어요'
+      : '약 $rank위 · $page페이지쯤에 있어요';
+}
+
 class _ProductInfoCard extends StatelessWidget {
+  final int?    currentRank;
   final String? productName;
   final String? brandName;
   final String? thumbnailUrl;
 
   const _ProductInfoCard({
+    this.currentRank,
     this.productName,
     this.brandName,
     this.thumbnailUrl,
@@ -664,6 +709,37 @@ class _ProductInfoCard extends StatelessWidget {
               ),
             ],
           ),
+
+          // 위치 힌트 — 검색 결과에서 상품을 먼저 찾아야 태그를 볼 수 있다
+          if (currentRank != null && currentRank! > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.indigo.shade100),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.place_outlined,
+                      size: 15, color: Colors.indigo.shade400),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _rankHintText(currentRank!),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.indigo.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // 썸네일 — 같은 판매자의 비슷한 상품과 헷갈리지 않도록 사진으로 확인
           if ((thumbnailUrl ?? '').isNotEmpty) ...[

@@ -55,7 +55,16 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="naversearchapp"/>
         </intent>
-        <!-- 네이버 검색 앱 패키지 직접 선언 (canLaunchUrl 보완, Android 11+) -->
+        <!-- 웹 검색 대체 경로 (네이버 앱이 없을 때 브라우저로 연다) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <!-- 네이버 검색 앱 패키지 직접 선언 (Android 11+ 패키지 가시성).
+             com.nhn.android.search 가 실제 패키지명이다.
+             기존에 적혀 있던 com.naver.search 는 존재하지 않는 값이라
+             패키지 지정 실행이 되지 않았다. -->
+        <package android:name="com.nhn.android.search" />
         <package android:name="com.naver.search" />
     </queries>
 </manifest>
