@@ -42,15 +42,51 @@ if (-not (Test-Path $Python)) {
     exit 1
 }
 
-# 순위 모니터링 크롤러가 아직 돌고 있으면 크롬 디버그 포트(9222)가 충돌한다.
-# 포트가 열려 있으면 앞 작업이 끝날 때까지 최대 30분 기다린다.
+# 순위 모니터링 크롤러와 같은 크롬 디버그 포트(9222)를 쓴다.
+#
+# 문제가 됐던 것: 앞 작업이 비정상 종료하면 크롬만 남아 포트를 계속 잡는다.
+# 그러면 다음 날부터 매일 '포트 사용 중'으로 아무것도 수집하지 못한다
+# (2026-09-25 ~ 09-26 이틀간 이렇게 비었다).
+#
+# 그래서 '실제로 크롤러가 돌고 있는지'를 파이썬 프로세스로 판별한다.
+#   - 돌고 있으면      : 끝날 때까지 최대 30분 기다린다
+#   - 남은 크롬뿐이면  : 정리하고 진행한다
+function Test-PortBusy {
+    $c = Get-NetTCPConnection -LocalPort 9222 -State Listen -ErrorAction SilentlyContinue
+    return [bool]$c
+}
+
+function Test-CrawlerRunning {
+    $procs = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+             Where-Object { $_.CommandLine -match 'naver_rank_standalone|reward_rank_crawler' }
+    return ($procs | Measure-Object).Count -gt 0
+}
+
 $waited = 0
-while ($waited -lt 1800) {
-    $busy = Test-NetConnection -ComputerName '127.0.0.1' -Port 9222 -InformationLevel Quiet -WarningAction SilentlyContinue
-    if (-not $busy) { break }
-    Write-Log '앞선 크롤러가 아직 실행 중 (포트 9222 사용) - 60초 대기'
+while ((Test-PortBusy) -and (Test-CrawlerRunning) -and $waited -lt 1800) {
+    Write-Log '앞선 크롤러가 실행 중 (포트 9222 사용) - 60초 대기'
     Start-Sleep -Seconds 60
     $waited += 60
+}
+
+if (Test-PortBusy) {
+    if (Test-CrawlerRunning) {
+        Write-Log '[중단] 30분을 기다렸지만 앞선 크롤러가 계속 실행 중입니다.'
+        exit 1
+    }
+
+    # 크롤러는 없는데 포트만 잡혀 있다 = 지난 실행에서 남은 크롬
+    Write-Log '남은 크롬이 포트를 잡고 있어 정리합니다 (크롤러 전용 프로필만 종료)'
+    Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like '*chrome_profile_*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 5
+
+    if (Test-PortBusy) {
+        Write-Log '[중단] 포트를 해제하지 못했습니다. 크롬을 모두 닫고 다시 실행하세요.'
+        exit 1
+    }
+    Write-Log '정리 완료 - 수집을 계속합니다'
 }
 
 Push-Location $RewardDir

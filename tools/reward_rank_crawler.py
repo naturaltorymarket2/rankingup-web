@@ -150,6 +150,28 @@ def load_crawler():
 # Supabase
 # ─────────────────────────────────────────────────────────────────────────────
 
+def sb_request(method: str, url: str, **kwargs):
+    """Supabase 요청. 네트워크가 끊겨도 몇 번 더 시도한다.
+
+    핫스팟으로 돌리는 환경이라 순간적으로 DNS 조회나 연결이 실패한다.
+    (2026-09-27 실행에서 이것 때문에 태그 수집이 통째로 건너뛰어졌다)
+    한 번 실패했다고 그날 수집을 버리면 데이터에 구멍이 남는다.
+    """
+    last = None
+    for attempt in range(3):
+        try:
+            res = requests.request(method, url, **kwargs)
+            res.raise_for_status()
+            return res
+        except Exception as e:
+            last = e
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                print(f'    통신 실패 — {wait}초 후 재시도 ({attempt + 1}/3)')
+                time.sleep(wait)
+    raise last
+
+
 def sb_headers(env: Dict[str, str]) -> Dict[str, str]:
     return {
         'apikey':        env['key'],
@@ -166,7 +188,7 @@ def load_recent_mission_ranks(env: Dict[str, str]) -> Dict[str, str]:
     """
     since = (datetime.now(timezone.utc)
              - timedelta(days=MISSION_REFRESH_DAYS)).isoformat()
-    res = requests.get(
+    res = sb_request('GET',
         env['url'] + '/rest/v1/campaign_rank_history',
         headers=sb_headers(env),
         params={
@@ -193,7 +215,7 @@ def load_outside_campaigns(env: Dict[str, str]) -> set:
     """
     since = (datetime.now(timezone.utc)
              - timedelta(days=OUTSIDE_RECHECK_DAYS)).isoformat()
-    res = requests.get(
+    res = sb_request('GET',
         env['url'] + '/rest/v1/campaign_rank_history',
         headers=sb_headers(env),
         params={
@@ -235,7 +257,7 @@ def load_collected_today(env: Dict[str, str]) -> set:
     """
     day_start = datetime.now(KST).replace(
         hour=0, minute=0, second=0, microsecond=0)
-    res = requests.get(
+    res = sb_request('GET',
         env['url'] + '/rest/v1/campaign_rank_history',
         headers=sb_headers(env),
         params={
@@ -255,7 +277,7 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
     같은 (상품URL, 메인키워드) 조합은 한 번만 크롤링하고,
     결과는 그룹 내 모든 캠페인에 동일하게 기록한다.
     """
-    res = requests.get(
+    res = sb_request('GET',
         env['url'] + '/rest/v1/campaigns',
         headers=sb_headers(env),
         params={
@@ -432,7 +454,7 @@ def load_pending_groups(env: Dict[str, str]) -> List[Dict[str, Any]]:
     승인 화면에서 운영자가 상품 페이지에 들어가 #태그를 직접 복사하던
     작업을 대신한다. 수집한 값은 초안이고, 확정은 승인 시점에 사람이 한다.
     """
-    res = requests.get(
+    res = sb_request('GET',
         env['url'] + '/rest/v1/campaigns',
         headers=sb_headers(env),
         params={
@@ -502,7 +524,7 @@ def fetch_product_tags(page, product_url: str) -> tuple:
 
 def save_scraped_tags(env: Dict[str, str], group_id: str, tags: List[str]) -> None:
     """수집한 태그를 승인 화면이 읽을 수 있도록 저장한다."""
-    res = requests.post(
+    res = sb_request('POST',
         env['url'] + '/rest/v1/rpc/save_scraped_tags',
         headers=sb_headers(env),
         json={'p_group_id': group_id, 'p_tags': tags},
