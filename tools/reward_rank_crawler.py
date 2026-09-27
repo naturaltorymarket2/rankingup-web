@@ -701,7 +701,9 @@ def main(test_mode: bool = False) -> None:
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp('http://localhost:%d' % port)
+            # 'localhost' 는 ::1(IPv6)로 먼저 풀려 연결이 거부된다.
+            # 크롬 디버그 포트는 127.0.0.1 에만 열리므로 IP 를 직접 쓴다.
+            browser = p.chromium.connect_over_cdp('http://127.0.0.1:%d' % port)
             context = browser.contexts[0] if browser.contexts else browser.new_context()
             page    = context.pages[0] if context.pages else context.new_page()
 
