@@ -42,6 +42,52 @@ function Write-Log {
     Add-Content -Path $Log -Value $line -Encoding utf8
 }
 
+# ── 크롬 디버그 포트 정리 ────────────────────────────────────
+# 앞 실행이 비정상 종료하면 크롬만 남아 포트를 계속 잡는다.
+# 그러면 그 뒤로 매일 아무것도 수집하지 못한다(2026-09-25~26 이틀 공백).
+# 실제로 크롤러가 도는지 파이썬 프로세스로 판별해, 남은 크롬이면 정리한다.
+function Test-PortBusy {
+    return [bool](Get-NetTCPConnection -LocalPort 9222 -State Listen -ErrorAction SilentlyContinue)
+}
+
+function Test-CrawlerRunning {
+    $procs = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+             Where-Object { $_.CommandLine -match 'naver_rank_standalone|reward_rank_crawler' }
+    return ($procs | Measure-Object).Count -gt 0
+}
+
+function Clear-StaleChrome {
+    param([string]$Step)
+
+    if (-not (Test-PortBusy)) { return $true }
+
+    $waited = 0
+    while ((Test-PortBusy) -and (Test-CrawlerRunning) -and $waited -lt 1800) {
+        Write-Log "[$Step] 다른 크롤러가 실행 중 - 60초 대기"
+        Start-Sleep -Seconds 60
+        $waited += 60
+    }
+
+    if (-not (Test-PortBusy)) { return $true }
+
+    if (Test-CrawlerRunning) {
+        Write-Log "[$Step] 30분을 기다렸지만 다른 크롤러가 계속 실행 중 - 건너뜀"
+        return $false
+    }
+
+    Write-Log "[$Step] 남은 크롬이 포트를 잡고 있어 정리합니다"
+    Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like '*chrome_profile_*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 5
+
+    if (Test-PortBusy) {
+        Write-Log "[$Step] 포트를 해제하지 못했습니다 - 건너뜀"
+        return $false
+    }
+    return $true
+}
+
 Write-Log '============================================================'
 Write-Log '실행 시작'
 
@@ -52,6 +98,7 @@ if (-not (Test-Path $TrackerDir)) { Write-Log "[오류] 크롤러 폴더를 찾�
 if (-not $ok) { Write-Log '사전 점검 실패 — 중단'; exit 1 }
 
 # ── 1. 순위 모니터링 크롤러 ──────────────────────────────────
+if (-not (Clear-StaleChrome '1/2')) { Write-Log '[1/2] 건너뜀'; }
 Write-Log '[1/2] 순위 모니터링 크롤러 시작'
 Push-Location $TrackerDir
 try {
@@ -72,6 +119,11 @@ try {
 Start-Sleep -Seconds 120
 
 # ── 2. 리워드 광고 순위 크롤러 ───────────────────────────────
+if (-not (Clear-StaleChrome '2/2')) {
+    Write-Log '[2/2] 포트를 확보하지 못해 중단합니다'
+    Write-Log '실행 종료'
+    exit 1
+}
 Write-Log '[2/2] 리워드 광고 크롤러 시작'
 Push-Location $RewardDir
 try {
