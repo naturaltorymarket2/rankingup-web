@@ -40,13 +40,24 @@ class _KeywordRow {
   final String                original;
   final TextEditingController ctrl;
 
-  /// 순위 확인 결과 — null: 아직 확인 안 함
+  /// 광고주가 등록할 때 조회된 통합검색 순위(1~10). 순위권 밖이면 null.
+  final int?  initialRank;
+
+  /// 등록 시점에 순위를 조회했는지. false면 '미조회'다 —
+  /// 순위권 밖(조회했으나 없음)과 구분해서 보여 준다.
+  final bool  rankChecked;
+
+  /// [순위 확인] 결과 — null: 아직 눌러보지 않음
   String? rankLabel;
   Color?  rankColor;
   bool    checking = false;
 
-  _KeywordRow(this.campaignId, this.original)
-      : ctrl = TextEditingController(text: original);
+  _KeywordRow(
+    this.campaignId,
+    this.original, {
+    this.initialRank,
+    this.rankChecked = false,
+  }) : ctrl = TextEditingController(text: original);
 }
 
 class _KeywordEditDialog extends StatefulWidget {
@@ -114,6 +125,8 @@ class _KeywordEditDialogState extends State<_KeywordEditDialog> {
           return _KeywordRow(
             m['campaign_id'] as String,
             m['keyword'] as String? ?? '',
+            initialRank: (m['initial_rank'] as num?)?.toInt(),
+            rankChecked: m['rank_checked'] == true,
           );
         }).toList();
         _loading = false;
@@ -132,6 +145,14 @@ class _KeywordEditDialogState extends State<_KeywordEditDialog> {
       _rows.any((r) => r.ctrl.text.trim() != r.original.trim());
 
   bool get _hasEmpty => _rows.any((r) => r.ctrl.text.trim().isEmpty);
+
+  /// 등록 시점에 8위 밖이었던(= 고쳐야 할) 키워드 수.
+  /// 조회하지 않은 키워드는 판단할 수 없으므로 세지 않는다.
+  int get _poorCount => _rows
+      .where((r) =>
+          r.rankChecked &&
+          (r.initialRank == null || r.initialRank! > _kTargetRank))
+      .length;
 
   // ─────────────────────────────────────────────────────────────
   // 순위 확인 (통합검색)
@@ -262,12 +283,42 @@ class _KeywordEditDialogState extends State<_KeywordEditDialog> {
                       ),
                       child: const Text(
                         '• 통합검색 8위 이내에 이 상품이 나오는 키워드로 바꿔주세요.\n'
+                        '• 키워드 위의 순위는 광고주가 등록할 때 조회된 값입니다.\n'
                         '• [순위 확인]은 SerpApi를 1회 사용합니다 (같은 키워드는 24시간 캐시).\n'
                         '• 키워드 이름만 바뀝니다. 개수·일일 목표·예산·태그는 그대로입니다.\n'
                         '• 바뀐 키워드의 위치 힌트는 다음 순위 수집 후부터 앱에 표시됩니다.',
                         style: TextStyle(fontSize: 12, height: 1.6),
                       ),
                     ),
+                    if (_poorCount > 0) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEBEE),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFFCDD2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                size: 18, color: _kRed),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '등록 시 8위 밖이던 키워드가 $_poorCount개 있습니다. '
+                                '이대로 두면 유저가 상품을 찾지 못합니다.',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: _kRed),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // ── 메인(순위 추적) 키워드 ──────────────────
@@ -337,11 +388,54 @@ class _KeywordEditDialogState extends State<_KeywordEditDialog> {
   Widget _buildRow(_KeywordRow row) {
     final changed = row.ctrl.text.trim() != row.original.trim();
 
+    // 등록 시점 순위 — 어드민이 [순위 확인]을 누르지 않아도
+    // 어떤 키워드를 고쳐야 하는지 바로 알 수 있게 한다
+    final String initialLabel;
+    final Color  initialColor;
+    if (!row.rankChecked) {
+      initialLabel = '등록 시 순위 미확인';
+      initialColor = Colors.grey;
+    } else if (row.initialRank == null) {
+      initialLabel = '등록 시 순위권 밖 — 수정 필요';
+      initialColor = _kRed;
+    } else if (row.initialRank! <= _kTargetRank) {
+      initialLabel = '등록 시 ${row.initialRank}위';
+      initialColor = _kGreen;
+    } else {
+      initialLabel = '등록 시 ${row.initialRank}위 — 수정 권장';
+      initialColor = Colors.orange.shade800;
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4, left: 2),
+            child: Row(
+              children: [
+                Icon(
+                  initialColor == _kGreen
+                      ? Icons.check_circle
+                      : (initialColor == Colors.grey
+                          ? Icons.help_outline
+                          : Icons.error_outline),
+                  size: 15,
+                  color: initialColor,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  initialLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: initialColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Row(
             children: [
               Expanded(

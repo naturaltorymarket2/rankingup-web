@@ -65,6 +65,11 @@ class CampaignRepository {
     String?               seedKeyword,
     String?               productName,
     String?               brandName,
+    /// 등록 시점 통합검색 순위(1~10). 순위권 밖이면 null.
+    /// 어드민 키워드 수정 화면이 이 값으로 고칠 키워드를 가려낸다.
+    int?                  initialRank,
+    /// 순위를 실제로 조회했는지. false면 '미조회'로 구분해 표시한다.
+    bool                  rankChecked = false,
   }) async {
     final res = await supabase.rpc('register_campaign', params: {
       'p_user_id':            userId,
@@ -76,6 +81,8 @@ class CampaignRepository {
       'p_start_date':         _toDateStr(startDate),
       'p_end_date':           _toDateStr(endDate),
       'p_seed_keyword':       seedKeyword,
+      'p_initial_rank':       initialRank,
+      'p_rank_checked':       rankChecked,
       'p_product_name':       productName,
       'p_brand_name':         brandName,
     }) as Map<String, dynamic>;

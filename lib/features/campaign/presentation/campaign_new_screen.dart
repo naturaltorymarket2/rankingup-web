@@ -49,7 +49,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   static const _kBlue  = Color(0xFF1E3A8A);
   static const _kGreen = Color(0xFF2E7D32);
   static const _kLabel = TextStyle(
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: FontWeight.w600,
     color: Color(0xFF111827),
   );
@@ -145,7 +145,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 860),
           child: Column(
             children: [
               _buildStepIndicator(),
@@ -282,7 +282,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               Text(
                 '실제 네이버 쇼핑에서 내 상품의 순위를 추적할 대표 키워드입니다.\n'
                 '미션 키워드와 달리 광고 효과 측정용으로만 사용됩니다.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
               const SizedBox(height: 8),
               // Focus 위젯으로 포커스 해제 시 에러 표시 활성화
@@ -318,30 +318,45 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const SizedBox(height: 4),
               Text(
                 '앱 유저가 네이버에서 실제로 검색할 키워드입니다. 여러 개 설정 가능합니다.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
               const SizedBox(height: 12),
-              // 8위 밖 키워드는 유저가 상품을 찾지 못해 미션을 완주할 수 없다
+              // 8위 밖 키워드는 유저가 상품을 찾지 못해 미션을 완주할 수 없다.
+              // 그냥 지나치면 효과 없는 광고가 등록되므로 눈에 띄게 만든다.
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
                 decoration: BoxDecoration(
                   color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.shade200),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.amber.shade400, width: 1.5),
                 ),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '* 등록 키워드는 검색시 8위이내 해당 상품이 나오는 키워드로 '
-                      '등록을 부탁 드립니다.',
-                      style: TextStyle(fontSize: 12, height: 1.6),
+                    Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            size: 22, color: Colors.amber.shade900),
+                        const SizedBox(width: 8),
+                        Text(
+                          '등록 전 꼭 확인해 주세요',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      '* 정확한 타겟팅을 위하여 등록하신 키워드는 센터에서 일부 '
-                      '수정 될 수 있습니다.',
-                      style: TextStyle(fontSize: 12, height: 1.6),
+                    const SizedBox(height: 12),
+                    _NoticeLine(
+                      '등록 키워드는 검색 시 '
+                      '8위 이내에 해당 상품이 나오는 키워드로 등록을 부탁드립니다.',
+                    ),
+                    SizedBox(height: 8),
+                    _NoticeLine(
+                      '정확한 타겟팅을 위하여 등록하신 키워드는 '
+                      '센터에서 일부 수정될 수 있습니다.',
                     ),
                   ],
                 ),
@@ -506,7 +521,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
               const SizedBox(height: 4),
               Text(
                 '하루 목표 미션 수행 인원 (100단위 입력, 최대 3,000명)',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -579,7 +594,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 Text(
                   '${_isDailyTargetValid ? '$_dailyTarget명' : '?명'} × $_durationDays일 × 50P'
                   ' (그룹 1회 과금)',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                 ),
                 if (_selectedKeywords.length > 1) ...[
                   const SizedBox(height: 4),
@@ -1028,6 +1043,10 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
           userId:           userId,
           productUrl:       _urlCtrl.text.trim(),
           keyword:          kw.keyword,
+          // 등록 화면에서 이미 조회한 순위를 그대로 저장한다 —
+          // 어드민이 다시 조회하면 SerpApi 쿼터를 또 쓰게 된다
+          initialRank:      kw.rank,
+          rankChecked:      true,
           dailyTarget:      perKeywordTarget,
           groupDailyTarget: groupDailyTarget,
           groupId:          groupId,
@@ -1171,6 +1190,36 @@ class _SummaryRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────
 // 스텝 원형 인디케이터
 // ─────────────────────────────────────────────────────────────────
+
+/// 안내 카드의 한 줄 (• + 본문). 본문이 길어지면 줄바꿈되고
+/// 불릿 위치는 그대로 유지된다.
+class _NoticeLine extends StatelessWidget {
+  final String text;
+
+  const _NoticeLine(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Colors.amber.shade900;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('• ', style: TextStyle(fontSize: 14, height: 1.6, color: color)),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _StepCircle extends StatelessWidget {
   final int  number;
