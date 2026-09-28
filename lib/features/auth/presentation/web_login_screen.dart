@@ -129,6 +129,14 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         return;
       }
 
+      // 앱으로 가입한 계정은 여기서 승격하지 않는다 — 승격되면 앱 로그인이 막힌다.
+      if (isAppSignup()) {
+        await supabase.auth.signOut();
+        if (!mounted) return;
+        _showError('앱으로 가입한 계정입니다. 퀴즈캐시나우 앱에서 로그인해주세요');
+        return;
+      }
+
       // /web/login은 광고주 전용 화면 — 사업자 정보 등록 없이 로그인 성공 = 광고주.
       // role이 아직 ADVERTISER가 아니면(이메일 인증 직후 등) 여기서 확정한다.
       await finalizeAdvertiserRole(userId);
@@ -169,6 +177,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         email: email,
         password: password,
         emailRedirectTo: 'https://rankingup-web-production.up.railway.app/auth/confirm',
+        data: const {kAccountTypeKey: 'ADVERTISER'},
       );
 
       if (res.user == null) {

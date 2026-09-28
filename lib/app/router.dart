@@ -59,6 +59,15 @@ final appRouter = GoRouter(
     // role을 ADVERTISER로 확정하고 바로 대시보드로 보낸다(사업자 정보 등록 불필요).
     if (params.containsKey('code')) {
       final userId = supabase.auth.currentUser?.id;
+
+      // 앱으로 가입한 계정은 승격하지 않는다. 인증 링크는 앱/웹 구분 없이
+      // 여기로 열리기 때문에, 그냥 승격하면 앱 유저가 광고주가 되어
+      // 앱 로그인이 '광고주 계정으로는 로그인할 수 없습니다'로 막힌다.
+      if (isAppSignup()) {
+        await supabase.auth.signOut();
+        return '/login?verified=true';
+      }
+
       if (userId != null) {
         try {
           await finalizeAdvertiserRole(userId);
@@ -101,7 +110,10 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/login',
-      builder: (context, state) => const LoginScreen(),
+      builder: (context, state) => LoginScreen(
+        // 이메일 인증을 웹에서 마친 뒤 돌아온 경우 안내 문구를 띄운다
+        showVerifiedBanner: state.uri.queryParameters['verified'] == 'true',
+      ),
     ),
     GoRoute(
       path: '/onboarding',

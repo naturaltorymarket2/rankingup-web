@@ -17,6 +17,24 @@ Future<bool> isRegisteredAdvertiser(String userId) async {
   return row?['role'] == 'ADVERTISER';
 }
 
+/// 가입한 경로를 auth user_metadata 에 남기는 키.
+///
+/// 이메일 인증 링크는 앱 가입이든 웹 가입이든 같은 주소(웹)로 열린다.
+/// 그래서 링크만 보고는 어느 쪽으로 가입했는지 알 수 없고, 앱으로 가입한
+/// 계정까지 광고주로 승격되어 앱 로그인이 막히는 일이 있었다.
+/// 가입 시점에 의도를 적어 두고, 승격 여부를 이 값으로 판단한다.
+const String kAccountTypeKey = 'account_type';
+
+/// 앱에서 가입한 계정(USER)이면 true.
+///
+/// 이 표시가 없는 계정은 이 기능이 들어오기 전에 가입한 것이다 —
+/// 그때는 웹 가입만 이메일 인증 후 승격되는 구조였으므로, 표시가 없으면
+/// 기존 동작(승격 허용)을 유지한다.
+bool isAppSignup() {
+  final type = supabase.auth.currentUser?.userMetadata?[kAccountTypeKey];
+  return type == 'USER';
+}
+
 /// 웹(/web/login)으로 로그인/이메일 인증한 계정의 role을 ADVERTISER로 확정한다.
 ///
 /// /web/login은 광고주 전용 화면이므로(앱 유저는 /login 사용), 여기를 통해

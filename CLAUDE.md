@@ -2066,6 +2066,20 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 - 어드민 수정은 키워드 '이름'만 바꾼다. 개수·일일 목표·예산·태그는 그대로다
 - 바뀐 키워드는 순위 기록이 없어, 다음 순위 수집 후부터 앱 위치 힌트가 표시된다
 
+### 가입 경로 표시 (2026-09-28)
+
+이메일 인증 링크는 앱 가입이든 웹 가입이든 **같은 주소(웹)로 열린다**.
+그래서 링크만 보고는 어느 쪽으로 가입했는지 알 수 없었고, `/?code=` 콜백이
+무조건 `role=ADVERTISER` 로 승격시켜 **앱 가입자가 앱에 로그인하지 못했다**
+("광고주 계정으로는 앱에 로그인할 수 없습니다"). 2026-09-28 실제 발생
+(stayinegham@gmail.com — role 을 USER 로 되돌려 복구).
+
+- 가입 시 `auth.user_metadata.account_type` 에 `USER`(앱) / `ADVERTISER`(웹)를 남긴다
+- `/?code=` 콜백과 `/web/login` 로그인은 이 값이 `USER` 면 승격하지 않는다.
+  앱 가입자는 로그아웃 후 `/login?verified=true` 로 보내 안내한다
+- 표시가 없는 계정(이 기능 이전 가입)은 기존대로 승격한다 — 그때는 웹 가입만
+  인증 후 승격되는 구조여서, 막으면 기존 광고주가 로그인하지 못한다
+
 ### 운영 계정
 
 - 어드민 로그인: `/admin/login` — **아이디 `admin`** (내부적으로 `admin@quizcashnow.co.kr` 로 변환)

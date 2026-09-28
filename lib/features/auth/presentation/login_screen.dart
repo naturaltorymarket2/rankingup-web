@@ -19,13 +19,34 @@ import '../../../shared/utils/device_util.dart';
 // ─────────────────────────────────────────────────────────────────
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// true이면 진입 시 "이메일 인증 완료 — 로그인해주세요" 안내를 띄운다.
+  /// 인증 링크는 웹으로 열리므로, 앱 가입자는 웹에서 인증을 마친 뒤
+  /// 이 화면으로 돌아온다 (router의 /?code= 콜백).
+  final bool showVerifiedBanner;
+
+  const LoginScreen({super.key, this.showVerifiedBanner = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showVerifiedBanner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('이메일 인증이 완료되었습니다. 로그인해주세요.'),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ));
+      });
+    }
+  }
+
   int  _tabIndex  = 0;
   bool _isLoading = false;
 
@@ -124,6 +145,9 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
         emailRedirectTo: 'https://rankingup-web-production.up.railway.app/auth/confirm',
+        // 인증 메일의 링크는 앱/웹 구분 없이 웹으로 열린다. 이 표시가 없으면
+        // 앱으로 가입한 계정도 광고주로 승격되어 앱 로그인이 막힌다.
+        data: const {kAccountTypeKey: 'USER'},
       );
 
       if (res.user == null) {
