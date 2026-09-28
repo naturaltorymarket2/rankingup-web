@@ -1528,7 +1528,7 @@ flutter pub run flutter_launcher_icons
 |------|-----|
 | 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 24 (Play Console 프로덕션 트랙 업로드 완료 — 이메일 인증 스킵 체크 수정 포함) |
+| 배포된 versionCode | 38 (2026-09-28 프로덕션 전체 출시 — 네이버 앱 실행 수정. Play 검토 중) |
 | 빌드된 versionCode | 26 (2026-07-20 빌드 완료 — 상품명/업체명 라벨 + URL 구조 변경(search.naver.com) + 스플래시 배너 이미지, Play Console 업로드 대기) |
 | 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (52.3MB) |
 
@@ -1818,7 +1818,8 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 일일 메인 키워드 순위 추적 | **로컬 크롤러** (`tools/reward_rank_crawler.py`, 500위까지) |
 
 - SerpApi 키는 Railway 랭킹 서버(`web` 프로젝트) 환경변수 `SERPAPI_KEY`
-- Starter 플랜 월 1,000회 — **광고 등록 1건당 5회** 소모. 일일 추적에는 쓰지 않는다
+- **무료 플랜 월 250회** (2026-09-28 전환 — 비상용화 단계라 충분. 필요하면 업그레이드).
+  **광고 등록 1건당 최대 7회** 소모하므로 월 약 35건. 일일 추적에는 쓰지 않는다
 - 통합검색 쇼핑 블록은 10위까지만 노출 -> 그 밖은 '순위권 밖'
 - 일일 추적은 500위까지 확인하고, 못 찾으면 `rank = NULL`(= '500위 밖')로 기록
 
@@ -1845,7 +1846,7 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 0044 | campaign_rank_history.keyword / is_seed — 키워드별 순위, 앱 조회 RLS | 적용 완료 (2026-08-28) |
 | 0045 | campaigns.thumbnail_url, mission_logs.attempt_count / last_submitted_tag, verify_mission 갱신 | 적용 완료 (2026-08-28) |
 | 0046 | get_active_mission RPC — 진행 중 미션 이어하기 | 적용 완료 (2026-08-28) |
-| 0052 | get_campaign_keywords / update_campaign_keywords — 어드민 키워드 수정 | ❌ 미적용 (2026-09-28 작성) — SQL Editor 적용 필요 |
+| 0052 | get_campaign_keywords / update_campaign_keywords — 어드민 키워드 수정 | 적용 완료 (2026-09-28) |
 
 > 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
 
@@ -2041,14 +2042,17 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 
 | 단계 | 처리 |
 |------|------|
-| 추천 로직 (rank_module) | 넓은 키워드 대신 **업체명(일부) + 속성 + 메인** 조합 우선. 5개 조회 후 8위 이내가 5개 미만이면 최대 3개 추가 조회(등록 1건당 SerpApi 최대 8회). 8위 이내를 앞으로 정렬 |
+| 추천 로직 (rank_module) | 넓은 키워드 대신 **업체명(일부) + 속성 + 메인** 조합 우선. 5개 조회 후 8위 이내가 3개 미만일 때만 2개 추가 조회(등록 1건당 SerpApi 최대 7회). 8위 이내를 앞으로 정렬 |
 | 등록 화면 안내 | 미션 키워드 카드에 "8위 이내 키워드로 등록 / 센터에서 일부 수정될 수 있음" 문구. 순위 뱃지 초록 기준 8위 |
+| 키워드 선택 모달 | **8위 이내만 '추천'으로 펼쳐 보이고, 8위 밖은 접어 둔다**(개수만 표시, 눌러야 펼쳐짐). 순위권 밖 뱃지는 '순위권 밖 — 효과 없음' 빨강. 8위 이내가 0개면 직접 추가를 안내 |
 | 어드민 수정 | `/admin/campaign` 의 [키워드 수정] — 키워드 이름 + 순위 추적 키워드 변경, [순위 확인]으로 통합검색 순위 즉시 확인 (migration 0052) |
 
 - 실측(비트즙): `토리마켓 비트즙` 2위, `자연주의 비트즙` 5위, 붙여 쓴
   `자연주의토리마켓 비트즙` 은 밖 — 같은 상품을 파는 다른 판매처(옥션·11번가 등)가
   상위를 차지했다. 그래서 여러 단어 업체명은 '일부'를 먼저 쓰고, 등록 화면에
   "여러 단어면 띄어 써주세요" 안내를 넣었다
+- 8위 안에 들어도 재판매처(핑거바이·옥션·11번가 등)가 그 위를 차지하는 경우가 많다.
+  그래서 '몇 위냐'가 곧 '유저가 찾을 수 있느냐'다 — 순위를 그대로 보여준다
 - 어드민 수정은 키워드 '이름'만 바꾼다. 개수·일일 목표·예산·태그는 그대로다
 - 바뀐 키워드는 순위 기록이 없어, 다음 순위 수집 후부터 앱 위치 힌트가 표시된다
 

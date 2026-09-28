@@ -67,6 +67,33 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
   static const _maxOn   = 5;
   static const _kBlue   = Color(0xFF1E3A8A);
 
+  // 리워드 유저가 상품을 찾을 수 있는 기준 순위 (랭킹 서버 TARGET_RANK 와 동일).
+  // 8위 밖이면 쇼핑 블록에서 '더보기'를 눌러야 해 완주율이 급감한다.
+  static const _targetRank = 8;
+
+  /// 순위권 밖 키워드 목록을 펼쳐 놓았는지 (기본은 접어 둔다)
+  bool _showOutOfRank = false;
+
+  static bool _isRecommended(KeywordRankResult k) =>
+      k.rank != null && k.rank! <= _targetRank;
+
+  /// 8위 이내 추천 키워드의 원본 인덱스 (순위 오름차순)
+  List<int> get _goodIdx {
+    final idx = [
+      for (var i = 0; i < widget.keywords.length; i++)
+        if (_isRecommended(widget.keywords[i])) i,
+    ];
+    idx.sort((a, b) =>
+        widget.keywords[a].rank!.compareTo(widget.keywords[b].rank!));
+    return idx;
+  }
+
+  /// 8위 밖(또는 미노출) 키워드의 원본 인덱스
+  List<int> get _poorIdx => [
+        for (var i = 0; i < widget.keywords.length; i++)
+          if (!_isRecommended(widget.keywords[i])) i,
+      ];
+
   late final List<bool> _toggles;
 
   // ── 직접 추가 키워드 ─────────────────────────────────────────────
@@ -231,20 +258,16 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '• 최소 키워드 1개는 ON해야 등록이 가능합니다',
+                  '• 아래 [추천] 키워드는 검색 시 8위 이내에 상품이 노출됩니다',
                   style: TextStyle(fontSize: 12, height: 1.7),
                 ),
                 Text(
-                  '• CPC 광고가 노출되는 키워드는 해제해주세요',
-                  style: TextStyle(fontSize: 12, height: 1.7),
+                  '• 8위 밖 키워드는 유저가 상품을 찾지 못해 효과가 없습니다',
+                  style: TextStyle(fontSize: 12, height: 1.7, color: Colors.red),
                 ),
                 Text(
-                  '• 통합검색 8위 이내 키워드만 ON해주세요',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.7,
-                    color: Colors.red,
-                  ),
+                  '• 등록하신 키워드는 센터에서 일부 수정될 수 있습니다',
+                  style: TextStyle(fontSize: 12, height: 1.7),
                 ),
               ],
             ),
@@ -258,38 +281,110 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              // ── 추천 키워드 섹션 헤더 ──────────────────────
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text(
-                  '추천 키워드',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
+              // ── 8위 이내 추천 키워드 ───────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle,
+                        size: 14, color: Color(0xFF2E7D32)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '추천 키워드 — 8위 이내 (${_goodIdx.length}개)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
-              // ── 추천 키워드 목록 ───────────────────────────
-              for (var i = 0; i < widget.keywords.length; i++) ...[
-                if (i > 0)
-                  const Divider(height: 1, indent: 16, endIndent: 16),
-                _RecommendedKeywordTile(
-                  item: widget.keywords[i],
-                  isOn: _toggles[i],
-                  canToggle: _toggles[i] || _selectedCount < _maxOn,
-                  onChanged: (v) => setState(() => _toggles[i] = v),
-                ),
-              ],
+              if (_goodIdx.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  child: Text(
+                    '8위 이내에 노출되는 키워드를 찾지 못했습니다.\n'
+                    '상품명·업체명을 정확히 입력했는지 확인하시거나, '
+                    '아래에서 키워드를 직접 추가해주세요.',
+                    style: TextStyle(
+                        fontSize: 12, height: 1.6, color: Colors.grey[600]),
+                  ),
+                )
+              else
+                for (var n = 0; n < _goodIdx.length; n++) ...[
+                  if (n > 0)
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                  _RecommendedKeywordTile(
+                    item: widget.keywords[_goodIdx[n]],
+                    isOn: _toggles[_goodIdx[n]],
+                    canToggle:
+                        _toggles[_goodIdx[n]] || _selectedCount < _maxOn,
+                    onChanged: (v) =>
+                        setState(() => _toggles[_goodIdx[n]] = v),
+                  ),
+                ],
 
               const Divider(height: 1),
+
+              // ── 8위 밖 — 기본은 접어 둔다 ──────────────────
+              // 효과가 없는 키워드라 눈에 띄지 않게 하되,
+              // 판단은 광고주가 할 수 있도록 펼쳐볼 수는 있게 한다.
+              if (_poorIdx.isNotEmpty) ...[
+                InkWell(
+                  onTap: () =>
+                      setState(() => _showOutOfRank = !_showOutOfRank),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _showOutOfRank
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          size: 18,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '8위 밖 키워드 ${_poorIdx.length}개 '
+                          '${_showOutOfRank ? "접기" : "보기"}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '권장하지 않습니다',
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_showOutOfRank)
+                  for (final i in _poorIdx) ...[
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    _RecommendedKeywordTile(
+                      item: widget.keywords[i],
+                      isOn: _toggles[i],
+                      canToggle: _toggles[i] || _selectedCount < _maxOn,
+                      onChanged: (v) => setState(() => _toggles[i] = v),
+                    ),
+                  ],
+                const Divider(height: 1),
+              ],
 
               // ── 직접 추가 섹션 헤더 ────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Text(
-                  '직접 추가 (${_customKeywords.length}/$_maxOn)',
+                  '직접 추가 (${_customKeywords.length}/$_maxOn) '
+                  '— 추가하면 순위를 바로 확인해 드립니다',
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -521,9 +616,10 @@ class _RankBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rank == null) {
+      // 유저가 상품을 찾을 수 없다는 뜻이라 회색이 아닌 빨강으로 알린다
       return const Text(
-        '순위권 밖',
-        style: TextStyle(color: Colors.grey, fontSize: 12),
+        '순위권 밖 — 효과 없음',
+        style: TextStyle(color: Color(0xFFB71C1C), fontSize: 12),
       );
     }
     // 8위 밖이면 유저가 상품을 찾기 어렵다 — 초록은 8위 이내만
