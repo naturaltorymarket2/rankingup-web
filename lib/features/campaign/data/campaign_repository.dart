@@ -6,6 +6,18 @@ import '../domain/campaign_model.dart';
 // 캠페인 데이터 접근 레이어
 // ─────────────────────────────────────────────────────────────────
 
+/// 광고를 찾지 못했을 때.
+///
+/// 대부분은 권한 문제다. 승인 전(PENDING) 광고는 RLS 상 소유자만 읽을 수
+/// 있어, 세션이 다른 계정이거나 끊기면 0건으로 돌아온다.
+/// (같은 브라우저에서 어드민에 로그인하면 광고주 세션이 깨진다)
+class CampaignNotFoundException implements Exception {
+  const CampaignNotFoundException();
+
+  @override
+  String toString() => '광고를 찾을 수 없습니다';
+}
+
 class CampaignRepository {
   /// 현재 로그인 유저의 포인트 잔액 조회
   Future<int> fetchBalance() async {
@@ -97,11 +109,16 @@ class CampaignRepository {
   ///
   /// group_id가 있으면 그룹 내 전체 서브키워드도 함께 조회하여 반환
   Future<CampaignModel> fetchCampaignDetail(String campaignId) async {
-    final res = await supabase
+    final row = await supabase
         .from('campaigns')
         .select()
         .eq('id', campaignId)
-        .single() as Map<String, dynamic>;
+        .maybeSingle();
+
+    // 0건 = 없는 광고이거나, 읽을 권한이 없는 세션이다.
+    // PostgrestException(PGRST116)을 그대로 내보내면 원인을 알 수 없다.
+    if (row == null) throw const CampaignNotFoundException();
+    final res = row as Map<String, dynamic>;
 
     final groupId = res['group_id'] as String?;
     List<String> subKeywords = const [];
@@ -133,8 +150,9 @@ class CampaignRepository {
         .from('campaigns')
         .select('group_id')
         .eq('id', campaignId)
-        .single() as Map<String, dynamic>;
-    final groupId = campaignRes['group_id'] as String?;
+        .maybeSingle();
+    if (campaignRes == null) throw const CampaignNotFoundException();
+    final groupId = (campaignRes as Map<String, dynamic>)['group_id'] as String?;
 
     // 2. 그룹 내 전체 campaign_id 수집
     List<String> targetIds;

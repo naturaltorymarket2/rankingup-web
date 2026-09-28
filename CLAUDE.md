@@ -2086,5 +2086,9 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 
 - 어드민 로그인: `/admin/login` — **아이디 `admin`** (내부적으로 `admin@quizcashnow.co.kr` 로 변환)
 - 광고주/어드민을 같은 브라우저에서 동시에 쓸 수 없다(세션 공유) -> 크롬 프로필 분리 권장
+  - 어드민으로 로그인하면 열려 있던 광고주 탭의 세션이 깨진다. 그 상태로 광고를
+    누르면 **승인 전(PENDING) 광고만** 0건으로 돌아온다(RLS: 소유자만 조회 가능).
+    승인된 광고는 그대로 열려 원인을 알아채기 어렵다 — 2026-09-28 실제 발생
+    (`PostgrestException PGRST116 ... 0 rows`). 지금은 원인과 재로그인 버튼을 안내한다
 
 ---

@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../dashboard/domain/dashboard_model.dart';
 import '../../dashboard/presentation/dashboard_provider.dart';
+import '../../../app/supabase_client.dart';
+import '../data/campaign_repository.dart';
 import '../domain/campaign_model.dart';
 import 'campaign_provider.dart';
 
@@ -29,22 +31,13 @@ class CampaignDetailScreen extends ConsumerWidget {
       appBar: _buildAppBar(context, detailAsync.valueOrNull?.displayKeyword),
       body: detailAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('오류: $e', style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () {
-                  ref.invalidate(campaignDetailProvider(id));
-                  ref.invalidate(campaignStatsProvider(id));
-                  ref.invalidate(rankHistoryProvider(id));
-                },
-                child: const Text('다시 시도'),
-              ),
-            ],
-          ),
+        error: (e, _) => _ErrorView(
+          error: e,
+          onRetry: () {
+            ref.invalidate(campaignDetailProvider(id));
+            ref.invalidate(campaignStatsProvider(id));
+            ref.invalidate(rankHistoryProvider(id));
+          },
         ),
         data: (campaign) => _buildBody(
           context, campaign, statsAsync, rankAsync,
@@ -664,6 +657,89 @@ class _StatBox extends StatelessWidget {
                     fontSize: 11, color: Colors.grey[500])),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 오류 화면
+//
+// 승인 전(PENDING) 광고는 RLS 상 소유자만 읽을 수 있다. 세션이 다른
+// 계정이면 '0건'으로 돌아와 PostgrestException(PGRST116)이 뜨는데,
+// 그 메시지만으로는 원인을 알 수 없다. 흔한 경우가 정해져 있으므로
+// (같은 브라우저에서 어드민 로그인 → 광고주 세션이 깨짐) 그대로 알린다.
+// ─────────────────────────────────────────────────────────────────
+
+class _ErrorView extends StatelessWidget {
+  final Object       error;
+  final VoidCallback onRetry;
+
+  const _ErrorView({required this.error, required this.onRetry});
+
+  /// 광고를 찾지 못한 경우 — 없는 광고이거나 권한이 없는 세션이다
+  bool get _isNotFound =>
+      error is CampaignNotFoundException ||
+      error.toString().contains('PGRST116');
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _isNotFound ? Icons.lock_outline : Icons.error_outline,
+                size: 40,
+                color: Colors.grey[500],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _isNotFound ? '광고를 볼 수 없습니다' : '광고를 불러오지 못했습니다',
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _isNotFound
+                    ? '로그인한 계정이 이 광고의 광고주가 아니거나, '
+                      '로그인이 풀렸습니다.\n\n'
+                      '같은 브라우저에서 관리자로 로그인하면 광고주 로그인이 '
+                      '풀립니다. 광고주 계정으로 다시 로그인해 주세요.'
+                    : '$error',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13, height: 1.6, color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton(
+                    onPressed: onRetry,
+                    child: const Text('다시 시도'),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await supabase.auth.signOut();
+                      if (context.mounted) context.go('/web/login');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E3A8A),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('광고주로 다시 로그인'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
