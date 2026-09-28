@@ -270,7 +270,7 @@ def load_collected_today(env: Dict[str, str]) -> set:
     return {(r['campaign_id'], r.get('keyword') or '') for r in res.json()}
 
 
-def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
+def load_targets(env: Dict[str, str], refresh: bool = False) -> List[Dict[str, Any]]:
     """
     승인 완료 + 진행 중인 광고를 그룹 단위로 모은다.
 
@@ -338,7 +338,7 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
         # ① 미션 키워드 순위 — 앱 화면의 "몇 위쯤에 있어요" 힌트에 쓰인다
         #    최근에 수집했으면 건너뛴다 (MISSION_REFRESH_DAYS 주기)
         mission_kw = (row.get('keyword') or '').strip()
-        if mission_kw and row['id'] not in recent_missions:
+        if mission_kw and (refresh or row['id'] not in recent_missions):
             add_target(url, mission_kw, row, row['id'], False)
 
         # ② 시드(순위 추적 대표) 키워드 순위 — 광고주 대시보드 차트 기준
@@ -353,12 +353,14 @@ def load_targets(env: Dict[str, str]) -> List[Dict[str, Any]]:
     # (오래 안 본 것부터 처리되도록 순서를 유지한다)
     seeds    = [t for t in targets if t.get('is_seed')]
     missions = [t for t in targets if not t.get('is_seed')]
-    skipped  = max(0, len(missions) - MISSION_MAX_PER_RUN)
+    # 전체 갱신 모드에서는 1회 실행량 제한도 풀어 한 번에 맞춘다
+    limit    = len(missions) if refresh else MISSION_MAX_PER_RUN
+    skipped  = max(0, len(missions) - limit)
     if skipped:
         print(f'미션 키워드 {len(missions)}개 중 {MISSION_MAX_PER_RUN}개만 처리 '
               f'(나머지 {skipped}개는 다음 실행에서)')
 
-    return seeds + missions[:MISSION_MAX_PER_RUN]
+    return seeds + missions[:limit]
 
 
 def save_rank(env: Dict[str, str], campaign_ids: List[str],
@@ -672,15 +674,23 @@ def expire_stale_missions(env: Dict[str, str]) -> None:
         print(f'[정리] 건너뜀: {e}')
 
 
-def main(test_mode: bool = False) -> None:
+def main(test_mode: bool = False, refresh: bool = False) -> None:
+    """refresh=True 면 건너뛰기 규칙을 무시하고 전부 다시 수집한다.
+
+    평소에는 미션 키워드를 7일 주기로만 보고, '500위 밖'으로 확인된 건과
+    오늘 이미 수집한 건은 건너뛴다. 그래서 앱의 위치 힌트가 며칠 묵는다.
+    광고를 새로 올렸거나 힌트를 지금 맞춰야 할 때 이 옵션으로 한 번 돌린다.
+    """
     env = load_env()
     nrs = load_crawler()
 
     expire_stale_missions(env)
 
-    targets = load_targets(env)
-    outside_recent  = load_outside_campaigns(env)
-    collected_today = load_collected_today(env)
+    targets = load_targets(env, refresh=refresh)
+    outside_recent  = set() if refresh else load_outside_campaigns(env)
+    collected_today = set() if refresh else load_collected_today(env)
+    if refresh:
+        print('전체 갱신 모드 — 건너뛰기 규칙을 무시하고 모두 수집합니다')
     if test_mode:
         targets = targets[:1]
 
@@ -807,5 +817,7 @@ def main(test_mode: bool = False) -> None:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='리워드 광고 순위 크롤러')
     parser.add_argument('--test', action='store_true', help='첫 1건만 확인')
+    parser.add_argument('--refresh', action='store_true',
+                        help='건너뛰기 규칙을 무시하고 전부 다시 수집 (앱 위치 힌트 갱신용)')
     args = parser.parse_args()
-    main(test_mode=args.test)
+    main(test_mode=args.test, refresh=args.refresh)
