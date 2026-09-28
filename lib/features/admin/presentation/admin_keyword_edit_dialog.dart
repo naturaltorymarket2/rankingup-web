@@ -26,7 +26,9 @@ Future<bool> showKeywordEditDialog(
 ) async {
   final saved = await showDialog<bool>(
     context: context,
-    barrierDismissible: false,
+    // 바깥 클릭·Esc 로 닫을 수 있게 둔다. 닫히지 않으면 배리어가 화면을
+    // 덮은 채 스크롤까지 막혀 페이지가 멈춘 것처럼 보인다.
+    // 저장 중에는 dialog 안쪽 PopScope 가 닫기를 막는다.
     builder: (_) => _KeywordEditDialog(repository: repository, record: record),
   );
   return saved == true;
@@ -230,7 +232,10 @@ class _KeywordEditDialogState extends State<_KeywordEditDialog> {
   Widget build(BuildContext context) {
     final record = widget.record;
 
-    return AlertDialog(
+    return PopScope(
+      // 저장 중에는 닫지 못하게 한다 (중간에 닫히면 결과를 알 수 없다)
+      canPop: !_saving,
+      child: AlertDialog(
       title: const Text('키워드 수정'),
       content: SizedBox(
         width: 520,
@@ -325,6 +330,7 @@ class _KeywordEditDialogState extends State<_KeywordEditDialog> {
               : const Text('저장'),
         ),
       ],
+      ),
     );
   }
 

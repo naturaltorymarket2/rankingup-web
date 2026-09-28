@@ -98,23 +98,30 @@ class _CampaignBulkScreenState extends ConsumerState<CampaignBulkScreen> {
     final failures = <String>[];
 
     for (final row in rows) {
+      // 엑셀 한 줄 = 광고 1건(그룹 1개). 미션 키워드가 여러 개면 개별 등록과
+      // 똑같이 같은 group_id 로 묶어 일일 목표를 나눠 담는다 — 과금은 1회다.
+      final groupId  = const Uuid().v4();
+      final keywords = row.keywords;
+      final base     = row.dailyTarget ~/ keywords.length;
+      final extra    = row.dailyTarget % keywords.length;
+
       try {
-        // 대량 등록은 서브키워드를 나누지 않는다.
-        // 엑셀에 적은 메인 키워드 하나가 그대로 그룹 전체가 된다.
-        final groupId = const Uuid().v4();
-        await repo.registerCampaign(
-          userId:           userId,
-          productUrl:       row.productUrl,
-          keyword:          row.keyword,
-          dailyTarget:      row.dailyTarget,
-          groupDailyTarget: row.dailyTarget,
-          groupId:          groupId,
-          startDate:        row.startDate!,
-          endDate:          row.endDate!,
-          seedKeyword:      row.keyword,
-          productName:      row.productName,
-          brandName:        row.brandName,
-        );
+        for (var i = 0; i < keywords.length; i++) {
+          await repo.registerCampaign(
+            userId:           userId,
+            productUrl:       row.productUrl,
+            keyword:          keywords[i],
+            // 나머지는 첫 번째 키워드가 가져간다 (개별 등록과 같은 규칙)
+            dailyTarget:      i == 0 ? base + extra : base,
+            groupDailyTarget: row.dailyTarget,
+            groupId:          groupId,
+            startDate:        row.startDate!,
+            endDate:          row.endDate!,
+            seedKeyword:      row.keyword,
+            productName:      row.productName,
+            brandName:        row.brandName,
+          );
+        }
       } catch (e) {
         failures.add('${row.rowNumber}행 (${row.productName}): $e');
       }
@@ -430,7 +437,8 @@ class _ValidTable extends StatelessWidget {
         columns: const [
           DataColumn(label: Text('행')),
           DataColumn(label: Text('상품명')),
-          DataColumn(label: Text('키워드')),
+          DataColumn(label: Text('메인 키워드')),
+          DataColumn(label: Text('미션 키워드')),
           DataColumn(label: Text('일일 유입')),
           DataColumn(label: Text('기간')),
           DataColumn(label: Text('차감 포인트')),
@@ -443,6 +451,15 @@ class _ValidTable extends StatelessWidget {
               child: Text(r.productName, overflow: TextOverflow.ellipsis),
             )),
             DataCell(Text(r.keyword)),
+            DataCell(SizedBox(
+              width: 260,
+              child: Text(
+                r.keywords.length > 1
+                    ? '${r.keywords.join(' · ')} (${r.keywords.length}개)'
+                    : r.keywords.join(),
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
             DataCell(Text('${_comma(r.dailyTarget)}명')),
             DataCell(Text('${_fmtDate(r.startDate!)} ~ '
                 '${_fmtDate(r.endDate!)} (${r.durationDays}일)')),
@@ -533,8 +550,13 @@ class _GuideCard extends StatelessWidget {
           '등록 당일에는 상품 순위·사진 정보가 없어 앱 사용자가 상품을 찾기 어렵습니다.',
       '광고 기간은 최소 7일입니다.',
       '차감 포인트 = 일일 유입 × 기간(일) × ${kPointPerVisitor}P',
-      '대량 등록에서는 키워드 추천을 제공하지 않습니다. '
-          '엑셀에 입력한 메인 키워드로 등록됩니다.',
+      '미션 키워드는 쉼표(,)로 구분해 최대 $kMaxMissionKeywords개까지 적을 수 있습니다. '
+          '비워 두면 메인 키워드 하나로 등록됩니다.',
+      '키워드가 여러 개여도 차감은 1회입니다. 일일 유입을 키워드 수만큼 나눠 담습니다.',
+      '검색 시 8위 이내에 상품이 나오는 키워드로 적어 주세요. '
+          '순위가 낮으면 앱 사용자가 상품을 찾지 못합니다.',
+      '대량 등록에서는 키워드 추천(순위 조회)을 제공하지 않습니다. '
+          '추천이 필요하면 개별 등록 화면을 이용해 주세요.',
       '등록 후 운영자가 상품 페이지를 확인하고 승인하면 앱에 노출됩니다. '
           '포인트는 승인 시점에 차감됩니다.',
     ];

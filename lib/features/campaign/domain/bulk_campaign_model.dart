@@ -8,9 +8,10 @@ import 'package:excel/excel.dart';
 // 등록 화면에서 받는 값을 그대로 엑셀 열로 옮겨 한 번에 올린다.
 //
 // 대량 등록에서는 키워드 추천(SerpApi)을 하지 않는다.
-// 1건당 5회를 쓰는데 50건이면 250회라 월 한도(1,000회)가 금방 소진된다.
-// 대량으로 올리는 광고주는 이미 자기 키워드를 알고 있고, 추천이 필요하면
-// 개별 등록 화면을 쓰면 된다.
+// 1건당 최대 7회를 쓰는데 50건이면 350회라 월 한도(무료 250회)를 넘긴다.
+// 대신 광고주가 미션 키워드를 직접 적는다 — 쉼표로 여러 개를 쓸 수 있고,
+// 개별 등록과 똑같이 하나의 그룹(1회 과금)으로 묶인다.
+// 추천이 필요하면 개별 등록 화면을 쓰면 된다.
 
 /// 템플릿 열 순서 — 다운로드·업로드가 같은 정의를 쓴다
 const List<String> kBulkColumns = [
@@ -18,10 +19,14 @@ const List<String> kBulkColumns = [
   '상품명',
   '업체명',
   '메인 키워드',
+  '미션 키워드(쉼표로 구분)',
   '일일 유입(명)',
   '시작일(YYYY-MM-DD)',
   '종료일(YYYY-MM-DD)',
 ];
+
+/// 한 광고에 넣을 수 있는 미션 키워드 최대 개수
+const int kMaxMissionKeywords = 10;
 
 /// 템플릿에 채워 넣는 예시 행 (사용하는 방법을 보여주기 위한 것)
 const List<String> kBulkSampleRow = [
@@ -29,6 +34,7 @@ const List<String> kBulkSampleRow = [
   '무농약 양파즙 100팩',
   '내추럴토리마켓',
   '양파즙',
+  '토리마켓 양파즙, 무농약양파즙, 무안양파즙',
   '100',
   '2026-01-02',
   '2026-01-08',
@@ -47,6 +53,11 @@ class BulkCampaignRow {
   final String  productName;
   final String  brandName;
   final String  keyword;
+
+  /// 앱 유저가 실제로 검색할 키워드들. 비워 두면 메인 키워드 1개가 들어간다.
+  /// 개별 등록과 같이 하나의 그룹으로 묶여 과금은 1회다.
+  final List<String> keywords;
+
   final int     dailyTarget;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -60,6 +71,7 @@ class BulkCampaignRow {
     required this.productName,
     required this.brandName,
     required this.keyword,
+    required this.keywords,
     required this.dailyTarget,
     required this.startDate,
     required this.endDate,
@@ -125,10 +137,13 @@ List<int> buildBulkTemplate() {
         .value = TextCellValue(kBulkSampleRow[i]);
   }
 
-  // 예시 행 아래에 안내를 적어 둔다 (파싱 시 무시된다 — URL이 없는 행)
+  // 예시 행 아래에 안내를 적어 둔다 ('※'로 시작하는 행은 파싱에서 건너뛴다)
   const notes = [
     '※ 2행의 예시는 지우고 작성해 주세요.',
-    '※ 일일 유입은 100명 단위로 입력합니다.',
+    '※ 미션 키워드는 쉼표(,)로 구분해 최대 $kMaxMissionKeywords개까지 적을 수 있습니다.',
+    '※ 미션 키워드를 비우면 메인 키워드 하나로 등록됩니다.',
+    '※ 검색 시 8위 이내에 상품이 나오는 키워드로 적어 주세요.',
+    '※ 일일 유입은 100명 단위로 입력합니다. 키워드가 여러 개여도 과금은 1회입니다.',
     '※ 광고 시작일은 내일 이후로만 지정할 수 있습니다.',
     '※ 광고 기간은 최소 7일입니다.',
     '※ 차감 포인트 = 일일 유입 × 기간(일) × 50P',
@@ -187,17 +202,31 @@ BulkParseResult parseBulkExcel(List<int> bytes, {required DateTime today}) {
 
     final productUrl = at(0);
 
-    // URL이 없는 줄은 빈 줄이거나 안내 문구다 — 조용히 건너뛴다
-    if (productUrl.isEmpty) continue;
+    // 빈 줄과 템플릿 안내 문구('※ …')는 건너뛴다.
+    // 안내는 A열에 적혀 있어 걸러내지 않으면 광고 한 건으로 읽혀
+    // '상품 URL 형식이 올바르지 않습니다' 오류가 무더기로 뜬다.
+    if (productUrl.isEmpty || productUrl.startsWith('※')) continue;
 
     final productName = at(1);
     final brandName   = at(2);
     final keyword     = at(3);
-    final dailyRaw    = at(4);
-    final startRaw    = at(5);
-    final endRaw      = at(6);
+    final missionRaw  = at(4);
+    final dailyRaw    = at(5);
+    final startRaw    = at(6);
+    final endRaw      = at(7);
 
     final errors = <String>[];
+
+    // 미션 키워드 — 쉼표로 나누고 중복(공백·대소문자 무시)을 제거한다.
+    // 비워 두면 메인 키워드 하나로 등록한다.
+    final keywords = _splitKeywords(missionRaw);
+    if (keywords.isEmpty && keyword.isNotEmpty) keywords.add(keyword);
+    if (keywords.length > kMaxMissionKeywords) {
+      errors.add('미션 키워드는 최대 $kMaxMissionKeywords개까지 입력할 수 있습니다');
+    }
+    if (keywords.any((k) => k.length > 50)) {
+      errors.add('미션 키워드는 하나당 50자를 넘을 수 없습니다');
+    }
 
     if (!_looksLikeProductUrl(productUrl)) {
       errors.add('상품 URL 형식이 올바르지 않습니다');
@@ -245,6 +274,7 @@ BulkParseResult parseBulkExcel(List<int> bytes, {required DateTime today}) {
       productName: productName,
       brandName:   brandName,
       keyword:     keyword,
+      keywords:    keywords,
       dailyTarget: daily ?? 0,
       startDate:   start,
       endDate:     end,
@@ -260,6 +290,20 @@ BulkParseResult parseBulkExcel(List<int> bytes, {required DateTime today}) {
   }
 
   return BulkParseResult(rows: rows);
+}
+
+/// 쉼표(또는 줄바꿈)로 구분된 키워드를 정리해 목록으로 만든다.
+/// 공백·대소문자만 다른 중복은 하나로 본다. 입력 순서는 유지한다.
+List<String> _splitKeywords(String raw) {
+  final out  = <String>[];
+  final seen = <String>{};
+  for (final part in raw.split(RegExp(r'[,\n]'))) {
+    final kw = part.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (kw.isEmpty) continue;
+    if (!seen.add(kw.replaceAll(' ', '').toLowerCase())) continue;
+    out.add(kw);
+  }
+  return out;
 }
 
 bool _looksLikeProductUrl(String url) {
