@@ -1847,6 +1847,7 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 0045 | campaigns.thumbnail_url, mission_logs.attempt_count / last_submitted_tag, verify_mission 갱신 | 적용 완료 (2026-08-28) |
 | 0046 | get_active_mission RPC — 진행 중 미션 이어하기 | 적용 완료 (2026-08-28) |
 | 0052 | get_campaign_keywords / update_campaign_keywords — 어드민 키워드 수정 | 적용 완료 (2026-09-28) |
+| 0053 | campaigns.initial_rank / initial_rank_at — 등록 시점 통합검색 순위 보관, register_campaign·get_campaign_keywords 갱신 | 적용 완료 (2026-09-28) |
 
 > 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
 
@@ -2049,10 +2050,11 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 
 | 단계 | 처리 |
 |------|------|
-| 추천 로직 (rank_module) | 넓은 키워드 대신 **업체명(일부) + 속성 + 메인** 조합 우선. 5개 조회 후 8위 이내가 3개 미만일 때만 2개 추가 조회(등록 1건당 SerpApi 최대 7회). 8위 이내를 앞으로 정렬 |
+| 추천 로직 (rank_module) | **속성 + 메인**(무농약양파즙) 조합을 앞세우고 **업체명 조합은 최대 2개**로 제한(2026-09-28 재조정 — 업체명 검색만 몰리면 부자연스럽고 메인 키워드 순위에도 도움이 안 된다. 다만 경쟁 상품은 속성 조합이 전부 8위 밖이라 안전망으로 남긴다). 5개 조회 후 8위 이내가 3개 미만일 때만 2개 추가 조회(등록 1건당 SerpApi 최대 7회). 8위 이내를 앞으로 정렬 |
 | 등록 화면 안내 | 미션 키워드 카드에 "8위 이내 키워드로 등록 / 센터에서 일부 수정될 수 있음" 문구. 순위 뱃지 초록 기준 8위 |
 | 키워드 선택 모달 | **8위 이내만 '추천'으로 펼쳐 보이고, 8위 밖은 접어 둔다**(개수만 표시, 눌러야 펼쳐짐). 순위권 밖 뱃지는 '순위권 밖 — 효과 없음' 빨강. 8위 이내가 0개면 직접 추가를 안내 |
 | 어드민 수정 | `/admin/campaign` 의 [키워드 수정] — 키워드 이름 + 순위 추적 키워드 변경, [순위 확인]으로 통합검색 순위 즉시 확인 (migration 0052) |
+| 등록 시점 순위 | 광고주 등록 때 조회한 순위를 `campaigns.initial_rank` 에 저장(0053). 어드민 수정 화면이 키워드마다 '등록 시 N위 / 순위권 밖 — 수정 필요'를 바로 보여 준다 — **쿼터를 다시 쓰지 않는다** |
 
 > 다이얼로그는 바깥 클릭·Esc 로 닫힌다. 닫히지 않으면 배리어가 화면을 덮은 채
 > 스크롤까지 막혀 **페이지가 멈춘 것처럼 보인다**(저장 중에만 닫기를 막는다).
