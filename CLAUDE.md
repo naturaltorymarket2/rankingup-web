@@ -1845,6 +1845,7 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 0044 | campaign_rank_history.keyword / is_seed — 키워드별 순위, 앱 조회 RLS | 적용 완료 (2026-08-28) |
 | 0045 | campaigns.thumbnail_url, mission_logs.attempt_count / last_submitted_tag, verify_mission 갱신 | 적용 완료 (2026-08-28) |
 | 0046 | get_active_mission RPC — 진행 중 미션 이어하기 | 적용 완료 (2026-08-28) |
+| 0052 | get_campaign_keywords / update_campaign_keywords — 어드민 키워드 수정 | ❌ 미적용 (2026-09-28 작성) — SQL Editor 적용 필요 |
 
 > 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
 
@@ -2032,6 +2033,24 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 > 저장소에는 넣지 않는다. 작업 사본은 `tools/tracker/` 에 두되 `.gitignore` 로
 > 제외했고, 원본은 `Desktop/naver_rank/naver_rank/` 다.
 > 수정 전 `.bak_YYYYMMDD` 백업을 남긴다.
+
+### 미션 키워드 8위 기준 (2026-09-28)
+
+광고주가 통합검색 8위 밖 키워드를 등록하면 리워드 유저가 상품을 찾지 못해
+미션을 완주할 수 없다(100위 밖이면 사실상 불가능). 세 겹으로 막는다.
+
+| 단계 | 처리 |
+|------|------|
+| 추천 로직 (rank_module) | 넓은 키워드 대신 **업체명(일부) + 속성 + 메인** 조합 우선. 5개 조회 후 8위 이내가 5개 미만이면 최대 3개 추가 조회(등록 1건당 SerpApi 최대 8회). 8위 이내를 앞으로 정렬 |
+| 등록 화면 안내 | 미션 키워드 카드에 "8위 이내 키워드로 등록 / 센터에서 일부 수정될 수 있음" 문구. 순위 뱃지 초록 기준 8위 |
+| 어드민 수정 | `/admin/campaign` 의 [키워드 수정] — 키워드 이름 + 순위 추적 키워드 변경, [순위 확인]으로 통합검색 순위 즉시 확인 (migration 0052) |
+
+- 실측(비트즙): `토리마켓 비트즙` 2위, `자연주의 비트즙` 5위, 붙여 쓴
+  `자연주의토리마켓 비트즙` 은 밖 — 같은 상품을 파는 다른 판매처(옥션·11번가 등)가
+  상위를 차지했다. 그래서 여러 단어 업체명은 '일부'를 먼저 쓰고, 등록 화면에
+  "여러 단어면 띄어 써주세요" 안내를 넣었다
+- 어드민 수정은 키워드 '이름'만 바꾼다. 개수·일일 목표·예산·태그는 그대로다
+- 바뀐 키워드는 순위 기록이 없어, 다음 순위 수집 후부터 앱 위치 힌트가 표시된다
 
 ### 운영 계정
 

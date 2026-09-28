@@ -53,6 +53,38 @@ class AdminCampaignRepository {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// 광고 그룹의 캠페인별 키워드 + 메인(순위 추적) 키워드 조회
+  ///
+  /// 반환값: {'success': true, 'seed_keyword': String?,
+  ///          'keywords': [{'campaign_id': String, 'keyword': String}, ...]}
+  Future<Map<String, dynamic>> fetchCampaignKeywords({
+    required String groupId,
+  }) async {
+    final res = await supabase.rpc('get_campaign_keywords', params: {
+      'p_group_id': groupId,
+    });
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// 키워드 이름 변경 — campaignIds 의 i번째 캠페인 키워드를 keywords 의 i번째로 바꾼다.
+  ///
+  /// [seedKeyword] 가 비어 있지 않으면 그룹의 메인 키워드도 바꾼다.
+  /// 예산·일일 목표·승인 상태·태그는 바뀌지 않는다.
+  Future<Map<String, dynamic>> updateCampaignKeywords({
+    required String       groupId,
+    required List<String> campaignIds,
+    required List<String> keywords,
+    String?               seedKeyword,
+  }) async {
+    final res = await supabase.rpc('update_campaign_keywords', params: {
+      'p_group_id':     groupId,
+      'p_campaign_ids': campaignIds,
+      'p_keywords':     keywords,
+      'p_seed_keyword': seedKeyword,
+    });
+    return Map<String, dynamic>.from(res as Map);
+  }
+
   /// 광고 거절 (등록 시점 차감이 없으므로 환불 처리 불필요)
   Future<Map<String, dynamic>> rejectCampaign({
     required String  groupId,

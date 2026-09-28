@@ -239,7 +239,7 @@ class _KeywordSelectModalState extends State<_KeywordSelectModal> {
                   style: TextStyle(fontSize: 12, height: 1.7),
                 ),
                 Text(
-                  '• 통합검색 10위 이내 키워드만 ON해주세요',
+                  '• 통합검색 8위 이내 키워드만 ON해주세요',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.7,
@@ -526,8 +526,8 @@ class _RankBadge extends StatelessWidget {
         style: TextStyle(color: Colors.grey, fontSize: 12),
       );
     }
-    // 통합검색 쇼핑 블록은 10위까지만 노출되므로 그 안이면 모두 초록
-    final color = rank! <= 10
+    // 8위 밖이면 유저가 상품을 찾기 어렵다 — 초록은 8위 이내만
+    final color = rank! <= 8
         ? const Color(0xFF2E7D32)
         : Colors.orange;
     return Text(

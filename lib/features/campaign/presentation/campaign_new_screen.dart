@@ -256,6 +256,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 decoration: InputDecoration(
                   labelText: '브랜드명 *',
                   hintText: '예) 나이키',
+                  // 추천 키워드가 '업체명 일부 + 키워드'로 만들어지므로
+                  // 여러 단어로 된 업체명은 띄어 써야 조합이 정확해진다
+                  helperText: '스토어 이름이 여러 단어면 띄어 써주세요 (예: 자연주의 토리마켓)',
                   border: const OutlineInputBorder(),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
@@ -318,6 +321,32 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 12),
+              // 8위 밖 키워드는 유저가 상품을 찾지 못해 미션을 완주할 수 없다
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '* 등록 키워드는 검색시 8위이내 해당 상품이 나오는 키워드로 '
+                      '등록을 부탁 드립니다.',
+                      style: TextStyle(fontSize: 12, height: 1.6),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '* 정확한 타겟팅을 위하여 등록하신 키워드는 센터에서 일부 '
+                      '수정 될 수 있습니다.',
+                      style: TextStyle(fontSize: 12, height: 1.6),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: canFetch ? _fetchKeywords : null,
                 icon: _isFetchingKeywords
@@ -365,7 +394,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
     final Color badgeColor;
     if (rank == null) {
       badgeColor = Colors.grey;
-    } else if (rank <= 15) {
+    } else if (rank <= 8) {
       badgeColor = _kGreen;
     } else {
       badgeColor = Colors.orange;

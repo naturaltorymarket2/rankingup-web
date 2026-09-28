@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../domain/admin_campaign_model.dart';
 import 'admin_campaign_provider.dart';
+import 'admin_keyword_edit_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // 어드민 광고 승인 화면  (/admin/campaign)
@@ -291,6 +292,7 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
                           onPaste:    () => _pasteFromClipboard(r.groupId),
                           onApprove:  () => _handleApprove(r),
                           onReject:   () => _handleReject(r),
+                          onEditKeywords: () => _handleEditKeywords(r),
                         ),
                         const SizedBox(height: 16),
                       ],
@@ -310,7 +312,7 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            '전체 광고 목록 — 삭제 가능',
+            '전체 광고 목록 — 키워드 수정 · 삭제',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -348,6 +350,7 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
                               record:    r,
                               isLoading: _loadingIds.contains(r.groupId),
                               onDelete:  () => _handleDelete(r),
+                              onEditKeywords: () => _handleEditKeywords(r),
                             ))
                         .toList(),
                   ),
@@ -666,6 +669,29 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
     }
   }
 
+  /// 키워드 수정 — 통합검색 8위 밖 키워드를 운영자가 직접 고친다
+  Future<void> _handleEditKeywords(AdminCampaignRecord record) async {
+    try {
+      final saved = await showKeywordEditDialog(
+        context,
+        ref.read(adminCampaignRepositoryProvider),
+        record,
+      );
+      if (!saved || !mounted) return;
+
+      ref.invalidate(pendingCampaignsProvider);
+      ref.invalidate(allCampaignsProvider);
+      _showSnack('${record.productName} 키워드를 수정했습니다.', _kBlue);
+    } catch (e) {
+      if (!mounted) return;
+      if (_isAuthError(e)) {
+        context.go('/admin/login');
+        return;
+      }
+      _showSnack('오류: $e', Colors.red);
+    }
+  }
+
   // ── 유틸 ─────────────────────────────────────────────────────
 
   String _approveErrorMessage(Map<String, dynamic> result) {
@@ -722,6 +748,7 @@ class _PendingCampaignCard extends StatelessWidget {
   final VoidCallback          onPaste;
   final VoidCallback          onApprove;
   final VoidCallback          onReject;
+  final VoidCallback          onEditKeywords;
 
   const _PendingCampaignCard({
     required this.record,
@@ -734,6 +761,7 @@ class _PendingCampaignCard extends StatelessWidget {
     required this.onPaste,
     required this.onApprove,
     required this.onReject,
+    required this.onEditKeywords,
   });
 
   static const _kBlue = Color(0xFF1E3A8A);
@@ -807,27 +835,42 @@ class _PendingCampaignCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // ── 서브키워드 ───────────────────────────────────────
-          if (record.subKeywords.isNotEmpty)
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: record.subKeywords
-                  .map((k) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          k,
-                          style: const TextStyle(
-                              fontSize: 12, color: _kBlue),
-                        ),
-                      ))
-                  .toList(),
-            ),
+          // ── 서브키워드 + 키워드 수정 ─────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: record.subKeywords
+                      .map((k) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              k,
+                              style: const TextStyle(
+                                  fontSize: 12, color: _kBlue),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: isLoading ? null : onEditKeywords,
+                icon: const Icon(Icons.edit, size: 15),
+                label: const Text('키워드 수정'),
+                style: TextButton.styleFrom(
+                  foregroundColor: _kBlue,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
 
           // ── 상품 URL ─────────────────────────────────────────
@@ -1112,11 +1155,13 @@ class _CampaignRow extends StatelessWidget {
   final AdminCampaignRecord record;
   final bool                isLoading;
   final VoidCallback        onDelete;
+  final VoidCallback        onEditKeywords;
 
   const _CampaignRow({
     required this.record,
     required this.isLoading,
     required this.onDelete,
+    required this.onEditKeywords,
   });
 
   static const _kRed = Color(0xFFB71C1C);
@@ -1192,6 +1237,16 @@ class _CampaignRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              TextButton(
+                onPressed: isLoading ? null : onEditKeywords,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF1E3A8A),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+                child: const Text('키워드 수정'),
+              ),
+              const SizedBox(width: 4),
               SizedBox(
                 width: 76,
                 child: isLoading
