@@ -14,6 +14,11 @@
 #    powershell -ExecutionPolicy Bypass -File tools\run_reward_rank.ps1
 # =============================================================
 
+# -Refresh : 건너뛰기 규칙(7일 주기·500위 밖·오늘 수집분·1회 20개)을
+#            무시하고 전부 다시 수집한다. 앱의 상품 위치 힌트를
+#            지금 맞춰야 할 때 쓴다.
+param([switch]$Refresh)
+
 $ErrorActionPreference = 'Continue'
 
 $Python    = 'C:\Python313\python.exe'
@@ -91,7 +96,13 @@ if (Test-PortBusy) {
 
 Push-Location $RewardDir
 try {
-    & $Python 'tools\reward_rank_crawler.py' 2>&1 | ForEach-Object {
+    $crawlerArgs = @('tools\reward_rank_crawler.py')
+    if ($Refresh) {
+        $crawlerArgs += '--refresh'
+        Write-Log '전체 갱신 모드로 실행합니다'
+    }
+
+    & $Python $crawlerArgs 2>&1 | ForEach-Object {
         Add-Content -Path $Log -Value $_ -Encoding utf8
         Write-Host $_
     }
