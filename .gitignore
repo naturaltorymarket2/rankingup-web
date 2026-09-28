@@ -71,3 +71,7 @@ key.properties
 
 # 스플래시 문구 렌더링용 폰트 (Google Fonts, OFL)
 .fonts/
+
+# 순위 모니터링 크롤러 사본 — 네이버 계정 비밀번호가 평문으로 들어 있어
+# 절대 커밋하지 않는다. 원본은 Desktop/naver_rank/naver_rank/ 에 있다.
+tools/tracker/

@@ -2012,6 +2012,27 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
   → `127.0.0.1` 로 고정
 - 핫스팟 DNS 끊김으로 수집분 유실 → `sb_request()` 3회 재시도
 
+### 차단 오탐 정리 (2026-09-28)
+
+순위 모니터링 크롤러가 **네트워크 문제를 네이버 차단으로 오인**하고 있었다.
+계정을 바꿔도 소용없는 오류인데 계정을 전환해 멀쩡한 계정을 소모했고,
+실패로 기록돼 매일 아침 경고가 떴다. 경고가 일상이 되면 진짜 차단을 놓친다.
+
+| 분류 | 예 | 처리 |
+|------|-----|------|
+| **일시 오류** | `Page.content ... navigating`, `ERR_INTERNET_DISCONNECTED`, DNS 실패, 타임아웃, 크롬/탭 닫힘 | 같은 상품을 5초·10초 뒤 최대 2회 재시도. 계정 전환 없음. 끝내 실패해도 기록만 남기고 다음 상품으로 |
+| **진짜 차단** | 캡차, 로그인 풀림 | 기존대로 계정 전환 / IP 차단이면 즉시 중단 |
+
+- `is_transient_error()` 로 판별하고 `block_kind='transient'` 로 표시한다
+- 일시 오류는 `blocked_items` 에 넣지 않아 **종료 코드가 0**으로 끝난다
+  (스케줄러 경고·팝업이 뜨지 않는다). 요약에는 `⏳ 일시 오류 N건` 으로 남는다
+- 리워드 크롤러(`reward_rank_crawler.py`)에도 같은 기준이 이미 적용돼 있다
+
+> ⚠️ `naver_rank_standalone.py` 에는 네이버 계정 비밀번호가 평문으로 들어 있다.
+> 저장소에는 넣지 않는다. 작업 사본은 `tools/tracker/` 에 두되 `.gitignore` 로
+> 제외했고, 원본은 `Desktop/naver_rank/naver_rank/` 다.
+> 수정 전 `.bak_YYYYMMDD` 백업을 남긴다.
+
 ### 운영 계정
 
 - 어드민 로그인: `/admin/login` — **아이디 `admin`** (내부적으로 `admin@quizcashnow.co.kr` 로 변환)
