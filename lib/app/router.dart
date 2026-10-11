@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_client.dart';
 import '../features/admin/presentation/admin_funnel_screen.dart';
@@ -39,6 +40,19 @@ import '../shared/widgets/bottom_nav_bar.dart';
 ///
 /// ShellRoute: /home, /history, /mypage 에 하단 탭 네비게이션 표시
 /// 비-Shell:   /splash, /login, /mission/*, /withdraw, /web/*, /admin/* — 하단 탭 없음
+/// 비밀번호 재설정 링크로 들어온 경우 /reset 으로 보낸다.
+///
+/// 링크의 토큰은 주소의 # 뒤에 담겨 오는데, Supabase 가 세션을 만든 뒤
+/// 그 부분을 지운다. 그러면 주소가 '/' 가 되어 광고주 로그인으로 튕긴다.
+/// 그래서 경로가 아니라 passwordRecovery 이벤트를 보고 이동시킨다.
+void initPasswordRecoveryListener() {
+  supabase.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.passwordRecovery) {
+      appRouter.go('/reset');
+    }
+  });
+}
+
 final appRouter = GoRouter(
   initialLocation: '/splash',
   // 인증 가드:

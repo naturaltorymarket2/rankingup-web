@@ -12,6 +12,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await initSupabase();
+  // 비밀번호 재설정 링크 처리 — 주소가 지워지기 전에 이벤트로 받는다
+  initPasswordRecoveryListener();
   if (!kIsWeb) await MobileAds.instance.initialize();
 
   runApp(
