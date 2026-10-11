@@ -2121,14 +2121,33 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | `shared/utils/auth_error_text.dart` | GoTrue 영문 오류 → 고객용 한글 안내 |
 
 - 메일 링크는 웹 `/reset` 으로 열린다(앱 딥링크가 없다). 변경 후 앱에서 다시 로그인한다
+- **인증 방식을 PKCE → implicit 으로 바꿨다**(`supabase_client.dart`). PKCE 는 링크를
+  요청한 바로 그 클라이언트에 저장된 `code_verifier` 가 있어야 로그인이 완성된다.
+  메일 링크는 다른 브라우저에서 열리므로(앱에서 요청해도 링크는 휴대폰 브라우저에서
+  열린다) 토큰을 받고도 세션이 생기지 않아 '링크를 사용할 수 없습니다'가 떴다.
+  배포본에서 재현 → implicit 으로 바꾼 뒤 재설정 → 새 비밀번호 로그인까지 검증 완료
+- 가입 인증 링크도 implicit 으로 바뀌어 `?code=` 대신 `/auth/confirm#토큰` 으로 열린다.
+  해당 라우트와 안내 화면(`email_confirm_screen.dart`)은 이미 있어 그대로 동작한다.
+  광고주는 인증 후 `/web/login` 에서 로그인할 때 role 이 확정된다(기존 `?code=` 승격 경로 대신)
+- 재설정 화면은 `passwordRecovery` 이벤트로 연다. 링크의 토큰은 주소의 `#` 뒤에 오는데
+  Supabase 가 세션을 만든 뒤 그 부분을 지워 주소가 `/` 가 되고 광고주 로그인으로 튕겼다
 - Supabase 리디렉트 허용 목록에 `/reset` 은 이미 통과 상태 (2026-10-11 실측)
 - **`Email link is invalid or has expired` → "이미 사용했거나 기간이 지난 링크입니다.
   ... 이미 인증을 마치셨다면 그대로 로그인해 주세요."** 로 한글화.
   인증 링크는 1회용이라 두 번째 클릭에서 이 오류가 난다 — 가입 실패가 아니다
 
-> ⚠️ 상용 전 확인: Supabase **기본 메일은 시간당 2~4통 제한**이다. 베타에 유저가
-> 몰리면 인증·재설정 메일이 아예 안 나간다. Authentication → Emails → SMTP 에
-> 외부 SMTP(Resend 등) 설정 여부를 확인할 것.
+**메일 발송(2026-10-11 확인)** — 외부 SMTP 가 이미 설정돼 있고 정상 작동한다.
+
+| 항목 | 값 |
+|------|-----|
+| 제공자 | Resend (`smtp.resend.com` : 465) |
+| 발신 | `noreply@bizdata.shop` / 퀴즈캐시나우 |
+| 실측 | 재설정 메일 발송 HTTP 200 (4.1초), `recovery_sent_at` 기록 확인 |
+
+> 정식 출시 전 발신 도메인을 앱 이름과 맞추는 것을 권한다(`bizdata.shop` 은 유저에게
+> 낯설어 스팸으로 의심받는다). 도메인 구매 후 Resend 에 도메인 추가 → DNS 3건 등록 →
+> **Verified 확인 후** Supabase 의 Sender email 만 바꾸면 된다(Host/Port/비밀번호는 그대로).
+> 인증 전에 바꾸면 메일이 전부 실패한다.
 
 ### 운영 계정
 
