@@ -12,6 +12,7 @@ import '../features/auth/presentation/email_confirm_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/auth/presentation/password_reset_screen.dart';
 import '../features/auth/presentation/web_login_screen.dart';
 import '../features/campaign/presentation/campaign_detail_screen.dart';
 import '../features/campaign/presentation/campaign_bulk_screen.dart';
@@ -47,9 +48,13 @@ final appRouter = GoRouter(
     final location = state.matchedLocation;
     final params   = state.uri.queryParameters;
 
-    // Supabase 인증 에러 콜백: /?error=...&error_description=... → 에러 스낵바
+    // Supabase 인증 에러 콜백: /?error=...&error_description=...
+    // 비밀번호 재설정 링크의 오류는 /reset 에서 안내한다(로그인 화면이 아니라).
     if (params.containsKey('error')) {
       final desc = Uri.encodeComponent(params['error_description'] ?? 'unknown');
+      if (location == '/reset' || params['type'] == 'recovery') {
+        return '/reset?link_error=$desc';
+      }
       return '/web/login?auth_error=$desc';
     }
 
@@ -77,6 +82,9 @@ final appRouter = GoRouter(
       }
       return '/web/dashboard';
     }
+
+    // 비밀번호 재설정은 로그인 전 화면이라 가드를 타지 않는다
+    if (location == '/reset') return null;
 
     // 루트 경로 직접 접근: GoException 방지용 → 광고주 로그인으로 이동
     if (location == '/') return '/web/login';
@@ -186,6 +194,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/withdraw',
       builder: (context, state) => const WithdrawScreen(),
+    ),
+
+    // ── 비밀번호 재설정 (앱·웹 공용) ──────────────────────────
+    //    재설정 메일의 링크가 이 주소로 열린다.
+    GoRoute(
+      path: '/reset',
+      builder: (context, state) => PasswordResetScreen(
+        linkError: state.uri.queryParameters['link_error'],
+      ),
     ),
 
     // ── 웹 (B2B 광고주) ───────────────────────────────────────

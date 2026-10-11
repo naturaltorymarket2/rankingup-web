@@ -1848,6 +1848,7 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 0046 | get_active_mission RPC — 진행 중 미션 이어하기 | 적용 완료 (2026-08-28) |
 | 0052 | get_campaign_keywords / update_campaign_keywords — 어드민 키워드 수정 | 적용 완료 (2026-09-28) |
 | 0053 | campaigns.initial_rank / initial_rank_at — 등록 시점 통합검색 순위 보관, register_campaign·get_campaign_keywords 갱신 | 적용 완료 (2026-09-28) |
+| 0054 | start_mission — 진행 중 미션을 거부 대신 '이어받기'로 변경 (뒤로가기 후 재참여 불가 해결) | 적용 완료 (2026-10-11) |
 
 > 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
 
@@ -2081,6 +2082,53 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
   앱 가입자는 로그아웃 후 `/login?verified=true` 로 보내 안내한다
 - 표시가 없는 계정(이 기능 이전 가입)은 기존대로 승격한다 — 그때는 웹 가입만
   인증 후 승격되는 구조여서, 막으면 기존 광고주가 로그인하지 못한다
+
+### 미션 도중 뒤로가기 → 재참여 불가 (2026-10-11, migration 0054)
+
+실사용자 신고. 이탈 로그가 원인을 그대로 보여줬다(10-10, user 64568224):
+
+```
+10:40:12 START / LAUNCH_NAVER   → mission_logs = IN_PROGRESS
+10:40:21 VIEW_DETAIL            → 돌아와서 다시 눌렀지만 START 없음
+```
+
+`start_mission` 의 하루 1회 검사가 `IN_PROGRESS` 도 '참여함'으로 세어
+**본인이 만든 기록에 본인이 막혔다**. `expire_stale_missions` 는 날짜가
+지난 건만 정리하므로 당일에는 풀리지 않는다(그날 미션 2건 모두 TIMEOUT,
+시도 0회로 종료). 기종 문제가 아니다.
+
+해결: 진행 중인 미션이 있으면 거부하지 말고 **그 미션을 이어서 준다.**
+
+| 항목 | 처리 |
+|------|------|
+| 새 로그 | 만들지 않는다 → 하루 1회 제한 그대로 |
+| remaining_slots | 다시 깎지 않는다 → 광고주 유입 수 손실 없음 |
+| 출제 태그 | 그대로 유지 → "N번째 태그" 안내가 바뀌지 않음 |
+| 차단 조건 | 오늘 이미 **SUCCESS** 한 상품만 ALREADY_PARTICIPATED_TODAY |
+
+응답 모양이 같아 **앱 업데이트 없이 설치된 버전에서 동작한다**.
+실제 세션으로 검증(재진입 OK / 같은 log_id·tag_index / 슬롯 1회만 차감).
+
+### 비밀번호 찾기 (2026-10-11)
+
+기능 자체가 없었다. 전체 소스에 `resetPasswordForEmail` 이 없었고
+`auth.users.recovery_sent_at` 도 전 계정 비어 있었다(한 번도 발송 안 됨).
+
+| 파일 | 역할 |
+|------|------|
+| `auth/presentation/forgot_password_dialog.dart` | 이메일 입력 → 재설정 메일 발송 (앱·웹 공용) |
+| `auth/presentation/password_reset_screen.dart` | `/reset` — 메일 링크로 열려 새 비밀번호 저장 후 로그아웃 |
+| `shared/utils/auth_error_text.dart` | GoTrue 영문 오류 → 고객용 한글 안내 |
+
+- 메일 링크는 웹 `/reset` 으로 열린다(앱 딥링크가 없다). 변경 후 앱에서 다시 로그인한다
+- Supabase 리디렉트 허용 목록에 `/reset` 은 이미 통과 상태 (2026-10-11 실측)
+- **`Email link is invalid or has expired` → "이미 사용했거나 기간이 지난 링크입니다.
+  ... 이미 인증을 마치셨다면 그대로 로그인해 주세요."** 로 한글화.
+  인증 링크는 1회용이라 두 번째 클릭에서 이 오류가 난다 — 가입 실패가 아니다
+
+> ⚠️ 상용 전 확인: Supabase **기본 메일은 시간당 2~4통 제한**이다. 베타에 유저가
+> 몰리면 인증·재설정 메일이 아예 안 나간다. Authentication → Emails → SMTP 에
+> 외부 SMTP(Resend 등) 설정 여부를 확인할 것.
 
 ### 운영 계정
 

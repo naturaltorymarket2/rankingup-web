@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/account_type.dart';
+import 'forgot_password_dialog.dart';
 import '../../../shared/utils/device_util.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -392,6 +393,22 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 24),
         _submitBtn(label: '로그인', onPressed: _isLoading ? null : _onLogin),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            onPressed: _isLoading
+                ? null
+                : () => showForgotPasswordDialog(
+                      context,
+                      initialEmail: _loginEmailCtrl.text.trim(),
+                    ),
+            child: Text(
+              '비밀번호를 잊으셨나요?',
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            ),
+          ),
+        ),
       ],
     );
   }

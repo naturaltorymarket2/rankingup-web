@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/account_type.dart';
+import '../../../shared/utils/auth_error_text.dart';
+import 'forgot_password_dialog.dart';
 
 // ─────────────────────────────────────────────────────────────────
 // 광고주 로그인 / 회원가입 웹 화면 (/web/login)
@@ -69,7 +71,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
     super.initState();
     if (widget.authError != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showError('인증 오류: ${Uri.decodeComponent(widget.authError!)}');
+        _showError(authErrorText(Uri.decodeComponent(widget.authError!)));
       });
     } else if (widget.showVerifiedBanner) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -468,6 +470,22 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         ),
         const SizedBox(height: 28),
         _submitBtn(label: '로그인', onPressed: _isLoading ? null : _onLogin),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            onPressed: _isLoading
+                ? null
+                : () => showForgotPasswordDialog(
+                      context,
+                      initialEmail: _loginEmailCtrl.text.trim(),
+                    ),
+            child: Text(
+              '비밀번호를 잊으셨나요?',
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            ),
+          ),
+        ),
       ],
     );
   }
