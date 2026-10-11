@@ -31,6 +31,19 @@ Future<void> initSupabase() async {
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
+    // 메일 링크는 보낸 기기가 아닌 다른 브라우저에서 열린다.
+    // 앱에서 비밀번호 찾기를 눌러도 링크는 휴대폰 브라우저(웹)에서 열리고,
+    // 인증 메일도 PC에서 여는 경우가 많다.
+    //
+    // 기본값인 PKCE 는 링크를 '요청한 바로 그 클라이언트'에만 저장된 값
+    // (code_verifier)이 있어야 로그인이 완성된다. 다른 브라우저에서 열면
+    // 토큰을 받고도 세션을 만들지 못해 '링크를 사용할 수 없습니다'가 뜬다
+    // (2026-10-11 실측 — 토큰은 정상 전달됐는데 세션이 생기지 않았다).
+    //
+    // implicit 은 링크 자체에 토큰이 담겨 어느 브라우저에서나 열린다.
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.implicit,
+    ),
   );
 }
 
