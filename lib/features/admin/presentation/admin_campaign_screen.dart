@@ -114,6 +114,12 @@ class _AdminCampaignScreenState extends ConsumerState<AdminCampaignScreen> {
       ),
       actions: [
         TextButton.icon(
+          onPressed: () => context.go('/admin/users'),
+          icon: const Icon(Icons.people_alt_outlined, size: 18),
+          label: const Text('회원 관리'),
+          style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
+        TextButton.icon(
           onPressed: () => context.go('/admin/funnel'),
           icon:  const Icon(Icons.insights_outlined, size: 18),
           label: const Text('이탈 지점'),

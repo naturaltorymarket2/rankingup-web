@@ -102,6 +102,12 @@ class _AdminChargeScreenState extends ConsumerState<AdminChargeScreen> {
           },
         ),
         TextButton.icon(
+          onPressed: () => context.go('/admin/users'),
+          icon: const Icon(Icons.people_alt_outlined, size: 18),
+          label: const Text('회원 관리'),
+          style: TextButton.styleFrom(foregroundColor: _kBlue),
+        ),
+        TextButton.icon(
           onPressed: () => context.go('/admin/campaign'),
           icon: const Icon(Icons.fact_check_outlined, size: 18),
           label: const Text('광고 승인'),

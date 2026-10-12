@@ -7,6 +7,7 @@ import '../features/admin/presentation/admin_funnel_screen.dart';
 import '../features/admin/presentation/admin_campaign_screen.dart';
 import '../features/admin/presentation/admin_charge_screen.dart';
 import '../features/admin/presentation/admin_notice_screen.dart';
+import '../features/admin/presentation/admin_user_screen.dart';
 import '../features/admin/presentation/admin_withdraw_screen.dart';
 import '../features/auth/presentation/admin_login_screen.dart';
 import '../features/auth/presentation/email_confirm_screen.dart';
@@ -296,6 +297,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/admin/withdraw',
       builder: (context, state) => const AdminWithdrawScreen(),
+    ),
+    GoRoute(
+      path: '/admin/users',
+      builder: (context, state) => const AdminUserScreen(),
     ),
     GoRoute(
       path: '/admin/notice',

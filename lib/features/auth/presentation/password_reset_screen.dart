@@ -38,6 +38,10 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   StreamSubscription<AuthState>? _authSub;
 
   bool    _hasSession = false;
+
+  /// 광고주 계정인지 — 완료 후 안내를 다르게 한다.
+  /// 앱 유저에게 '광고주 로그인'을 권하면 엉뚱한 곳으로 가게 된다.
+  bool    _isAdvertiser = false;
   bool    _obscure    = true;
   bool    _isSaving   = false;
   bool    _isDone     = false;
@@ -86,6 +90,21 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     });
 
     try {
+      // 로그아웃하기 전에 계정 종류를 확인해 둔다 (세션이 있어야 읽힌다)
+      try {
+        final uid = supabase.auth.currentUser?.id;
+        if (uid != null) {
+          final row = await supabase
+              .from('users')
+              .select('role')
+              .eq('id', uid)
+              .maybeSingle();
+          _isAdvertiser = row?['role'] == 'ADVERTISER';
+        }
+      } catch (_) {
+        // 확인 실패는 무시 — 앱 유저 기준으로 안내한다
+      }
+
       await supabase.auth.updateUser(UserAttributes(password: pw));
       // 재설정이 끝나면 임시 세션은 정리한다 — 새 비밀번호로 다시 로그인한다.
       await supabase.auth.signOut();
@@ -222,19 +241,25 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
-        const Text(
-          '퀴즈캐시나우 앱에서 새 비밀번호로 로그인해 주세요.',
+        Text(
+          _isAdvertiser
+              ? '광고주 페이지에서 새 비밀번호로 로그인해 주세요.'
+              : '퀴즈캐시나우 앱을 열어 새 비밀번호로 로그인해 주세요.\n'
+                '이 창은 닫으셔도 됩니다.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, height: 1.6),
+          style: const TextStyle(fontSize: 13, height: 1.6),
         ),
         const SizedBox(height: 22),
-        SizedBox(
-          height: 46,
-          child: OutlinedButton(
-            onPressed: () => context.go('/web/login'),
-            child: const Text('광고주 로그인으로 이동'),
+        // 광고주일 때만 로그인 화면으로 보낸다.
+        // 앱 유저에게는 갈 곳이 없다(앱으로 돌아가야 한다).
+        if (_isAdvertiser)
+          SizedBox(
+            height: 46,
+            child: OutlinedButton(
+              onPressed: () => context.go('/web/login'),
+              child: const Text('광고주 로그인으로 이동'),
+            ),
           ),
-        ),
       ],
     );
   }

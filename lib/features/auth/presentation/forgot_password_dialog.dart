@@ -166,7 +166,8 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${_emailCtrl.text.trim()} 으로\n비밀번호 재설정 링크를 보냈습니다.',
+          '${_emailCtrl.text.trim()}\n'
+          '가입된 이메일이라면 재설정 링크가 발송됩니다.',
           style: const TextStyle(fontSize: 13, height: 1.6),
         ),
         const SizedBox(height: 12),
@@ -178,6 +179,8 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
           ),
           child: const Text(
             '• 메일이 보이지 않으면 스팸함도 확인해 주세요.\n'
+            '• 그래도 없으면 가입되지 않은 주소일 수 있습니다.\n'
+            '  (보안상 가입 여부를 화면에 표시하지 않습니다)\n'
             '• 링크는 한 번만 사용할 수 있습니다.\n'
             '• 새 비밀번호를 정한 뒤 앱에서 다시 로그인해 주세요.',
             style: TextStyle(fontSize: 12, height: 1.7),
