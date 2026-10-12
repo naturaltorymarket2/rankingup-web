@@ -316,7 +316,11 @@ Phase 4 (1~2주): 어드민 + 배포
   └─ 충전승인 → 출금처리 → 파이썬 모듈 연동 → Play Store 배포
 ```
 
-현재 진행 Phase: **Phase 21 완료** (미션 진행 화면 UX 개선 — 상품명/업체명 라벨, URL 구조 변경, 스플래시 배너 이미지, 2026-07-20)
+현재 진행 Phase: **베타 상용 테스트 준비 (2026-10-12, 앱 46 출시)**
+
+> ⚠️ 아래 Phase 1~22 기록은 당시 작업 이력이다. **현재 구조는 섹션 17을 먼저 읽을 것** —
+> 2026-08 이후 순위 수집(SerpApi/로컬 크롤러), 광고 승인 절차, 미션 흐름이 크게 바뀌었고
+> 2026-10-11~12 에 미션 완주 관련 버그 3건을 고쳤다. 옛 기록만 보고 작업하면 어긋난다.
 
 - ✅ 완료: Phase 1 전체 (Supabase 스키마, Flutter 초기화, go_router, 로그인, Device ID)
 - ✅ 완료: Phase 2 전체
@@ -1512,7 +1516,7 @@ flutter pub run flutter_launcher_icons
 
 ---
 
-## 13. 배포 현황 (2026-07-20 기준)
+## 13. 배포 현황 (2026-10-12 기준)
 
 ### 서비스 URL
 
@@ -1528,9 +1532,15 @@ flutter pub run flutter_launcher_icons
 |------|-----|
 | 플랫폼 | Google Play Console 프로덕션 트랙 |
 | applicationId | com.storetrafficbooster.app |
-| 배포된 versionCode | 38 (2026-09-28 프로덕션 전체 출시 — 네이버 앱 실행 수정. Play 검토 중) |
-| 빌드된 versionCode | 26 (2026-07-20 빌드 완료 — 상품명/업체명 라벨 + URL 구조 변경(search.naver.com) + 스플래시 배너 이미지, Play Console 업로드 대기) |
-| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (52.3MB) |
+| 배포된 versionCode | **46** (2026-10-12 14:08 프로덕션 전체 출시) |
+| 빌드 결과물 | build/app/outputs/bundle/release/app-release.aab (65MB) |
+| 강제 업데이트 | `min_version_code = 46`, `force = false` (건너뛰기 가능). 완전히 막으려면 `SELECT public.set_min_app_version(46, true);` |
+| targetSdk | **36** (Android 16) — 2026-11-01 정책 기한 대응 완료 |
+| 콘텐츠 등급 | 3세 이상 (청소년이용불가 아님 — 다운로드 시 연령 확인은 구글 계정 쪽 절차다) |
+
+> ⚠️ 쓰지 않는 테스트 트랙이 살아 있다 — 비공개 테스트(17) / Alpha(14) / 내부 테스트(13).
+> 테스터를 그 트랙으로 초대하면 **옛 버전**을 받는다. 베타는 프로덕션으로 받고,
+> 쓰지 않는 트랙은 중단할 것.
 
 ### GitHub 저장소
 
@@ -1539,7 +1549,7 @@ flutter pub run flutter_launcher_icons
 | Flutter 프로젝트 | https://github.com/naturaltorymarket2/rankingup-web |
 | 랭킹 모듈 | https://github.com/naturaltorymarket2/rankingup |
 | 브랜치 | main |
-| 마지막 push | 2026-07-20 — store_traffic_booster: Phase 21 상품명/업체명 라벨 + URL 구조 변경 + 스플래시 배너 이미지 (versionCode 26) / rank_module: Phase 17 (839f544→9e6459f, 2026-06-19) |
+| 마지막 push | 2026-10-12 — rankingup-web: 065c24d (강제 업데이트 + 권한 구멍 수정) / rankingup: fb9792a (추천 키워드 업체명 편중 제거, 2026-09-28) |
 
 ### GitHub Actions
 
@@ -1763,8 +1773,10 @@ service_role_key를 MCP 헤더에 그대로 노출하는 현재 방식도 권장
 
 - **빌드 전 반드시 Play Console에서 최신 versionCode 확인**
 - 앱 배포는 한 번에 한 사람만 진행
-- 2026-08-28 기준: **28 · 29 · 30 출시 완료, 31 업로드 중**
-  (27은 30/31 로 대체돼 미사용)
+- **2026-10-12 기준: 46 출시 완료** (프로덕션 전체 출시)
+- 하루에 여러 번 올린 날이 있어 번호가 띄엄띄엄하다. 45는 46으로 대체돼 미사용
+- 앱에 버전이 보인다 — **마이페이지 맨 아래 `버전 1.0.0 (46)`**.
+  스토어에는 versionName(1.0.0)만 나와 구분이 안 되니 이걸로 확인한다
 
 ### 2) git — pull 먼저, force push 금지
 
@@ -1848,6 +1860,12 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 | 0046 | get_active_mission RPC — 진행 중 미션 이어하기 | 적용 완료 (2026-08-28) |
 | 0052 | get_campaign_keywords / update_campaign_keywords — 어드민 키워드 수정 | 적용 완료 (2026-09-28) |
 | 0053 | campaigns.initial_rank / initial_rank_at — 등록 시점 통합검색 순위 보관, register_campaign·get_campaign_keywords 갱신 | 적용 완료 (2026-09-28) |
+| 0054 | start_mission — 진행 중 미션을 거부 대신 '이어받기' (뒤로가기 후 재참여 불가 해결) | 적용 완료 (2026-10-11) |
+| 0055 | app_config 테이블 + set_min_app_version — 앱 강제 업데이트 | 적용 완료 (2026-10-12) |
+| 0056 | get_users / admin_update_user / admin_delete_user — 어드민 회원 관리 | 적용 완료 (2026-10-12) |
+| 0057 | get_active_mission(p_campaign_id) — 진행 중 미션을 지정해서 이어하기 | 적용 완료 (2026-10-12) |
+| 0058 | set_min_app_version 에 is_admin() 검증 추가 (권한 구멍 수정) | 적용 완료 (2026-10-12) |
+| 0059 | set_min_app_version — SQL Editor 에서도 호출 가능하게 보완 + 강제 업데이트 켜기(46) | 적용 완료 (2026-10-12) |
 | 0054 | start_mission — 진행 중 미션을 거부 대신 '이어받기'로 변경 (뒤로가기 후 재참여 불가 해결) | 적용 완료 (2026-10-11) |
 
 > 편의를 위해 `supabase/apply_phase22.sql`, `apply_phase23.sql` 합본 파일이 있다.
@@ -2148,6 +2166,81 @@ flutter build web --release --dart-define=RANK_API_URL=https://web-production-e7
 > 낯설어 스팸으로 의심받는다). 도메인 구매 후 Resend 에 도메인 추가 → DNS 3건 등록 →
 > **Verified 확인 후** Supabase 의 Sender email 만 바꾸면 된다(Host/Port/비밀번호는 그대로).
 > 인증 전에 바꾸면 메일이 전부 실패한다.
+
+### 2026-10-11 ~ 12 변경 (앱 43~46) — 베타 직전 정리
+
+실사용자 신고에서 출발했다. 서버 로그(`mission_events`)로 원인을 짚은 건이 많아,
+증상만 보고 추측하지 말고 **이탈 로그를 먼저 볼 것**.
+
+#### 미션이 끝까지 가지 않던 3가지 (전부 해결)
+
+| 증상 | 원인 | 조치 |
+|------|------|------|
+| 미션 도중 뒤로가기 → 그날 재참여 불가 | `start_mission` 의 하루 1회 검사가 `IN_PROGRESS` 도 '참여함'으로 셌다. 본인이 만든 기록에 본인이 막힌다 | **0054** — 진행 중이면 거부 대신 그 미션을 이어서 준다. 새 로그·슬롯 차감 없음, 태그 유지. `SUCCESS` 만 차단 |
+| 네이버에서 돌아와도 "상품을 찾아주세요"에서 안 넘어감 | 태그 화면이 네이버를 띄운 뒤(1.5초 지연) 만들어져, 생성 시점에 이미 백그라운드였다 → `paused` 를 못 받아 '나간 적 있음'이 안 찍힘 | 앱 44 — `initState` 에서 현재 lifecycleState 를 직접 확인, `inactive` 도 백그라운드로 처리. 대기 화면에 **'태그를 확인했어요 — 바로 입력하기'** 비상 통로 추가 |
+| 진행중 목록에서 이어하기가 하나만 됨 | `get_active_mission` 이 '가장 최근 1건'만 돌려주는데, 앱은 누른 미션과 다르면 거부했다 | **0057** — `p_campaign_id` 로 지정. 미지정이면 기존 동작이라 구버전 앱도 그대로 돈다 |
+
+> 참여 제한은 **상품(그룹)당 하루 1회**다. 서로 다른 상품을 동시에 진행하는 것은
+> 정상이고 흔하다. **완료 전까지는 어떤 제약도 걸지 않는다** — 고객은 중간에
+> 이것저것 시도한다. 새로 제약을 넣을 일이 있으면 이 원칙을 먼저 확인할 것.
+
+#### 계정·메일
+
+- **비밀번호 찾기**가 아예 없었다(`resetPasswordForEmail` 미구현, `recovery_sent_at` 전 계정 비어 있음).
+  앱·웹 로그인에 [비밀번호를 잊으셨나요?] 추가 → 메일 링크는 웹 `/reset` 에서 새 비밀번호를 정한다
+- **인증 방식 PKCE → implicit** (`supabase_client.dart`). PKCE 는 링크를 요청한 그
+  클라이언트의 `code_verifier` 가 있어야 하는데, 메일 링크는 다른 브라우저에서 열린다.
+  토큰은 전달되는데 세션이 안 생겨 '링크를 사용할 수 없습니다'가 떴다
+- 재설정 화면은 `passwordRecovery` 이벤트로 연다. 토큰은 주소의 `#` 뒤에 오는데
+  Supabase 가 세션 생성 후 그 부분을 지워 주소가 `/` 가 되고 로그인으로 튕겼다
+- 완료 화면은 **역할에 따라** 다르게 안내한다(광고주만 광고주 로그인 버튼)
+- `Email link is invalid or has expired` → **"이미 사용했거나 기간이 지난 링크입니다"** 로 한글화.
+  인증 링크는 1회용이라 두 번째 클릭에서 나는 오류다 — 가입 실패가 아니다
+- 가입 안 된 주소로 재설정을 요청하면 Supabase 는 메일을 보내지 않는다(계정 존재를 숨김).
+  화면 문구도 "가입된 이메일이라면 발송됩니다"로 바꿨다 — 실제 문의가 있었다
+
+#### 어드민 회원 관리 (`/admin/users`, migration 0056)
+
+| 기능 | 비고 |
+|------|------|
+| 목록·검색 | 이메일 / 기기 ID |
+| 표시 | 가입일·최근 로그인·인증 여부·포인트·미션 성공/전체·광고 수·기기 |
+| 역할 변경 | USER / ADVERTISER / ADMIN |
+| **기기 초기화** | `DEVICE_ALREADY_REGISTERED` 를 풀 때. 더 이상 SQL Editor 를 열지 않는다 |
+| 계정 삭제 | 본인·관리자 불가, 마지막 관리자 권한 유지, **광고 보유 계정은 차단**(광고를 먼저 삭제) |
+
+#### 앱 강제 업데이트 (migration 0055 / 0058 / 0059)
+
+Play 스토어는 기기마다 업데이트가 뜨는 시점이 다르다. 서버가 최소 버전을 들고
+앱이 켜질 때 스스로 확인한다 — **앱 배포 없이 SQL 한 줄로 켜고 끈다.**
+
+```sql
+SELECT public.set_min_app_version(46, false);  -- 권장(건너뛰기 가능)
+SELECT public.set_min_app_version(46, true);   -- 강제
+SELECT public.set_min_app_version(0,  false);  -- 해제
+```
+
+- 조회 실패·네트워크 오류는 **통과시킨다** — 서버 문제로 앱을 못 쓰게 만들지 않는다
+- 43 부터 동작한다. 42 이하에는 확인 코드가 없다
+- **스토어에 해당 버전이 실제로 내려받아지는 것을 확인한 뒤** 값을 올릴 것
+
+> ⚠️ **0055 에 ADMIN 검증이 빠져 있었다.** `SECURITY DEFINER` 라 RLS 를 넘어 도는데
+> `authenticated` 에 EXECUTE 를 줘서, 로그인한 아무 앱 유저나 최소 버전을 올려
+> 전체 앱을 잠글 수 있었다(일반 유저 세션으로 200 응답 확인). 0058 에서 막았다.
+> **테이블 RLS 만 걸고 SECURITY DEFINER 함수 안의 검증을 빠뜨리지 말 것.**
+> 0059 는 SQL Editor(= `session_user` 가 `postgres`)를 허용하는 보완이다 —
+> `SECURITY DEFINER` 안에서 `current_user` 는 함수 소유자로 바뀌므로 쓰면 안 된다.
+
+#### 그 밖
+
+- 마이페이지에 **앱 버전 표시** (`버전 1.0.0 (46)`) — 스토어에는 versionName 만 보여 구분이 안 됐다
+- 미션 보드 필터에 **건수** 표시 (`전체 10 / 참여가능 8 / 진행중 2`)
+- 홈 목록이 상세에서 돌아와도 갱신되지 않아 '진행중'으로 안 바뀌던 것 수정
+- 광고 상세의 `PGRST116`(0 rows)을 원인 안내로 교체 — 승인 전 광고는 소유자만 읽을 수 있어
+  어드민 세션으로 보면 0건이다(같은 브라우저에서 어드민 로그인 시 광고주 세션이 깨진다)
+- **메일 발송**: Resend(`smtp.resend.com`:465, 발신 `noreply@bizdata.shop`) 정상 동작 실측.
+  정식 출시 전 발신 도메인을 앱 이름과 맞출 것 — Resend 에 도메인 추가 → DNS 3건 →
+  **Verified 확인 후** Supabase Sender email 만 변경(인증 전에 바꾸면 전부 실패)
 
 ### 운영 계정
 
