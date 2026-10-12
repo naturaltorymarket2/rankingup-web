@@ -52,7 +52,7 @@ android {
         //   - 큰 화면에서 화면 방향 고정 무시: 앱이 방향을 고정하지 않아 무관
         //   - 예측형 뒤로가기: 미션 화면이 이미 PopScope 를 쓴다
         targetSdk     = 36
-        versionCode   = 43
+        versionCode   = 44
         versionName   = "1.0.0"
     }
 

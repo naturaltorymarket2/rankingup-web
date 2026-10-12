@@ -119,6 +119,17 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     // 이어하기 진입은 이미 검색을 마친 상태이므로 복귀 대기를 건너뛴다
     _isResumed = widget.resume;
 
+    // 이 화면은 네이버를 띄운 뒤에 만들어진다(미션 상세가 1.5초 뒤 push).
+    // 그래서 화면이 생길 때 앱은 이미 백그라운드인 경우가 많고,
+    // paused 이벤트를 받을 기회가 없어 '앱을 벗어난 적 있음'이 안 찍혔다.
+    // → 복귀해도 대기 화면("상품을 찾아주세요")에서 넘어가지 못했다.
+    //   (2026-10-12 실기기 확인)
+    // 생성 시점의 상태를 직접 보고 판단한다.
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      _wentBackground = true;
+    }
+
     _resolveMissionData();
     _loadRankHint();
   }
@@ -196,8 +207,11 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
     // 앱을 실제로 벗어난 적이 있어야 '네이버에서 돌아왔다'로 본다.
     // [네이버 앱 다시 열기]를 눌렀는데 네이버가 뜨지 않은 경우에도
     // resumed 가 오면서 대기 화면이 그냥 넘어가던 문제가 있었다.
+    // inactive 도 포함한다 — 기기에 따라 앱 전환 시 paused 없이
+    // inactive 만 오는 경우가 있다.
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.inactive) {
       _wentBackground = true;
       return;
     }
@@ -376,6 +390,7 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
                             ),
                           )
                         : _WaitingBody(
+                            onSkipToInput: _onResumedFromNaver,
                             keyword:  _keyword ?? '',
                             onReopen: _openNaver,
                           ),
@@ -405,11 +420,22 @@ class _MissionActiveScreenState extends ConsumerState<MissionActiveScreen>
 // 복귀 대기 화면 (네이버 앱 이동 후)
 // ─────────────────────────────────────────────────────────────────
 
+/// 대기 화면에서 직접 태그 입력으로 넘어가는 비상 통로.
+///
+/// 복귀 감지가 실패하는 기기가 있을 수 있는데, 그때 유저가 아무것도
+/// 할 수 없으면 미션을 포기하게 된다. 수동으로 넘어갈 길을 남긴다.
 class _WaitingBody extends StatelessWidget {
   final String        keyword;
   final Future<void> Function() onReopen;
 
-  const _WaitingBody({required this.keyword, required this.onReopen});
+  /// 복귀 감지를 거치지 않고 바로 입력 화면으로 넘어간다
+  final VoidCallback  onSkipToInput;
+
+  const _WaitingBody({
+    required this.keyword,
+    required this.onReopen,
+    required this.onSkipToInput,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -505,7 +531,22 @@ class _WaitingBody extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
+          // 기기에 따라 복귀가 자동으로 인식되지 않을 수 있다.
+          // 그때 아무것도 못 하면 미션을 포기하게 되므로 길을 남긴다.
+          TextButton(
+            onPressed: onSkipToInput,
+            child: Text(
+              '태그를 확인했어요 — 바로 입력하기',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.indigo.shade700,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             '앱으로 돌아오면 태그 입력창이 나타납니다',
             textAlign: TextAlign.center,

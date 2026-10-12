@@ -77,7 +77,7 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
       return;
     }
 
-    context.push('/mission/${mission.campaignId}/active', extra: {
+    await context.push('/mission/${mission.campaignId}/active', extra: {
       'log_id':        active['log_id'],
       'keyword':       active['keyword'],
       'tag_index':     active['tag_index'],
@@ -87,6 +87,9 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
       'resume':        true,
       'thumbnail_url': active['thumbnail_url'],
     });
+    if (context.mounted) {
+      ref.read(missionHomeProvider.notifier).refresh();
+    }
   }
 
   @override
@@ -160,8 +163,11 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
                       }
                       final mission = missions[index];
                       return _MissionCard(
-                        mission: mission,
+                        mission:  mission,
                         onResume: () => _resumeMission(mission),
+                        // 상세에 다녀오면 목록을 다시 읽는다
+                        onReturn: () =>
+                            ref.read(missionHomeProvider.notifier).refresh(),
                       );
                     },
                   ),
@@ -339,7 +345,11 @@ class _MissionCard extends StatelessWidget {
   final CampaignMissionModel mission;
   final VoidCallback? onResume;
 
-  const _MissionCard({required this.mission, this.onResume});
+  /// 미션 상세에서 돌아왔을 때 — 목록을 다시 읽는다.
+  /// 없으면 미션을 시작하고 나와도 '진행중'으로 바뀌지 않는다.
+  final VoidCallback? onReturn;
+
+  const _MissionCard({required this.mission, this.onResume, this.onReturn});
 
   @override
   Widget build(BuildContext context) {
@@ -369,11 +379,15 @@ class _MissionCard extends StatelessWidget {
               ? () => onResume?.call()
               : (isFull || isCompleted)
                   ? null
-                  : () {
+                  : () async {
                       // 이탈 지점 측정 — 상세까지만 보고 나가는 경우를 잡는다
                       logMissionEvent(MissionStep.viewDetail,
                           campaignId: mission.campaignId);
-                      context.push('/mission/${mission.campaignId}');
+                      // 돌아오면 목록을 다시 읽는다 — 그러지 않으면
+                      // 미션을 시작하고 나와도 '진행중'으로 바뀌지 않는다
+                      // (2026-10-12 실기기 확인)
+                      await context.push('/mission/${mission.campaignId}');
+                      onReturn?.call();
                     },
           child: Padding(
             padding: const EdgeInsets.all(16),
