@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -71,6 +72,11 @@ class MypageScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+
+              // ── 앱 버전 ──────────────────────────────────────
+              // 스토어에는 1.0.0 만 보여 어느 버전인지 알 수 없다.
+              // 문의 대응과 업데이트 확인을 위해 빌드 번호까지 적는다.
+              const _AppVersionText(),
             ],
           ),
         ),
@@ -108,6 +114,32 @@ class MypageScreen extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────
 // 프로필 섹션
 // ─────────────────────────────────────────────────────────────────
+
+/// 앱 버전 표시 — "버전 1.0.0 (44)"
+class _AppVersionText extends StatelessWidget {
+  const _AppVersionText();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snapshot) {
+        final info = snapshot.data;
+        final text = info == null
+            ? ''
+            : '버전 ${info.version} (${info.buildNumber})';
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _ProfileSection extends StatelessWidget {
   final String email;
