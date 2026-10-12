@@ -21,8 +21,15 @@ class WalletRepository {
   /// get_active_mission RPC 가 tag_word 없이 필요한 값만 돌려준다.
   ///
   /// 진행 중인 미션이 없으면 null.
-  Future<Map<String, dynamic>?> fetchActiveMission() async {
-    final res = await supabase.rpc('get_active_mission') as Map<String, dynamic>;
+  /// 진행 중인 미션 조회.
+  ///
+  /// [campaignId] 를 주면 그 상품(그룹)의 미션을 돌려준다.
+  /// 주지 않으면 가장 최근 1건 — 서로 다른 상품을 동시에 진행 중이면
+  /// 엉뚱한 미션이 와서 이어하기가 막힌다.
+  Future<Map<String, dynamic>?> fetchActiveMission({String? campaignId}) async {
+    final res = await supabase.rpc('get_active_mission', params: {
+      'p_campaign_id': campaignId,
+    }) as Map<String, dynamic>;
     if (res['success'] != true) return null;
     final mission = res['mission'];
     return mission == null ? null : Map<String, dynamic>.from(mission as Map);

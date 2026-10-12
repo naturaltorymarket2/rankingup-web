@@ -41,6 +41,17 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
         MissionFilter.done       => list.where((m) => m.isCompleted).toList(),
       };
 
+  /// 필터별 건수 — 칩에 함께 보여준다
+  Map<MissionFilter, int> _filterCounts(List<CampaignMissionModel>? list) {
+    final l = list ?? const <CampaignMissionModel>[];
+    return {
+      MissionFilter.all:        l.length,
+      MissionFilter.available:  l.where((m) => !m.isParticipatedToday).length,
+      MissionFilter.inProgress: l.where((m) => m.isInProgress).length,
+      MissionFilter.done:       l.where((m) => m.isCompleted).length,
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -65,10 +76,15 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
   ///
   /// log_id / tag_index 는 서버(get_active_mission)에서만 받을 수 있다.
   Future<void> _resumeMission(CampaignMissionModel mission) async {
-    final active = await WalletRepository().fetchActiveMission();
+    // 누른 미션을 지정해서 묻는다. 지정하지 않으면 '가장 최근 1건'이 와서
+    // 다른 상품을 진행 중일 때 엉뚱한 미션이 돌아온다 (2026-10-12 확인).
+    final active = await WalletRepository()
+        .fetchActiveMission(campaignId: mission.campaignId);
     if (!mounted) return;
 
-    if (active == null || active['campaign_id'] != mission.campaignId) {
+    // 서버가 같은 상품(그룹) 기준으로 찾아 주므로, 돌아온 campaign_id 가
+    // 카드의 것과 달라도(서브키워드) 그대로 이어서 진행한다.
+    if (active == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('이어서 진행할 수 있는 미션이 없습니다.'),
         behavior: SnackBarBehavior.floating,
@@ -77,7 +93,8 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
       return;
     }
 
-    await context.push('/mission/${mission.campaignId}/active', extra: {
+    final campaignId = active['campaign_id'] as String? ?? mission.campaignId;
+    await context.push('/mission/$campaignId/active', extra: {
       'log_id':        active['log_id'],
       'keyword':       active['keyword'],
       'tag_index':     active['tag_index'],
@@ -118,6 +135,7 @@ class _MissionHomeScreenState extends ConsumerState<MissionHomeScreen> {
           // ── 참여가능 / 참여완료 필터 ──────────────────────────
           _FilterBar(
             current: _filter,
+            counts: _filterCounts(missionState.valueOrNull?.missions),
             onChanged: (f) => setState(() => _filter = f),
           ),
 
@@ -192,7 +210,14 @@ class _FilterBar extends StatelessWidget {
   final MissionFilter current;
   final ValueChanged<MissionFilter> onChanged;
 
-  const _FilterBar({required this.current, required this.onChanged});
+  /// 필터별 건수 — 라벨 옆에 작게 붙인다
+  final Map<MissionFilter, int> counts;
+
+  const _FilterBar({
+    required this.current,
+    required this.counts,
+    required this.onChanged,
+  });
 
   static const _labels = {
     MissionFilter.all:        '전체',
@@ -212,7 +237,11 @@ class _FilterBar extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
-              label: Text(_labels[f]!),
+              label: Text(
+                (counts[f] ?? 0) > 0
+                    ? '${_labels[f]!} ${counts[f]}'
+                    : _labels[f]!,
+              ),
               selected: selected,
               onSelected: (_) => onChanged(f),
               labelStyle: TextStyle(
