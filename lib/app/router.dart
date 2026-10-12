@@ -14,6 +14,8 @@ import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/password_reset_screen.dart';
+import '../features/auth/presentation/update_required_screen.dart';
+import '../shared/utils/app_update_gate.dart';
 import '../features/auth/presentation/web_login_screen.dart';
 import '../features/campaign/presentation/campaign_detail_screen.dart';
 import '../features/campaign/presentation/campaign_bulk_screen.dart';
@@ -146,6 +148,20 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
         return EmailVerifyScreen(email: extra?['email'] as String?);
+      },
+    ),
+    // 구버전 안내 — 스플래시가 최소 버전 미만일 때 보낸다
+    GoRoute(
+      path: '/update',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final info  = extra?['info'] as AppUpdateInfo?;
+        // 정보 없이 직접 들어온 경우는 스플래시로 되돌린다
+        if (info == null) return const SplashScreen();
+        return UpdateRequiredScreen(
+          info:         info,
+          nextLocation: (extra?['next'] as String?) ?? '/home',
+        );
       },
     ),
     GoRoute(

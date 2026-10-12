@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/account_type.dart';
+import '../../../shared/utils/app_update_gate.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -47,37 +48,56 @@ class _SplashScreenState extends State<SplashScreen> {
     }
     if (!mounted) return;
 
+    // 어디로 갈지 먼저 정하고(_resolveDestination), 보내기 직전에
+    // 업데이트가 필요한지 확인한다. 구버전이면 안내 화면을 거친다.
+    final destination = await _resolveDestination();
+    if (!mounted || destination == null) return;
+
+    final update = await checkAppUpdate();
+    if (!mounted) return;
+
+    if (update.needsUpdate) {
+      context.go('/update', extra: {
+        'info': update,
+        'next': destination,
+      });
+      return;
+    }
+    context.go(destination);
+  }
+
+  /// 세션·역할·인증 상태를 보고 갈 곳을 정한다.
+  /// 화면을 직접 옮겨야 하는 경우(로그아웃 등)는 여기서 처리하고 null 을 준다.
+  Future<String?> _resolveDestination() async {
     final session = supabase.auth.currentSession;
     if (session != null) {
       final userId      = supabase.auth.currentUser!.id;
       final isAdvertiser = await isRegisteredAdvertiser(userId);
-      if (!mounted) return;
+      if (!mounted) return null;
 
       if (kIsWeb) {
-        if (isAdvertiser) {
-          context.go('/web/dashboard');
-        } else {
-          // 세션은 있지만 광고주가 아닌 계정 — 웹 접근 차단 (방어 코드)
-          await supabase.auth.signOut();
-          if (mounted) context.go('/web/login');
-        }
+        if (isAdvertiser) return '/web/dashboard';
+        // 세션은 있지만 광고주가 아닌 계정 — 웹 접근 차단 (방어 코드)
+        await supabase.auth.signOut();
+        if (mounted) context.go('/web/login');
+        return null;
       } else {
         if (isAdvertiser) {
           // 세션은 있지만 광고주 계정 — 앱 접근 차단 (방어 코드)
           await supabase.auth.signOut();
           if (mounted) context.go('/login');
-        } else {
-          final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
-          context.go(emailConfirmedAt != null ? '/home' : '/email_verify');
+          return null;
         }
+        final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
+        return emailConfirmedAt != null ? '/home' : '/email_verify';
       }
     } else if (kIsWeb) {
-      context.go('/web/login');
+      return '/web/login';
     } else {
       // 앱 첫 실행이면 사용법 안내(온보딩)를 먼저 보여준다
       final seen = await hasSeenOnboarding();
-      if (!mounted) return;
-      context.go(seen ? '/login' : '/onboarding');
+      if (!mounted) return null;
+      return seen ? '/login' : '/onboarding';
     }
   }
 
