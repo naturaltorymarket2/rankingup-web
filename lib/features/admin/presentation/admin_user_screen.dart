@@ -280,7 +280,7 @@ class _AdminUserScreenState extends ConsumerState<AdminUserScreen> {
       builder: (ctx) => SimpleDialog(
         title: Text('역할 변경 — ${user.email}'),
         children: [
-          for (final r in const ['USER', 'ADVERTISER', 'ADMIN'])
+          for (final r in const ['USER', 'ADMIN'])
             SimpleDialogOption(
               onPressed: () => Navigator.pop(ctx, r),
               child: Row(
@@ -293,11 +293,9 @@ class _AdminUserScreenState extends ConsumerState<AdminUserScreen> {
                     color: user.role == r ? _kBlue : Colors.grey,
                   ),
                   const SizedBox(width: 10),
-                  Text(switch (r) {
-                    'ADMIN'      => '관리자 — 어드민 화면 접근',
-                    'ADVERTISER' => '광고주 — 광고주 웹 접근',
-                    _            => '앱 유저 — 미션 참여',
-                  }),
+                  Text(r == 'ADMIN'
+                      ? '관리자 — 어드민 화면 접근'
+                      : '앱 유저 — 미션 참여'),
                 ],
               ),
             ),
@@ -312,6 +310,20 @@ class _AdminUserScreenState extends ConsumerState<AdminUserScreen> {
           .read(adminUserRepositoryProvider)
           .updateUser(userId: user.id, role: role),
       '${user.email} 역할을 $role 로 변경했습니다',
+    );
+  }
+
+  /// 광고주 자격 켜고 끄기 — role 과 별개라 앱 유저 겸업이 가능하다
+  Future<void> _toggleAdvertiser(AdminUserRecord user) async {
+    final turnOn = !user.isAdvertiser;
+    await _run(
+      user,
+      () => ref
+          .read(adminUserRepositoryProvider)
+          .updateUser(userId: user.id, isAdvertiser: turnOn),
+      turnOn
+          ? '${user.email} 광고주 자격을 부여했습니다'
+          : '${user.email} 광고주 자격을 해제했습니다',
     );
   }
 
@@ -432,6 +444,7 @@ class _AdminUserScreenState extends ConsumerState<AdminUserScreen> {
                               user:          u,
                               isBusy:        _busy.contains(u.id),
                               onChangeRole:  () => _changeRole(u),
+                              onToggleAdvertiser: () => _toggleAdvertiser(u),
                               onClearDevice: () => _clearDevice(u),
                               onIssuePassword: () => _issueTempPassword(u),
                               onDelete:      () => _confirmDelete(u),
@@ -456,6 +469,7 @@ class _UserCard extends StatelessWidget {
   final AdminUserRecord user;
   final bool            isBusy;
   final VoidCallback    onChangeRole;
+  final VoidCallback    onToggleAdvertiser;
   final VoidCallback    onClearDevice;
   final VoidCallback    onIssuePassword;
   final VoidCallback    onDelete;
@@ -464,6 +478,7 @@ class _UserCard extends StatelessWidget {
     required this.user,
     required this.isBusy,
     required this.onChangeRole,
+    required this.onToggleAdvertiser,
     required this.onClearDevice,
     required this.onIssuePassword,
     required this.onDelete,
@@ -498,6 +513,23 @@ class _UserCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: user.roleColor)),
               ),
+              if (user.isAdvertiser) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AdminUserRecord.advertiserColor
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('광고주',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AdminUserRecord.advertiserColor)),
+                ),
+              ],
               const SizedBox(width: 8),
               Expanded(
                 child: Text(user.email,
@@ -556,6 +588,13 @@ class _UserCard extends StatelessWidget {
                     child: const Text('기기 초기화',
                         style: TextStyle(fontSize: 13)),
                   ),
+                TextButton(
+                  onPressed: onToggleAdvertiser,
+                  child: Text(
+                    user.isAdvertiser ? '광고주 해제' : '광고주 지정',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
                 TextButton(
                   onPressed: onIssuePassword,
                   child: const Text('임시 비밀번호',

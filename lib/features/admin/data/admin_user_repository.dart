@@ -29,11 +29,13 @@ class AdminUserRepository {
     required String userId,
     String?         role,
     bool            clearDevice = false,
+    bool?           isAdvertiser,
   }) async {
     final res = await supabase.rpc('admin_update_user', params: {
-      'p_user_id':      userId,
-      'p_role':         role,
-      'p_clear_device': clearDevice,
+      'p_user_id':       userId,
+      'p_role':          role,
+      'p_clear_device':  clearDevice,
+      'p_is_advertiser': isAdvertiser,
     });
     return Map<String, dynamic>.from(res as Map);
   }

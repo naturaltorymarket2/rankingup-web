@@ -11,8 +11,8 @@ import '../../onboarding/presentation/onboarding_screen.dart';
 // 스플래시 화면 — Supabase 세션 복원 후 자동 이동
 // ─────────────────────────────────────────────────────────────────
 //
-// 웹:  세션 있음 + role=ADVERTISER → /web/dashboard   그 외 → 로그아웃 후 /web/login
-// 앱:  세션 있음 + role!=ADVERTISER → /home            그 외 → 로그아웃 후 /login
+// 웹:  세션 있음 + 광고주 자격 → /web/dashboard   그 외 → 로그아웃 후 /web/login
+// 앱:  세션 있으면 → /home (광고주도 앱 유저일 수 있어 막지 않는다)
 //      세션 없음 → 각 플랫폼 로그인 화면
 // ─────────────────────────────────────────────────────────────────
 
@@ -82,12 +82,7 @@ class _SplashScreenState extends State<SplashScreen> {
         if (mounted) context.go('/web/login');
         return null;
       } else {
-        if (isAdvertiser) {
-          // 세션은 있지만 광고주 계정 — 앱 접근 차단 (방어 코드)
-          await supabase.auth.signOut();
-          if (mounted) context.go('/login');
-          return null;
-        }
+        // 앱은 광고주 계정도 막지 않는다 — 광고주가 리워드 유저이기도 할 수 있다
         final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
         return emailConfirmedAt != null ? '/home' : '/email_verify';
       }

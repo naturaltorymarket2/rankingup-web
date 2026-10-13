@@ -1,6 +1,6 @@
 import '../../app/supabase_client.dart';
 
-/// 현재 계정의 역할이 ADVERTISER(광고주)인지 확인한다.
+/// 광고주 웹을 쓸 수 있는 계정인지 확인한다.
 ///
 /// users.role을 "유저 vs 광고주" 구분의 단일 진실 공급원으로 사용한다.
 /// (이전에는 business_info 존재 여부로 추정했으나, 사업자 등록 완료 시점에
@@ -11,10 +11,12 @@ import '../../app/supabase_client.dart';
 Future<bool> isRegisteredAdvertiser(String userId) async {
   final row = await supabase
       .from('users')
-      .select('role')
+      .select('role, is_advertiser')
       .eq('id', userId)
       .maybeSingle();
-  return row?['role'] == 'ADVERTISER';
+  // is_advertiser 가 광고주 자격의 단일 기준이다.
+  // role 비교는 이관 전 데이터를 위한 보조 조건으로만 남긴다.
+  return row?['is_advertiser'] == true || row?['role'] == 'ADVERTISER';
 }
 
 /// 가입한 경로를 auth user_metadata 에 남기는 키.
@@ -35,7 +37,7 @@ bool isAppSignup() {
   return type == 'USER';
 }
 
-/// 웹(/web/login)으로 로그인/이메일 인증한 계정의 role을 ADVERTISER로 확정한다.
+/// 광고주 자격을 켠다 — **가입을 마친 시점에만** 호출한다.
 ///
 /// /web/login은 광고주 전용 화면이므로(앱 유저는 /login 사용), 여기를 통해
 /// 세션이 확보된 계정은 곧 광고주 계정이다. 사업자 정보(business_info) 등록은
@@ -45,7 +47,10 @@ bool isAppSignup() {
 /// 한다 — RLS(users_self_update: auth.uid() = id)가 auth.uid()를 요구하기
 /// 때문에, 세션 없이 호출하면 0건 업데이트로 조용히 실패한다.
 Future<void> finalizeAdvertiserRole(String userId) async {
-  await supabase.from('users').update({'role': 'ADVERTISER'}).eq('id', userId);
+  // 로그인만으로 승격하지 않는다. 앱 유저가 광고주 웹에 한 번 들어갔다는
+  // 이유로 앱 로그인이 막히던 문제가 있었다(2026-10-13).
+  // role 은 건드리지 않는다 — 광고주이면서 앱 유저일 수 있다.
+  await supabase.rpc('mark_self_advertiser');
 }
 
 /// 해당 이메일로 이미 가입된 계정이 있는지(인증 여부 무관) 확인한다.

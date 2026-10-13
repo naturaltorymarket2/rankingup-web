@@ -131,17 +131,15 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
         return;
       }
 
-      // 앱으로 가입한 계정은 여기서 승격하지 않는다 — 승격되면 앱 로그인이 막힌다.
-      if (isAppSignup()) {
+      // 로그인으로는 아무 자격도 주지 않는다.
+      // 예전에는 여기서 광고주로 '확정'해, 앱 유저가 광고주 웹에 한 번
+      // 들어갔다는 이유로 앱 로그인이 막혔다 (2026-10-13 실제 발생).
+      if (!await isRegisteredAdvertiser(userId)) {
         await supabase.auth.signOut();
         if (!mounted) return;
-        _showError('앱으로 가입한 계정입니다. 퀴즈캐시나우 앱에서 로그인해주세요');
+        _showError('광고주로 가입된 계정이 아닙니다. 회원가입을 먼저 진행해주세요');
         return;
       }
-
-      // /web/login은 광고주 전용 화면 — 사업자 정보 등록 없이 로그인 성공 = 광고주.
-      // role이 아직 ADVERTISER가 아니면(이메일 인증 직후 등) 여기서 확정한다.
-      await finalizeAdvertiserRole(userId);
       if (!mounted) return;
       context.go('/web/dashboard');
     } on AuthException catch (e) {

@@ -96,10 +96,11 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
         if (uid != null) {
           final row = await supabase
               .from('users')
-              .select('role')
+              .select('role, is_advertiser')
               .eq('id', uid)
               .maybeSingle();
-          _isAdvertiser = row?['role'] == 'ADVERTISER';
+          _isAdvertiser =
+              row?['is_advertiser'] == true || row?['role'] == 'ADVERTISER';
         }
       } catch (_) {
         // 확인 실패는 무시 — 앱 유저 기준으로 안내한다

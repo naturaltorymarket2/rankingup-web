@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 class AdminUserRecord {
   final String    id;
   final String    email;
-  final String    role;            // USER / ADVERTISER / ADMIN
+  final String    role;            // USER / ADMIN
+  /// 광고주 웹 접근 가능 여부. role 과 독립 — 앱 유저 겸업이 가능하다.
+  final bool      isAdvertiser;
   final String?   deviceId;
   final DateTime  createdAt;
   final bool      emailConfirmed;
@@ -21,6 +23,7 @@ class AdminUserRecord {
     required this.id,
     required this.email,
     required this.role,
+    required this.isAdvertiser,
     required this.deviceId,
     required this.createdAt,
     required this.emailConfirmed,
@@ -35,6 +38,7 @@ class AdminUserRecord {
         id:             m['id'] as String,
         email:          m['email'] as String? ?? '(이메일 없음)',
         role:           m['role'] as String? ?? 'USER',
+        isAdvertiser:   m['is_advertiser'] == true || m['role'] == 'ADVERTISER',
         deviceId:       m['device_id'] as String?,
         createdAt:      DateTime.parse(m['created_at'] as String),
         emailConfirmed: m['email_confirmed'] == true,
@@ -47,20 +51,16 @@ class AdminUserRecord {
         campaignCount:  (m['campaign_count'] as num?)?.toInt() ?? 0,
       );
 
-  String get roleLabel => switch (role) {
-        'ADMIN'      => '관리자',
-        'ADVERTISER' => '광고주',
-        _            => '앱 유저',
-      };
+  String get roleLabel => role == 'ADMIN' ? '관리자' : '앱 유저';
 
-  Color get roleColor => switch (role) {
-        'ADMIN'      => const Color(0xFFB71C1C),
-        'ADVERTISER' => const Color(0xFF1E3A8A),
-        _            => const Color(0xFF2E7D32),
-      };
+  Color get roleColor => role == 'ADMIN'
+      ? const Color(0xFFB71C1C)
+      : const Color(0xFF2E7D32);
 
   /// 삭제해도 되는 계정인지 (서버에서도 같은 기준으로 막는다)
   bool get canDelete => role != 'ADMIN' && campaignCount == 0;
+
+  static const advertiserColor = Color(0xFF1E3A8A);
 
   bool get hasDevice => (deviceId ?? '').isNotEmpty;
 }

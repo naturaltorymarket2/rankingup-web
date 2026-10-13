@@ -94,15 +94,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // 광고주(business_info 등록 완료) 계정은 앱 로그인 차단
-      if (await isRegisteredAdvertiser(userId)) {
-        await supabase.auth.signOut();
-        if (mounted) {
-          _showError('광고주 계정으로는 앱에 로그인할 수 없습니다. 웹에서 이용해주세요.');
-        }
-        return;
-      }
-
+      // 광고주 계정도 앱에 로그인할 수 있다.
+      // 광고주가 리워드 유저이기도 할 수 있어 막지 않는다 (2026-10-13).
       await _saveDeviceId();
       if (mounted) {
         final emailConfirmedAt = supabase.auth.currentUser?.emailConfirmedAt;
@@ -136,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // 0. 이메일 중복 가입 사전 차단 (인증 여부 무관 — 광고주 웹 가입과 분리)
       if (await checkEmailExists(email)) {
-        _showError('이미 가입된 이메일입니다. 광고주 계정이라면 앱에서는 가입할 수 없습니다.');
+        _showError('이미 가입된 이메일입니다. 로그인하거나 비밀번호 찾기를 이용해주세요.');
         return;
       }
 
