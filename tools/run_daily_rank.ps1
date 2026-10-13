@@ -4,6 +4,7 @@
 #    1) naver_rank_standalone.py   순위 모니터링 서비스 (고객 상품)
 #    2) reward_rank_crawler.py     리워드 광고 (메인/미션 키워드, 500위까지)
 #    3) run_collect.ps1            SalesBrainAI 키워드 수집 (인사이트/수요/유입/지형/점수)
+#    4) lookup_worker.py --refresh 판매수/유입 조회 '오늘 캐시' 선수집 (밤에도 즉시 응답)
 #
 #  셋 다 같은 디버그 포트와 네이버 계정으로 크롬을 띄우므로 반드시 순차 실행한다.
 #  실행 기록은 tools\logs\YYYY-MM-DD.log 에 남는다.
@@ -172,6 +173,24 @@ if (-not (Test-Path $CollectScript)) {
     } catch {
         Write-Log ("[3/3] 예외: {0}" -f $_.Exception.Message)
     }
+}
+
+# -- 4. 판매수/유입 조회 '오늘 캐시' 선수집 --------------------
+# 고객이 밤에 눌러도 라이브 세션 없이 즉시 응답하도록, 그동안 조회된 적 있는 상품의
+# 오늘 행을 미리 채운다. 대부분 쿠키/http 경로라 순위 크롤러(9222)와 포트가 겹치지
+# 않는다 — 셀러 세션(9581, 키퍼가 상시 소유)만 쓰므로 Clear-StaleChrome 불필요.
+# 건수가 늘 수 있어 lookup_worker 내부에서 시간을 끊어(paced) 돈다.
+Write-Log '[4/4] 조회 캐시 선수집 시작 (lookup_worker --refresh)'
+Push-Location $TrackerDir
+try {
+    & $Python 'lookup_worker.py' '--refresh' 2>&1 | ForEach-Object {
+        Add-Content -Path $Log -Value $_ -Encoding utf8
+    }
+    Write-Log ("[4/4] 종료 코드: {0}" -f $LASTEXITCODE)
+} catch {
+    Write-Log ("[4/4] 예외: {0}" -f $_.Exception.Message)
+} finally {
+    Pop-Location
 }
 
 Write-Log '실행 종료'

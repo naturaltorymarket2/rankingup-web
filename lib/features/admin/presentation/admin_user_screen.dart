@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -131,6 +134,143 @@ class _AdminUserScreenState extends ConsumerState<AdminUserScreen> {
       user,
       () => ref.read(adminUserRepositoryProvider).deleteUser(userId: user.id),
       '${user.email} 삭제 완료',
+    );
+  }
+
+  /// 임시 비밀번호 발급 — 헷갈리는 글자(0/O, 1/l)는 뺀다
+  String _makePassword() {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rnd = Random.secure();
+    return List.generate(10, (_) => chars[rnd.nextInt(chars.length)]).join();
+  }
+
+  Future<void> _issueTempPassword(AdminUserRecord user) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('임시 비밀번호 발급'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(user.email,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              const Text(
+                '새 비밀번호를 만들어 화면에 한 번 보여드립니다.\n'
+                '지금 쓰던 비밀번호는 이 시점부터 쓸 수 없습니다.',
+                style: TextStyle(fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '※ 회원에게 전달한 뒤, 로그인해서 본인 비밀번호로 바꾸도록 안내해 주세요.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kBlue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('발급'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final password = _makePassword();
+    if (_busy.contains(user.id)) return;
+    setState(() => _busy.add(user.id));
+    try {
+      final res = await ref
+          .read(adminUserRepositoryProvider)
+          .setTempPassword(userId: user.id, password: password);
+      if (!mounted) return;
+
+      if (res['success'] == true) {
+        await _showPassword(user, password);
+      } else {
+        _snack(_errorText(res), _kRed);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _snack('오류: $e', _kRed);
+    } finally {
+      if (mounted) setState(() => _busy.remove(user.id));
+    }
+  }
+
+  Future<void> _showPassword(AdminUserRecord user, String password) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('임시 비밀번호'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(user.email, style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  password,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '이 화면을 닫으면 다시 볼 수 없습니다. 지금 복사해 두세요.',
+                style: TextStyle(fontSize: 12, color: _kRed),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: password));
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('복사했습니다')),
+                );
+              }
+            },
+            child: const Text('복사'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kBlue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -289,11 +429,12 @@ class _AdminUserScreenState extends ConsumerState<AdminUserScreen> {
                             }
                             final u = users[i - 1];
                             return _UserCard(
-                              user:         u,
-                              isBusy:       _busy.contains(u.id),
-                              onChangeRole: () => _changeRole(u),
+                              user:          u,
+                              isBusy:        _busy.contains(u.id),
+                              onChangeRole:  () => _changeRole(u),
                               onClearDevice: () => _clearDevice(u),
-                              onDelete:     () => _confirmDelete(u),
+                              onIssuePassword: () => _issueTempPassword(u),
+                              onDelete:      () => _confirmDelete(u),
                             );
                           },
                         ),
@@ -316,6 +457,7 @@ class _UserCard extends StatelessWidget {
   final bool            isBusy;
   final VoidCallback    onChangeRole;
   final VoidCallback    onClearDevice;
+  final VoidCallback    onIssuePassword;
   final VoidCallback    onDelete;
 
   const _UserCard({
@@ -323,6 +465,7 @@ class _UserCard extends StatelessWidget {
     required this.isBusy,
     required this.onChangeRole,
     required this.onClearDevice,
+    required this.onIssuePassword,
     required this.onDelete,
   });
 
@@ -413,6 +556,11 @@ class _UserCard extends StatelessWidget {
                     child: const Text('기기 초기화',
                         style: TextStyle(fontSize: 13)),
                   ),
+                TextButton(
+                  onPressed: onIssuePassword,
+                  child: const Text('임시 비밀번호',
+                      style: TextStyle(fontSize: 13)),
+                ),
                 const SizedBox(width: 4),
                 OutlinedButton(
                   onPressed: user.canDelete ? onDelete : null,
