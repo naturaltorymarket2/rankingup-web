@@ -140,7 +140,7 @@ class _CampaignBulkScreenState extends ConsumerState<CampaignBulkScreen> {
       await _resultDialog(
         title: '등록 완료',
         body:  '광고 ${rows.length}건이 등록되었습니다.\n'
-               '운영자 승인 후 앱에 노출되며, 포인트는 승인 시점에 차감됩니다.',
+               '등록 다음 날 오전 검수 후 앱에 노출되며, 포인트는 승인 시점에 차감됩니다.',
       );
       if (mounted) context.go('/web/dashboard');
     } else {
@@ -558,7 +558,7 @@ class _GuideCard extends StatelessWidget {
       '대량 등록에서는 키워드 추천(순위 조회)을 제공하지 않습니다. '
           '추천이 필요하면 개별 등록 화면을 이용해 주세요.',
       '등록 후 운영자가 상품 페이지를 확인하고 승인하면 앱에 노출됩니다. '
-          '포인트는 승인 시점에 차감됩니다.',
+          '검수는 등록 다음 날 오전에 진행되며, 포인트는 승인 시점에 차감됩니다.',
     ];
 
     return Container(

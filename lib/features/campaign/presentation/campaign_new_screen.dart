@@ -495,7 +495,9 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                 '① 광고를 등록하면 운영자 검수(승인 대기) 상태로 접수됩니다.\n'
                 '② 운영자가 상품 페이지의 #태그를 직접 확인해 등록합니다.\n'
                 '③ 승인이 완료되면 광고가 시작되고, 그때 포인트가 차감됩니다.\n'
-                '④ 승인 상태는 대시보드에서 확인할 수 있습니다.',
+                '④ 승인 상태는 대시보드에서 확인할 수 있습니다.\n'
+                '\n'
+                '※ 검수는 광고 등록 다음 날 오전에 진행됩니다.',
                 style: TextStyle(fontSize: 13, height: 1.7),
               ),
               const Divider(height: 20),
@@ -864,7 +866,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('광고 등록 (운영자 승인 후 1회 차감)'),
+                    : const Text('광고 등록 (익일 오전 검수 후 1회 차감)'),
               ),
         },
       ),
@@ -1073,7 +1075,7 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         SnackBar(
           content: Text(
             '$successCount개 키워드 광고 그룹이 등록되었습니다. '
-            '운영자 승인 후 광고가 시작되며, 그때 포인트가 차감됩니다.',
+            '등록 다음 날 오전 검수 후 승인되며, 그때 포인트가 차감됩니다.',
           ),
           backgroundColor: _kGreen,
         ),

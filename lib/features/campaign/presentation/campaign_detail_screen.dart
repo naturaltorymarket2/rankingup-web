@@ -163,7 +163,17 @@ class CampaignDetailScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 13, color: Colors.grey[600]),
           ),
         ),
-        if (remaining != null && remaining >= 0)
+        // 승인 대기 중이면 언제 처리되는지 알려준다 — 가장 많이 묻는 질문이다
+        if (campaign.displayStatus == 'PENDING')
+          Text(
+            '등록 다음 날 오전 검수 예정',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Colors.orange.shade800,
+            ),
+          )
+        else if (remaining != null && remaining >= 0)
           Text(
             '잔여 $remaining일',
             style: TextStyle(
