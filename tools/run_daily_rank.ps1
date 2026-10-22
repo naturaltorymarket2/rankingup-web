@@ -51,6 +51,50 @@ function Write-Log {
     Add-Content -Path $Log -Value $line -Encoding utf8
 }
 
+# ── 네트워크(DNS) 준비 대기 ──────────────────────────────────
+# PC 가 꺼져 있다 켜지면 작업 스케줄러가 바로 뜨는데, 그때는 와이파이·핫스팟이
+# 아직 안 붙어 DNS 가 안 된다. 크롤러는 getaddrinfo 실패로 즉사하고 그날
+# 수집이 통째로 빈다 (2026-10-20 실제 발생 — 10/20~10/22 사흘 공백).
+# 파이썬 안의 3회 재시도(15초)로는 부팅 직후를 못 넘긴다.
+#
+# Supabase 도메인이 풀릴 때까지 최대 15분 기다렸다 시작한다.
+function Wait-ForNetwork {
+    param([int]$MaxMinutes = 15)
+
+    $hosts    = @('wfxlihrqjtexuxvoajny.supabase.co', 'search.naver.com')
+    $deadline = (Get-Date).AddMinutes($MaxMinutes)
+    $waited   = $false
+
+    while ((Get-Date) -lt $deadline) {
+        $ok = $true
+        foreach ($h in $hosts) {
+            try {
+                $null = [System.Net.Dns]::GetHostEntry($h)
+            } catch {
+                $ok = $false
+                break
+            }
+        }
+        if ($ok) {
+            if ($waited) { Write-Log '[네트워크] 연결됨 - 수집을 시작합니다' }
+            return $true
+        }
+        if (-not $waited) {
+            Write-Log '[네트워크] DNS 가 아직 안 됩니다 - 최대 15분 기다립니다'
+            $waited = $true
+        }
+        Start-Sleep -Seconds 30
+    }
+
+    Write-Log '[네트워크] 15분 동안 연결되지 않았습니다 - 오늘 수집을 건너뜁니다'
+    return $false
+}
+
+if (-not (Wait-ForNetwork)) {
+    Write-Log '수집 중단 (네트워크 없음)'
+    exit 1
+}
+
 # ── 크롬 디버그 포트 정리 ────────────────────────────────────
 # 앞 실행이 비정상 종료하면 크롬만 남아 포트를 계속 잡는다.
 # 그러면 그 뒤로 매일 아무것도 수집하지 못한다(2026-09-25~26 이틀 공백).
