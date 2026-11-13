@@ -56,6 +56,27 @@ class KeywordRankResult {
   const KeywordRankResult({required this.keyword, this.rank});
 }
 
+/// 순위 조회 전 후보 목록 + 쿼터 정책 (GET /keywords/candidates)
+class KeywordCandidates {
+  final List<String> candidates;
+
+  /// 먼저 조회할 개수
+  final int firstBatch;
+
+  /// [targetRank] 이내가 이 수에 못 미치면 남은 후보까지 조회한다
+  final int minHits;
+
+  /// 이 순위 이내여야 리워드 유저가 상품을 찾을 수 있다 (통합검색 기준)
+  final int targetRank;
+
+  const KeywordCandidates({
+    required this.candidates,
+    required this.firstBatch,
+    required this.minHits,
+    required this.targetRank,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────
 // 파이썬 랭킹 모듈 HTTP 클라이언트
 // ─────────────────────────────────────────────────────────────────
@@ -76,6 +97,7 @@ class RankApiClient {
 
   static const _timeout         = Duration(seconds: 10);  // fetchRank 용
   static const _keywordsTimeout = Duration(seconds: 60);  // fetchKeywords 용 (다중 API 호출)
+  static const _candidatesTimeout = Duration(seconds: 30); // 후보 목록만 (SerpApi 미사용)
 
   /// 상품 URL + 키워드로 네이버 쇼핑 순위를 조회합니다.
   ///
@@ -133,6 +155,72 @@ class RankApiClient {
       rank:         rank,
       productName:  (body['product_name'] as String?) ?? '',
       thumbnailUrl: body['thumbnail_url'] as String?,
+    );
+  }
+
+  /// 조회할 키워드 후보 목록만 받아옵니다 (순위 조회 전).
+  ///
+  /// 순위 조회는 키워드 하나당 몇 초씩 걸려, 한 번에 다 하면 광고주는
+  /// 아무 표시 없이 수십 초를 기다린다. 후보를 먼저 받아 전체 개수를 알면
+  /// 키워드별로 [fetchRank] 를 돌리며 실제 진행률을 보여줄 수 있다.
+  /// 이 호출 자체는 SerpApi 를 쓰지 않아 빠르고 쿼터를 소모하지 않는다.
+  ///
+  /// 반환값의 [KeywordCandidates.firstBatch] / [minHits] 는 쿼터 정책이다 —
+  /// 먼저 firstBatch 개만 조회하고, 기준 순위 이내가 minHits 개에 못 미칠
+  /// 때만 남은 후보를 조회한다.
+  Future<KeywordCandidates> fetchKeywordCandidates(
+    String productUrl,
+    String seedKeyword, {
+    String? productName,
+    String? brandName,
+  }) async {
+    if (_baseUrl.isEmpty) {
+      throw const RankApiException(0); // RANK_API_URL 미설정
+    }
+
+    final uri = Uri.parse(_baseUrl).replace(
+      path: '/keywords/candidates',
+      queryParameters: {
+        'url':     productUrl,
+        'keyword': seedKeyword,
+        if (productName != null && productName.isNotEmpty)
+          'product_name': productName,
+        if (brandName != null && brandName.isNotEmpty)
+          'brand_name': brandName,
+      },
+    );
+
+    late http.Response response;
+    try {
+      response = await http.get(uri).timeout(_candidatesTimeout);
+    } on TimeoutException {
+      throw const RankTimeoutException();
+    } catch (e) {
+      throw RankNetworkException(e);
+    }
+
+    if (response.statusCode != 200) {
+      throw RankApiException(response.statusCode);
+    }
+
+    late Map<String, dynamic> body;
+    try {
+      body = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const RankApiException(-1);
+    }
+
+    final list = (body['candidates'] as List<dynamic>? ?? const [])
+        .map((e) => (e as String).trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return KeywordCandidates(
+      candidates: list,
+      firstBatch:
+          (body['first_batch'] as int?) ?? (list.length < 5 ? list.length : 5),
+      minHits:    (body['min_hits']    as int?) ?? 3,
+      targetRank: (body['target_rank'] as int?) ?? 8,
     );
   }
 

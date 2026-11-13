@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/supabase_client.dart';
 import '../../../shared/utils/rank_api_client.dart';
 import 'campaign_provider.dart';
+import 'keyword_progress_dialog.dart';
 import 'keyword_select_modal.dart';
 
 // ─────────────────────────────────────────────────────────────────
@@ -899,36 +900,128 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
   // ─────────────────────────────────────────────────────────────
 
   /// 키워드 자동완성 버튼 처리:
-  ///   1. fetchKeywords API 호출
-  ///   2. KeywordSelectModal 표시
-  ///   3. ON된 키워드를 _selectedKeywords 에 저장
+  ///   1. 조회할 후보 목록 받기 (/keywords/candidates — 빠름, 쿼터 미소모)
+  ///   2. 후보별 순위 조회 (/rank) — 진행 창에 실제 진행률 표시
+  ///   3. KeywordSelectModal 표시 → ON된 키워드를 _selectedKeywords 에 저장
+  ///
+  /// 순위 조회를 서버에서 한 번에 돌리면(기존 /keywords) 광고주는 수십 초를
+  /// 아무 표시 없이 기다리다 화면을 떠난다. 그래서 키워드 단위로 쪼개
+  /// 끝난 개수만큼 게이지를 채운다 — 가짜 애니메이션이 아니다.
   Future<void> _fetchKeywords() async {
-    final url  = _urlCtrl.text.trim();
-    final seed = _seedCtrl.text.trim();
+    final url   = _urlCtrl.text.trim();
+    final seed  = _seedCtrl.text.trim();
+    final pName = _productNameCtrl.text.trim();
+    final bName = _brandNameCtrl.text.trim();
     if (url.isEmpty || seed.isEmpty) return;
 
-    setState(() => _isFetchingKeywords = true);
-    try {
-      final keywords = await RankApiClient().fetchKeywords(
-        url,
-        seed,
-        productName: _productNameCtrl.text.trim(),
-        brandName:   _brandNameCtrl.text.trim(),
-      );
-      if (!mounted) return;
+    final api      = RankApiClient();
+    final progress = ValueNotifier(const KeywordProgress());
+    var cancelled  = false;
+    var dialogOpen = true;
 
-      if (keywords.isEmpty) {
+    final nav = Navigator.of(context);
+    void closeDialog() {
+      if (dialogOpen) {
+        dialogOpen = false;
+        nav.pop();
+      }
+    }
+
+    setState(() => _isFetchingKeywords = true);
+    showKeywordProgressDialog(
+      context,
+      progress: progress,
+      onCancel: () {
+        cancelled = true;
+        closeDialog();
+      },
+    );
+
+    try {
+      // ── 1·2단계: 조회할 후보 목록 ──────────────────────────
+      final plan = await api.fetchKeywordCandidates(
+        url, seed, productName: pName, brandName: bName,
+      );
+      if (cancelled || !mounted) return;
+
+      if (plan.candidates.isEmpty) {
+        closeDialog();
         _showSnack('연관 키워드를 찾을 수 없습니다.');
         return;
       }
 
+      progress.value = KeywordProgress(
+        step:  KeywordStep.candidates,
+        total: plan.candidates.length,
+      );
+      // 후보 생성이 끝났다는 걸 눈으로 확인할 틈을 준다
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (cancelled || !mounted) return;
+
+      // ── 3단계: 후보별 순위 조회 ───────────────────────────
+      //
+      // SerpApi 무료 쿼터(월 250회)를 아끼려 먼저 firstBatch 개만 조회하고,
+      // 기준 순위 이내가 minHits 개에 못 미칠 때만 남은 후보를 조회한다.
+      final results = <KeywordRankResult>[];
+      var hits  = 0;
+      var total = plan.candidates.length < plan.firstBatch
+          ? plan.candidates.length
+          : plan.firstBatch;
+
+      for (var i = 0; i < plan.candidates.length; i++) {
+        if (i >= total) {
+          if (hits >= plan.minHits) break;
+          total = plan.candidates.length; // 적중이 부족하다 — 남은 후보까지
+        }
+
+        final kw = plan.candidates[i];
+        progress.value = KeywordProgress(
+          step:    KeywordStep.ranking,
+          checked: i,
+          total:   total,
+          current: kw,
+        );
+
+        int? rank;
+        try {
+          rank = (await api.fetchRank(
+            url, kw, productName: pName, brandName: bName,
+          )).rank;
+        } on RankNotFoundException {
+          rank = null; // 순위권 밖 — 결과에는 남겨 광고주가 판단하게 한다
+        } catch (_) {
+          rank = null; // 한 키워드 실패로 전체를 중단하지 않는다
+        }
+        if (cancelled || !mounted) return;
+
+        results.add(KeywordRankResult(keyword: kw, rank: rank));
+        if (rank != null && rank <= plan.targetRank) hits++;
+
+        progress.value = KeywordProgress(
+          step:    KeywordStep.ranking,
+          checked: i + 1,
+          total:   total,
+          current: kw,
+        );
+      }
+
+      // 기준 순위 이내를 앞으로 (순위 없음은 맨 뒤)
+      results.sort((a, b) =>
+          (a.rank ?? 1 << 20).compareTo(b.rank ?? 1 << 20));
+
+      progress.value = const KeywordProgress(step: KeywordStep.done);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (cancelled || !mounted) return;
+
+      closeDialog();
+
       final selected = await showKeywordSelectModal(
         context,
-        keywords,
+        results,
         preSelected: _selectedKeywords,
-        productUrl:  _urlCtrl.text.trim(),
-        productName: _productNameCtrl.text.trim(),
-        brandName:   _brandNameCtrl.text.trim(),
+        productUrl:  url,
+        productName: pName,
+        brandName:   bName,
       );
       if (!mounted) return;
 
@@ -936,14 +1029,21 @@ class _CampaignNewScreenState extends ConsumerState<CampaignNewScreen> {
         setState(() => _selectedKeywords = selected);
       }
     } on RankTimeoutException {
+      closeDialog();
       _showSnack('키워드 조회 시간이 초과되었습니다.');
     } on RankNetworkException {
+      closeDialog();
       _showSnack('네트워크 연결을 확인해주세요.');
     } on RankApiException {
+      closeDialog();
       _showSnack('키워드 조회에 실패했습니다.');
     } catch (e) {
+      closeDialog();
       _showSnack('키워드 조회 중 오류가 발생했습니다.');
     } finally {
+      closeDialog();
+      // 닫히는 애니메이션 동안 진행 창이 아직 값을 읽으므로 바로 버리지 않는다
+      Future<void>.delayed(const Duration(seconds: 1), progress.dispose);
       if (mounted) setState(() => _isFetchingKeywords = false);
     }
   }
